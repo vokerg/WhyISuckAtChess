@@ -25,7 +25,8 @@ CRT is the reference implementation, not a product authority. BIBLE.md and PLAN.
 
 Each subsystem below uses the following labels.
 
-- **Reference** — the CRT implementation and tests to inspect when building the equivalent capability.
+- **Reuse classification** — exactly one of `copy nearly as-is`, `copy/adapt`, `use only as a pattern`, `new for this product`, or `omit`, matching issue #2.
+- **Reference** — the exact CRT implementation and tests to inspect when building the equivalent capability.
 - **Preserve** — behavior or engineering discipline that has already proved useful and should carry over.
 - **Change** — an intentional Why product or architecture delta.
 - **Omit** — out of the initial scope, not a hidden future requirement.
@@ -39,13 +40,13 @@ The CRT baseline is a modular monolith with these boundaries:
 
 | CRT surface | Reference location | Why implication |
 | --- | --- | --- |
-| Workspace and commands | Root README.md and package.json | Use the same build/test/lint discipline where it serves the smaller product. |
-| Web application | apps/web | Start with the game evidence and diagnosis workflows; mobile is not part of the first workspace. |
-| HTTP API and workflows | apps/api | Keep routes thin and put ownership, persistence, provider, and workflow logic in modules/services. |
-| Persistent worker | apps/api/src/worker.ts and modules/jobs | Keep long-running imports and engine work out of the HTTP process. |
-| Chess domain | packages/chess-domain | Keep FEN, move, evaluation, and classification rules framework-neutral. |
-| HTTP contracts | packages/contracts | Make timing, game evidence, and diagnosis payloads explicit and verified. |
-| Database | apps/api/prisma/schema.prisma | Preserve ownership and durable-run patterns, but design a Why-specific evidence model. |
+| Workspace and commands | `README.md`, `package.json` | Use the same build/test/lint discipline where it serves the smaller product. |
+| Web application | `apps/web/package.json` | Start with the game evidence and diagnosis workflows; mobile is not part of the first workspace. |
+| HTTP API and workflows | `apps/api/src/app.ts` | Keep routes thin and put ownership, persistence, provider, and workflow logic in modules/services. |
+| Persistent worker | `apps/api/src/worker.ts` | Keep long-running imports and engine work out of the HTTP process. |
+| Chess domain | `packages/chess-domain/package.json` | Keep FEN, move, evaluation, and classification rules framework-neutral. |
+| HTTP contracts | `packages/contracts/package.json` | Make timing, game evidence, and diagnosis payloads explicit and verified. |
+| Database | `apps/api/prisma/schema.prisma` | Preserve ownership and durable-run patterns, but design a Why-specific evidence model. |
 
 The intended initial repository shape is therefore:
 
@@ -63,12 +64,14 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 1. Workspace, runtime, and application boundaries
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- CRT README.md and AGENTS.md.
-- Root package.json and the workspace package manifests.
-- docs/architecture.md.
-- apps/api/src/app.ts, apps/api/src/main.ts, and apps/api/src/worker.ts.
+- `README.md` and `AGENTS.md`.
+- `package.json`, `apps/api/package.json`, `apps/web/package.json`, `packages/chess-domain/package.json`, and `packages/contracts/package.json`.
+- `docs/architecture.md`.
+- `apps/api/src/app.ts`, `apps/api/src/main.ts`, and `apps/api/src/worker.ts`.
 
 **Preserve**
 
@@ -85,7 +88,7 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Omit**
 
-- apps/mobile and its independent navigation/state surface.
+- `apps/mobile` and its independent navigation/state surface.
 - Course authoring, repertoire authoring, training plans, and other learning-product modules.
 - Any Chess.com/provider abstraction that is not needed for Lichess.
 
@@ -96,13 +99,18 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 2. Application identity, ownership, and authorization
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- apps/api/src/auth/auth.plugin.ts.
-- apps/api/src/auth/current-app-user.service.ts and request-auth.ts.
-- apps/api/src/services/oauthTokenCrypto.ts.
-- CRT migrations adding AppUser auth identity and Lichess OAuth.
-- Tests: apps/api/test/auth/external-user-resolution.test.mjs, lichess-oauth-flow.test.mjs, and oauth-token-crypto.test.mjs.
+- `apps/api/src/auth/auth.plugin.ts`.
+- `apps/api/src/auth/current-app-user.service.ts` and `apps/api/src/auth/request-auth.ts`.
+- `apps/api/src/services/oauthTokenCrypto.ts`.
+- `apps/api/prisma/migrations/20260613120000_add_app_user_auth_identity/migration.sql`.
+- `apps/api/prisma/migrations/20260701120000_add_lichess_oauth_connection/migration.sql`.
+- `apps/api/test/auth/external-user-resolution.test.mjs`.
+- `apps/api/test/auth/lichess-oauth-flow.test.mjs`.
+- `apps/api/test/auth/oauth-token-crypto.test.mjs`.
 
 **Preserve**
 
@@ -133,12 +141,16 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 3. Lichess OAuth and connected-account lifecycle
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- apps/api/src/services/lichessConnectionService.ts.
-- apps/api/src/routes/lichessAuth.ts.
-- packages/contracts/src/lichess/lichess.schemas.ts.
-- apps/api/prisma/schema.prisma models LichessConnection, OAuthLoginState, ExternalAccount, and AppUser.
+- `apps/api/src/services/lichessConnectionService.ts`.
+- `apps/api/src/routes/lichessAuth.ts`.
+- `packages/contracts/src/lichess/lichess.schemas.ts`.
+- `apps/api/prisma/schema.prisma` models `LichessConnection`, `OAuthLoginState`, `ExternalAccount`, and `AppUser`.
+- `apps/api/prisma/migrations/20260701120000_add_lichess_oauth_connection/migration.sql`.
+- `apps/api/test/auth/lichess-oauth-flow.test.mjs`.
 
 **Preserve**
 
@@ -159,20 +171,26 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- A LichessCredentialProvider-style adapter may supply an access token to the importer without allowing provider response types into domain or web contracts.
+- A `LichessCredentialProvider`-style adapter may supply an access token to the importer without allowing provider response types into domain or web contracts.
 - Account replacement can later be implemented behind the same one-connection boundary.
 
 ### 4. Lichess import and normalization
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.ts.
-- apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.executor.ts.
-- apps/api/src/modules/account-imports/account-import.types.ts.
-- apps/api/src/modules/account-imports/account-import.provider-commit.repository.prisma.ts.
-- apps/api/src/modules/account-imports/account-import.lifecycle.repository.prisma.ts.
-- Legacy comparison: apps/api/src/services/lichessImportService.ts.
-- Tests: apps/api/test/account-imports/account-import.lichess.test.mjs, account-import.lichess-executor.test.mjs, account-import.lichess-worker.test.mjs, account-import.provider-commit.repository.test.mjs, and account-import.lifecycle.test.mjs.
+- `apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.ts`.
+- `apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.executor.ts`.
+- `apps/api/src/modules/account-imports/account-import.types.ts`.
+- `apps/api/src/modules/account-imports/account-import.provider-commit.repository.prisma.ts`.
+- `apps/api/src/modules/account-imports/account-import.lifecycle.repository.prisma.ts`.
+- Legacy comparison: `apps/api/src/services/lichessImportService.ts`.
+- `apps/api/test/account-imports/account-import.lichess.test.mjs`.
+- `apps/api/test/account-imports/account-import.lichess-executor.test.mjs`.
+- `apps/api/test/account-imports/account-import.lichess-worker.test.mjs`.
+- `apps/api/test/account-imports/account-import.provider-commit.repository.test.mjs`.
+- `apps/api/test/account-imports/account-import.lifecycle.test.mjs`.
 
 **Preserve**
 
@@ -184,7 +202,7 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Change**
 
-- Add the Lichess clock request and preserve the provider's per-ply clock array all the way through the normalized import value and persistence contract. The CRT provider type recognizes clocks, but its request URL does not ask for clocks=true, and its NormalizedAccountImportGame drops the array.
+- Add the Lichess clock request and preserve the provider's per-ply clock array all the way through the normalized import value and persistence contract. The CRT provider type recognizes clocks, but its request URL does not ask for `clocks=true`, and its `NormalizedAccountImportGame` drops the array.
 - Require authenticated connected-account loading. Do not silently remove Authorization and continue with a public endpoint when the connection is unusable.
 - Select the durable account-import path as the only Why path. The legacy synchronous service is useful historical reference but should not become a second source of import semantics.
 - Include bullet in the accepted downstream product scope, not merely in import metadata.
@@ -193,7 +211,7 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 **Omit**
 
 - Chess.com or another provider adapter.
-- The legacy synchronous syncAccount route/service as a product path.
+- The legacy synchronous `syncAccount` route/service as a product path.
 - Importing an arbitrary public username without a connected Why identity.
 
 **Future seam**
@@ -203,16 +221,18 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 5. Imported-game persistence, ply indexing, and position identity
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- CRT models ImportedGame, ImportedGamePly, Position, PositionAnalysis, ImportRun, and GameAnalysisRun in apps/api/prisma/schema.prisma.
-- apps/api/src/modules/imported-games/ply-index.service.ts.
-- apps/api/src/modules/imported-games/ply-index.repository.prisma.ts.
-- apps/api/src/modules/imported-games/imported-game-index-workflow.service.ts.
-- apps/api/src/modules/imported-games/imported-game-processing.service.ts.
-- apps/api/src/modules/positions/position-key.ts.
-- packages/chess-domain/src/position.ts.
-- packages/contracts/src/imported-games/imported-games.schemas.ts.
+- CRT models `ImportedGame`, `ImportedGamePly`, `Position`, `PositionAnalysis`, `ImportRun`, and `GameAnalysisRun` in `apps/api/prisma/schema.prisma`.
+- `apps/api/src/modules/imported-games/ply-index.service.ts`.
+- `apps/api/src/modules/imported-games/ply-index.repository.prisma.ts`.
+- `apps/api/src/modules/imported-games/imported-game-index-workflow.service.ts`.
+- `apps/api/src/modules/imported-games/imported-game-processing.service.ts`.
+- `apps/api/src/modules/positions/position-key.ts`.
+- `packages/chess-domain/src/position.ts`.
+- `packages/contracts/src/imported-games/imported-games.schemas.ts`.
 
 **Preserve**
 
@@ -226,9 +246,9 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 **Change**
 
 - Extend the per-ply evidence model with source clock facts and explicit absence/unknown semantics. The exact field names, units, whether the value is before or after the move, and handling of the initial position belong to issue #4; the key decision here is that the information must not be discarded.
-- Preserve exact timeControlRaw, initial seconds, increment seconds, and source-derived speed as separate values. Speed is a classification; it is not a substitute for the actual control.
+- Preserve exact `timeControlRaw`, initial seconds, increment seconds, and source-derived speed as separate values. Speed is a classification; it is not a substitute for the actual control.
 - Record source provenance and normalization/derivation versions where a later diagnostic result could otherwise be impossible to reproduce.
-- Allow standard bullet games into indexing and analysis eligibility. CRT's STANDARD_IMPORTED_GAME_SPEEDS currently limits the imported-game index workflow to blitz and rapid even though the account-import scope can accept bullet.
+- Allow standard bullet games into indexing and analysis eligibility. CRT's `STANDARD_IMPORTED_GAME_SPEEDS` currently limits the imported-game index workflow to blitz and rapid even though the account-import scope can accept bullet.
 - Keep provider source facts immutable after import; store timing summaries and diagnostic features as derived, versioned data.
 
 **Omit**
@@ -238,25 +258,31 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- A normalized ImportedGameFacts/PlyEvidence boundary should feed both persistence and diagnostics.
+- A normalized `ImportedGameFacts`/`PlyEvidence` boundary should feed both persistence and diagnostics.
 - Position identity and reusable engine analysis can stay provider-neutral; timing and source provenance should sit beside, not inside, the position cache.
 
 ### 6. Durable runs, jobs, and worker execution
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- docs/imported-game-job-processing.md.
-- apps/api/src/modules/jobs/job-worker.service.ts.
-- apps/api/src/modules/jobs/job-worker.repository.prisma.ts.
-- apps/api/src/modules/jobs/imported-game-job-executors.ts.
-- apps/api/src/modules/account-imports/account-import.lifecycle.repository.prisma.ts.
-- packages/contracts/src/jobs/job-run.schemas.ts.
-- Tests: apps/api/test/jobs/job-worker.test.mjs, imported-game-job-executors.test.mjs, job-runs.test.mjs, and account-import worker/lifecycle tests.
+- `docs/imported-game-job-processing.md`.
+- `apps/api/src/modules/jobs/job-worker.service.ts`.
+- `apps/api/src/modules/jobs/job-worker.repository.prisma.ts`.
+- `apps/api/src/modules/jobs/imported-game-job-executors.ts`.
+- `apps/api/src/modules/account-imports/account-import.lifecycle.repository.prisma.ts`.
+- `packages/contracts/src/jobs/job-run.schemas.ts`.
+- `apps/api/test/jobs/job-worker.test.mjs`.
+- `apps/api/test/jobs/imported-game-job-executors.test.mjs`.
+- `apps/api/test/jobs/job-runs.test.mjs`.
+- `apps/api/test/account-imports/account-import.lichess-worker.test.mjs`.
+- `apps/api/test/account-imports/account-import.lifecycle.test.mjs`.
 
 **Preserve**
 
 - API and worker as separate processes.
-- Durable run/task state, priorities, bounded execution slices, FOR UPDATE SKIP LOCKED claiming, one active task per game, opaque work-key fencing, heartbeats, stale recovery, cancellation, retries, and graceful shutdown.
+- Durable run/task state, priorities, bounded execution slices, `FOR UPDATE SKIP LOCKED` claiming, one active task per game, opaque work-key fencing, heartbeats, stale recovery, cancellation, retries, and graceful shutdown.
 - AbortSignal-aware provider streams and engine disposal.
 - Engine-free indexing/tag tasks and isolated Stockfish lifecycle for analysis tasks.
 - Idempotent executors that can be retried after process or provider failure.
@@ -279,17 +305,22 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 7. Stockfish analysis, cache, accuracy, and baseline move classification
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- docs/position-analysis-cache.md.
-- apps/api/src/modules/analysis/stockfish-engine.ts.
-- apps/api/src/modules/analysis/stockfish-engine.factory.ts.
-- apps/api/src/modules/analysis/position-analysis.service.ts.
-- apps/api/src/modules/analysis/imported-game-analysis.service.ts.
-- apps/api/src/modules/analysis/imported-game-analysis-execution.service.ts.
-- apps/api/src/modules/analysis/accuracy.ts.
-- packages/chess-domain/src/stockfish-analysis.ts and move-classification.ts.
-- Tests under apps/api/test/analysis and packages/chess-domain.
+- `docs/position-analysis-cache.md`.
+- `apps/api/src/modules/analysis/stockfish-engine.ts`.
+- `apps/api/src/modules/analysis/stockfish-engine.factory.ts`.
+- `apps/api/src/modules/analysis/position-analysis.service.ts`.
+- `apps/api/src/modules/analysis/imported-game-analysis.service.ts`.
+- `apps/api/src/modules/analysis/imported-game-analysis-execution.service.ts`.
+- `apps/api/src/modules/analysis/accuracy.ts`.
+- `packages/chess-domain/src/stockfish-analysis.ts` and `packages/chess-domain/src/move-classification.ts`.
+- `apps/api/test/analysis/accuracy.test.mjs`.
+- `apps/api/test/analysis/imported-game-analysis-execution.test.mjs`.
+- `apps/api/test/analysis/local-stockfish-engine.test.mjs`.
+- `apps/api/test/analysis/analysis-response-contracts.test.mjs`.
 
 **Preserve**
 
@@ -304,7 +335,7 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 - Include bullet games in the supported standard-game analysis policy.
 - Add timing-aware features only after source clock evidence is persisted. Time pressure, fast play, increment effects, and session deterioration must be derived in a dedicated timing/diagnostic layer rather than encoded as new generic Stockfish classifications.
-- Keep the CRT baseline classifications as descriptive move quality. A Why diagnosis must explain a recurring mechanism across evidence, not rename a single BLUNDER.
+- Keep the CRT baseline classifications as descriptive move quality. A Why diagnosis must explain a recurring mechanism across evidence, not rename a single `BLUNDER`.
 - Define analysis coverage and engine/model versions in a way that allows a diagnosis to distinguish missing evidence from absence of a pattern.
 
 **Omit**
@@ -314,17 +345,19 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- StockfishEngine, PositionAnalysisRepository, and MoveClassification remain reusable inputs.
-- Add a separate TimingFeatureExtractor and DiagnosticDetector boundary that consumes immutable game/ply/analysis evidence and emits versioned findings.
+- `StockfishEngine`, `PositionAnalysisRepository`, and move classification remain reusable inputs.
+- Add a separate `TimingFeatureExtractor` and `DiagnosticDetector` boundary that consumes immutable game/ply/analysis evidence and emits versioned findings.
 
 ### 8. Story tags and game-level enrichment
 
+**Reuse classification:** `use only as a pattern`
+
 **Reference**
 
-- docs/imported-game-tags.md.
-- apps/api/src/modules/imported-games/game-tagging.service.ts.
-- apps/api/src/modules/imported-games/game-tags.ts.
-- Tests: apps/api/test/imported-games/game-tagging.test.mjs.
+- `docs/imported-game-tags.md`.
+- `apps/api/src/modules/imported-games/game-tagging.service.ts`.
+- `apps/api/src/modules/imported-games/game-tags.ts`.
+- `apps/api/test/imported-games/game-tagging.test.mjs`.
 
 **Preserve**
 
@@ -335,9 +368,9 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Change**
 
-- Do not make CRT's compact ImportedGame.tagCodes Int[] the canonical diagnostic representation. It has no category, confidence, detector version, source evidence, or explanation link.
+- Do not make CRT's compact `ImportedGame.tagCodes Int[]` the canonical diagnostic representation. It has no category, confidence, detector version, source evidence, or explanation link.
 - Keep story/enrichment facets separate from diagnosis findings. A game can be tagged “time pressure” or “repeated mistake,” but a diagnosis needs the exact plies, measurements, comparison baseline, detector version, and confidence.
-- Implement the reserved clock story tags only when real per-ply clocks exist; do not infer TIME_SCRAMBLE, MUTUAL_TIME_SCRAMBLE, or PLAYED_TOO_FAST from elapsed game metadata.
+- Implement the reserved clock story tags only when real per-ply clocks exist; do not infer `TIME_SCRAMBLE`, `MUTUAL_TIME_SCRAMBLE`, or `PLAYED_TOO_FAST` from elapsed game metadata.
 - Keep classification/category names stable and user-facing only through contracts, not as magic integer meanings spread through the UI.
 
 **Omit**
@@ -347,16 +380,21 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- A GameStoryDetector can emit structured facets for filtering.
-- A separate DiagnosisFinding model can reference story facets without sharing their storage format.
+- A `GameStoryDetector` can emit structured facets for filtering.
+- A separate `DiagnosisFinding` model can reference story facets without sharing their storage format.
 
 ### 9. Tactical detections and chess-mechanism evidence
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- docs/tactical-detections.md.
-- apps/api/src/modules/lab/tactical-detections/tactical-detection.service.ts and its policy/repository files.
-- Tests under apps/api/test/tactical-detections.
+- `docs/tactical-detections.md`.
+- `apps/api/src/modules/lab/tactical-detections/tactical-detection.service.ts`.
+- `apps/api/src/modules/lab/tactical-detections/tactical-detection-policy.ts`.
+- `apps/api/src/modules/lab/tactical-detections/tactical-detection.repository.prisma.ts`.
+- `apps/api/src/modules/lab/tactical-detections/tactical-detection-game.repository.prisma.ts`.
+- `apps/api/test/tactical-detections/tactical-detection-policy.test.mjs`.
 
 **Preserve**
 
@@ -383,13 +421,16 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 10. Opening struggles and recurring-position analysis
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- docs/opening-struggles.md.
-- apps/api/src/modules/opening-struggles.
-- Imported-game filter/repository and the shared opening matcher.
-- packages/contracts/src/opening-struggles.
-- Tests under apps/api/test/opening-struggles.
+- `docs/opening-struggles.md`.
+- `apps/api/src/modules/opening-struggles/opening-struggles.service.ts`.
+- `apps/api/src/modules/opening-struggles/opening-struggles.repository.prisma.ts`.
+- `apps/api/src/modules/opening-struggles/opening-struggles.routes.ts`.
+- `apps/api/src/modules/opening-struggles/opening-struggles.schema.ts`.
+- `apps/api/test/opening-struggles/opening-struggles.test.mjs`.
 
 **Preserve**
 
@@ -416,13 +457,18 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 11. Player profile, performance aggregation, and evidence quality
 
+**Reuse classification:** `use only as a pattern`
+
 **Reference**
 
-- docs/player-chess-profile.md.
-- apps/api/src/modules/player-chess-profile/player-chess-profile.service.ts.
-- player-chess-profile.repository.prisma.ts and player-chess-profile.metrics.ts.
-- apps/api/src/modules/imported-games/performance-insights.service.ts.
-- Tests under apps/api/test/player-chess-profile.
+- `docs/player-chess-profile.md`.
+- `apps/api/src/modules/player-chess-profile/player-chess-profile.service.ts`.
+- `apps/api/src/modules/player-chess-profile/player-chess-profile.repository.prisma.ts`.
+- `apps/api/src/modules/player-chess-profile/player-chess-profile.metrics.ts`.
+- `apps/api/src/modules/imported-games/performance-insights.service.ts`.
+- `apps/api/test/player-chess-profile/player-chess-profile.service.test.mjs`.
+- `apps/api/test/player-chess-profile/player-chess-profile.performance.test.mjs`.
+- `apps/api/test/player-chess-profile/player-chess-profile.test.mjs`.
 
 **Preserve**
 
@@ -447,18 +493,24 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- A DiagnosticEvidenceQuery layer can assemble bounded evidence units.
+- A `DiagnosticEvidenceQuery` layer can assemble bounded evidence units.
 - A pure aggregator can turn those units into findings, confidence, and wording inputs; a later explanation provider can consume the result without querying Prisma.
 
 ### 12. Web replay, board, and investigation UI
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- apps/web/src/app/features/games/game-detail-page.
-- game-detail.store and game-tree.helpers.ts.
-- game-workbench, game-summary, game-insights, game-evaluation-graph, game-tactical-findings, and game-ai-review-widget components.
-- The shared analysis-board/chessground board components.
-- docs/ai-widgets.md for the existing game-review context and bounded replay model.
+- `apps/web/src/app/features/games/pages/game-detail-page.component.ts`.
+- `apps/web/src/app/features/games/pages/game-detail-page.component.spec.ts`.
+- `apps/web/src/app/features/games/state/game-detail.store.ts`.
+- `apps/web/src/app/features/games/state/game-detail.store.spec.ts`.
+- `apps/web/src/app/features/games/helpers/game-tree.helpers.ts`.
+- `apps/web/src/app/features/games/helpers/game-tree.helpers.spec.ts`.
+- `apps/web/src/app/features/games/state/game-tactical-findings.store.ts`.
+- `apps/web/src/app/features/games/state/game-tactical-findings.store.spec.ts`.
+- `docs/ai-widgets.md` for the existing bounded game-review/replay context.
 
 **Preserve**
 
@@ -486,16 +538,20 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 13. API routes, shared contracts, and generated documentation
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- docs/api-contracts.md and docs/openapi.md.
-- apps/api/src/app.ts and route composition in apps/api/src/routes/index.ts.
-- packages/contracts/src/lichess, imported-games, analysis, jobs, player-chess-profile, and ai.
-- Route schema patterns and contract-validation tests.
+- `docs/api-contracts.md` and `docs/openapi.md`.
+- `apps/api/src/app.ts` and `apps/api/src/routes/index.ts`.
+- `packages/contracts/src/lichess/lichess.schemas.ts`.
+- `packages/contracts/src/imported-games/imported-games.schemas.ts`.
+- `packages/contracts/src/jobs/job-run.schemas.ts`.
+- `apps/api/test/analysis/analysis-response-contracts.test.mjs`.
 
 **Preserve**
 
-- Zod schemas in packages/contracts as the source of verified HTTP shapes.
+- Zod schemas in `packages/contracts` as the source of verified HTTP shapes.
 - Fastify route schemas and typed response mapping.
 - ISO date/time serialization, explicit nullable fields, ownership checks, and consumer-specific projections.
 - OpenAPI generation from route metadata; avoid hand-maintained duplicate API descriptions.
@@ -519,15 +575,17 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 14. Engineering procedures, CI, and repository hygiene
 
+**Reuse classification:** `copy/adapt`
+
 **Reference**
 
-- CRT root package.json.
-- .github/workflows/ci.yml.
-- scripts/check-architecture-guardrails.mjs.
-- scripts/check-repository-hygiene.mjs.
-- docs/repository-hygiene.md.
-- CRT AGENTS.md and .github/instructions/docs.instructions.md.
-- .github/skills/documentation-sync/SKILL.md.
+- `package.json`.
+- `.github/workflows/ci.yml`.
+- `scripts/check-architecture-guardrails.mjs`.
+- `scripts/check-repository-hygiene.mjs`.
+- `docs/repository-hygiene.md`.
+- `AGENTS.md` and `.github/instructions/docs.instructions.md`.
+- `.github/skills/documentation-sync/SKILL.md`.
 
 **Preserve**
 
@@ -556,11 +614,18 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 ### 15. Optional AI explanation layer
 
+**Reuse classification:** `use only as a pattern`
+
 **Reference**
 
-- docs/ai-widgets.md.
-- apps/api/src/modules/ai and packages/contracts/src/ai.
-- The game-review widget and its API/tests.
+- `docs/ai-widgets.md`.
+- `apps/api/src/modules/ai/ai.config.ts`.
+- `apps/api/src/modules/ai/ai.routes.ts`.
+- `apps/api/src/modules/ai/openai-compatible-llm.client.ts`.
+- `apps/api/src/modules/ai/game-review/game-review-context.ts`.
+- `apps/api/src/modules/ai/game-review/game-review.service.ts`.
+- `apps/web/src/app/features/games/state/game-ai-review.store.ts`.
+- `apps/web/src/app/features/games/state/game-ai-review.store.spec.ts`.
 
 **Preserve**
 
@@ -582,7 +647,7 @@ The worker may remain an entry point in apps/api initially, as it does in CRT. T
 
 **Future seam**
 
-- Define an ExplanationProvider boundary that receives a typed, redacted finding context and returns a bounded explanation artifact.
+- Define an `ExplanationProvider` boundary that receives a typed, redacted finding context and returns a bounded explanation artifact.
 - The core product must remain useful and testable with no provider key and no network call.
 
 ## Non-negotiable product deltas
@@ -593,7 +658,7 @@ These are the mismatches that must be resolved during implementation rather than
 | --- | --- | --- |
 | Identity | App user can have provider accounts, and durable Lichess import can fall back to a public request without a token. | One authenticated Why user maps to one connected Lichess identity; private import fails clearly when that connection is unavailable. |
 | Provider scope | Lichess plus existing provider-oriented seams and historical legacy paths. | Lichess only initially; keep the adapter seam but omit other providers. |
-| Clocks | Lichess provider type can see optional clocks, but the URL omits clocks=true; normalization and ImportedGamePly do not retain per-ply clocks. | Request, persist, contract, replay, and derive from per-ply clock evidence end to end. |
+| Clocks | Lichess provider type can see optional clocks, but the URL omits `clocks=true`; normalization and `ImportedGamePly` do not retain per-ply clocks. | Request, persist, contract, replay, and derive from per-ply clock evidence end to end. |
 | Time controls | Game-level raw/initial/increment values exist; downstream behavior often groups by speed. | Preserve exact control and increment, with speed as a separate label and timing derivations versioned. |
 | Speed eligibility | Durable import scope includes bullet, but standard imported-game indexing/analysis currently accepts only blitz and rapid. | Bullet is in the first supported standard-game analysis scope. |
 | Enrichment | Compact integer story tags and separate tactical/opening/profile views. | Keep useful facets, but diagnoses require structured, versioned evidence with source plies and sufficiency. |
@@ -652,21 +717,22 @@ This map does not silently decide the details that belong in the next design art
 
 ## Evidence inventory
 
-The following CRT artifacts were used as the reference, so future implementation work can jump to the closest proven behavior:
+The following CRT artifacts are representative exact starting points at the pinned snapshot; subsystem Reference blocks above are authoritative when more detail is needed.
 
-| Capability | Primary CRT documentation | Primary tests |
+| Capability | Primary CRT documentation/code | Representative exact tests |
 | --- | --- | --- |
-| Architecture and process boundaries | docs/architecture.md | apps/api/test/app.test.mjs and module-specific suites |
-| OAuth and identity | auth services, migrations, and contracts listed above | apps/api/test/auth/* |
-| Durable Lichess import | account-import provider/executor/lifecycle modules | apps/api/test/account-imports/* |
-| Ply/position indexing | imported-games and positions modules | apps/api/test/imported-games/* and analysis position tests |
-| Analysis/cache/classification | docs/position-analysis-cache.md and analysis/domain modules | apps/api/test/analysis/* and packages/chess-domain tests |
-| Jobs and worker | docs/imported-game-job-processing.md | apps/api/test/jobs/* |
-| Story tags | docs/imported-game-tags.md | apps/api/test/imported-games/game-tagging.test.mjs |
-| Tactical evidence | docs/tactical-detections.md | apps/api/test/tactical-detections/* |
-| Opening evidence | docs/opening-struggles.md | apps/api/test/opening-struggles/* |
-| Profile/evidence quality | docs/player-chess-profile.md | apps/api/test/player-chess-profile/* |
-| Web replay and AI boundaries | web game feature paths and docs/ai-widgets.md | corresponding web/API feature suites |
-| Procedures and hygiene | CRT AGENTS.md, CI, guardrail scripts, and docs/repository-hygiene.md | CI checks and repository scripts |
+| Architecture and process boundaries | `docs/architecture.md`, `apps/api/src/app.ts`, `apps/api/src/worker.ts` | `apps/api/test/app.test.mjs` |
+| OAuth and identity | `apps/api/src/auth/current-app-user.service.ts`, `apps/api/src/services/lichessConnectionService.ts` | `apps/api/test/auth/external-user-resolution.test.mjs`, `apps/api/test/auth/lichess-oauth-flow.test.mjs` |
+| Durable Lichess import | `apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.ts`, `apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.executor.ts` | `apps/api/test/account-imports/account-import.lichess.test.mjs`, `apps/api/test/account-imports/account-import.lichess-executor.test.mjs` |
+| Ply/position indexing | `apps/api/src/modules/imported-games/ply-index.service.ts`, `apps/api/src/modules/positions/position-key.ts` | `apps/api/test/analysis/latest-analysis-snapshot.test.mjs` |
+| Analysis/cache/classification | `docs/position-analysis-cache.md`, `apps/api/src/modules/analysis/imported-game-analysis-execution.service.ts` | `apps/api/test/analysis/imported-game-analysis-execution.test.mjs`, `apps/api/test/analysis/accuracy.test.mjs` |
+| Jobs and worker | `docs/imported-game-job-processing.md`, `apps/api/src/modules/jobs/job-worker.service.ts` | `apps/api/test/jobs/job-worker.test.mjs`, `apps/api/test/jobs/imported-game-job-executors.test.mjs` |
+| Story tags | `docs/imported-game-tags.md`, `apps/api/src/modules/imported-games/game-tagging.service.ts` | `apps/api/test/imported-games/game-tagging.test.mjs` |
+| Tactical evidence | `docs/tactical-detections.md`, `apps/api/src/modules/lab/tactical-detections/tactical-detection.service.ts` | `apps/api/test/tactical-detections/tactical-detection-policy.test.mjs` |
+| Opening evidence | `docs/opening-struggles.md`, `apps/api/src/modules/opening-struggles/opening-struggles.service.ts` | `apps/api/test/opening-struggles/opening-struggles.test.mjs` |
+| Profile/evidence quality | `docs/player-chess-profile.md`, `apps/api/src/modules/player-chess-profile/player-chess-profile.service.ts` | `apps/api/test/player-chess-profile/player-chess-profile.service.test.mjs` |
+| Web replay | `apps/web/src/app/features/games/pages/game-detail-page.component.ts`, `apps/web/src/app/features/games/state/game-detail.store.ts` | `apps/web/src/app/features/games/pages/game-detail-page.component.spec.ts`, `apps/web/src/app/features/games/state/game-detail.store.spec.ts` |
+| Optional AI boundary | `docs/ai-widgets.md`, `apps/api/src/modules/ai/game-review/game-review.service.ts` | `apps/web/src/app/features/games/state/game-ai-review.store.spec.ts` |
+| Procedures and hygiene | `AGENTS.md`, `.github/workflows/ci.yml`, `scripts/check-repository-hygiene.mjs` | CI and repository scripts themselves are the executable checks. |
 
 The next implementation PRs should link back to this map when they make a deliberate preserve/change/omit decision, especially for clocks, bullet eligibility, and diagnosis evidence.
