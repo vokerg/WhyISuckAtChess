@@ -814,14 +814,14 @@ Issue #4 owns the exact clock unit, before/after-move semantics, think-time reco
 
 ### 8.1 Allowed relationship edges
 
-A finding may relate to another finding through one or more typed edges:
+A finding may relate to another finding through one or more typed edges. Every relationship edge is directed from one `DiagnosticFinding.id` to another `DiagnosticFinding.id`; raw context values such as `3+0`, `no increment`, a clock band, or an interpretation string belong in finding scope/dimensions and are never relationship targets.
 
 | Edge | Meaning |
 | --- | --- |
 | `SPECIALIZES` | Child is a more specific form of parent. Example `TACT-004` specializes `TACT-006`. |
 | `MANIFESTS_AS` | Higher-level condition/root candidate produces or is evidenced through a concrete mechanism/outcome. |
 | `CONTRIBUTES_TO` | Finding plausibly contributes to another based on ordered/conditional evidence, without asserting full causality. |
-| `CONDITIONAL_ON` | Finding is materially concentrated in a context. Example tactical blindness conditional on low clock. |
+| `CONDITIONAL_ON` | Finding is materially concentrated when another contextual finding/condition is present. Example `TACT-004 CONDITIONAL_ON -> TIME-002` when hanging-material errors rise under time pressure. |
 | `EXPLAINS_OBSERVATION` | Mechanism/condition provides a more specific explanation for an observation. |
 | `SHARES_EVENTS_WITH` | Findings use materially overlapping game/ply events and should not be ranked independently without penalty. |
 | `CONFOUNDED_BY` | A material composition difference weakens interpretation. |
@@ -862,18 +862,16 @@ TACT-004  hanging-material errors dominate those low-clock blunders
 TIME-006  increment games show less late pressure
 ```
 
-Relationship graph:
+The exact-control and increment values remain in each finding's scope/dimensions; the relationship graph contains finding IDs only:
 
 ```text
-TIME-005 EXACT_TIME_CONTROL_UNDERPERFORMANCE (observation)
-  EXPLAINED_BY -> TIME-001 FREQUENT_TIME_PRESSURE
-  EXPLAINED_BY -> TIME-002 QUALITY_COLLAPSE_UNDER_TIME_PRESSURE
-TIME-002
+TIME-001 FREQUENT_TIME_PRESSURE (observation; scope: 3+0)
+  CONTRIBUTES_TO -> TIME-005 EXACT_TIME_CONTROL_UNDERPERFORMANCE
+TIME-002 QUALITY_COLLAPSE_UNDER_TIME_PRESSURE (contributing condition)
+  EXPLAINS_OBSERVATION -> TIME-005 EXACT_TIME_CONTROL_UNDERPERFORMANCE
   MANIFESTS_AS -> TACT-004 HANGING_OR_UNDEFENDED_MATERIAL
-TIME-001
-  CONDITIONAL_ON -> 3+0 / no increment context
-TIME-006
-  CONTRIBUTES_TO -> interpretation of TIME-001
+TIME-006 INCREMENT_EFFECT (contributing condition)
+  CONTRIBUTES_TO -> TIME-001 FREQUENT_TIME_PRESSURE
 ```
 
 A ranking engine may synthesize a root candidate such as:
