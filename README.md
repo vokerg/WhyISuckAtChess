@@ -10,6 +10,9 @@ A lightweight, evidence-driven chess diagnosis product built to answer one quest
 - [BIBLE.md](BIBLE.md) — canonical product intent, diagnostic philosophy, architecture principles, scope, and engineering invariants.
 - [PLAN.md](PLAN.md) — high-level project phases, phase exit criteria, dependencies, parallelism, PR/review model, and agentic delivery process.
 - [CRT-to-Why delta map](docs/crt-delta-map.md) — Phase 1 reference inventory and intentional preserve/change/omit seams for issue #2.
+- [Diagnostic taxonomy and evidence contracts](docs/diagnostic-taxonomy.md) — canonical diagnosis IDs, evidence/coverage rules, finding semantics, and relationship contract from issue #3.
+- [Lichess ingestion and timing contract](docs/lichess-ingestion-and-timing.md) — authoritative connected-account import, exact time-control, raw clock-state, alignment, timing-derivation, and bullet-eligibility contract from issue #4.
+- [Implementation architecture and dependency graph](docs/implementation-architecture-and-dependency-graph.md) — Phase 1 module/data/worker boundaries and dependency-safe implementation sequence from issue #8.
 
 The existing [`vokerg/chess_repertoir_trainer`](https://github.com/vokerg/chess_repertoir_trainer) project is the primary reference implementation for stack, authentication, Lichess integration, imported-game processing, Stockfish analysis, chess UI, and engineering procedures; this project is not intended to be a fork of it.
 
