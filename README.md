@@ -14,6 +14,52 @@ A lightweight, evidence-driven chess diagnosis product built to answer one quest
 - [Lichess ingestion and timing contract](docs/lichess-ingestion-and-timing.md) — authoritative connected-account import, exact time-control, raw clock-state, alignment, timing-derivation, and bullet-eligibility contract from issue #4.
 - [Implementation architecture and dependency graph](docs/implementation-architecture-and-dependency-graph.md) — Phase 1 module/data/worker boundaries and dependency-safe implementation sequence from issue #8.
 
-The existing [`vokerg/chess_repertoir_trainer`](https://github.com/vokerg/chess_repertoir_trainer) project is the primary reference implementation for stack, authentication, Lichess integration, imported-game processing, Stockfish analysis, chess UI, and engineering procedures; this project is not intended to be a fork of it.
+The existing [`vokerg/chess_repertoir_trainer`](https://github.com/vokerg/chess_repertoir_trainer) project is the primary reference implementation. This repository adapts its modular workspace/process patterns but intentionally omits mobile, repertoire, course, and training product breadth.
 
-Before meaningful feature work, agents must inspect the corresponding Chess Repertoire Trainer implementation and define the intentional delta. Implementation should follow the repository sources of truth and GitHub issue/PR state rather than relying on chat history.
+## Workspace
+
+```text
+apps/api                 Fastify HTTP API plus a separate persistent-worker entry point
+apps/web                 Angular application shell
+packages/chess-domain    framework-neutral chess logic
+packages/contracts       verified wire schemas/types
+scripts                   architecture and repository guardrails
+```
+
+The API reserves module seams for auth, Lichess, account imports, jobs, imported games, timing, positions, analysis, evidence, sessions, and diagnosis. Issue #9 deliberately implements none of those features beyond the bootstrap boundary.
+
+## Developer setup
+
+Requirements: Node.js 22.12+ and npm 10+. PostgreSQL is required only for migration/database checks at this stage.
+
+```bash
+npm install
+cp .env.example .env
+npm run db:validate
+npm run db:generate
+npm run build
+npm run typecheck
+npm test
+npm run lint
+```
+
+For a PostgreSQL migration smoke check, point `DATABASE_URL` at a disposable database and run:
+
+```bash
+npm run db:migrate
+```
+
+Development processes are intentionally separate:
+
+```bash
+npm run dev          # API + Angular web shell
+npm run dev:worker   # persistent worker process; no executors are registered yet
+```
+
+The API exposes only `GET /health`. The web app contains only a bootstrap shell. Provider/OAuth/import/Stockfish/diagnosis behavior belongs to later issues.
+
+## Guardrails
+
+`npm run check:architecture` enforces the initial dependency rules: no Prisma imports from `packages/chess-domain`, no provider/Lichess imports from diagnosis, and no AI dependency inside deterministic detector directories when those directories appear. `npm run check:hygiene` rejects committed generated/vendor content, environment secrets, and omitted CRT product workspaces.
+
+CI installs the workspace, validates and deploys the empty bootstrap Prisma migration against PostgreSQL, then runs typecheck, lint/guardrails, build, and tests.

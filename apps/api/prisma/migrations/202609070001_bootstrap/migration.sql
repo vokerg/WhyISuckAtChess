@@ -1,0 +1,2 @@
+-- Bootstrap migration.
+-- Product tables are intentionally deferred to the feature issues that own their schemas.

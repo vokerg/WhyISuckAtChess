@@ -1,0 +1,32 @@
+{
+  "name": "@why-i-suck-at-chess/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev:worker": "ts-node-dev --respawn --transpile-only src/worker.ts",
+    "prebuild": "npm --prefix ../.. run build:contracts && prisma generate --schema prisma/schema.prisma",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "prisma generate --schema prisma/schema.prisma && tsc -p tsconfig.json --noEmit",
+    "lint": "npm run typecheck",
+    "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@why-i-suck-at-chess/contracts": "file:../../packages/contracts",
+    "dotenv": "^16.3.1",
+    "fastify": "^5.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prisma": "^6.19.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.0"
+  }
+}
