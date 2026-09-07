@@ -16,7 +16,7 @@ CREATE TABLE "LichessConnection" (
     "appUserId" INTEGER NOT NULL,
     "lichessUserId" VARCHAR(64) NOT NULL,
     "username" VARCHAR(64) NOT NULL,
-    "scopes" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "scopes" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "accessTokenCiphertext" TEXT NOT NULL,
     "accessTokenIv" TEXT NOT NULL,
     "accessTokenAuthTag" TEXT NOT NULL,
