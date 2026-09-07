@@ -1,0 +1,38 @@
+{
+  "name": "why-i-suck-at-chess",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/chess-domain",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:worker": "npm run dev:worker --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build:domain && npm run build:contracts && npm run build:api && npm run build:web",
+    "build:domain": "npm run build --workspace=packages/chess-domain",
+    "build:contracts": "npm run build --workspace=packages/contracts",
+    "build:api": "npm run build --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "typecheck": "npm run build:domain && npm run build:contracts && npm run typecheck --workspace=packages/chess-domain && npm run typecheck --workspace=packages/contracts && npm run typecheck --workspace=apps/api && npm run typecheck --workspace=apps/web",
+    "test": "npm run test --workspace=packages/chess-domain && npm run test --workspace=packages/contracts && npm run test --workspace=apps/api && npm run test --workspace=apps/web && npm run test:guardrails",
+    "lint": "npm run build:domain && npm run build:contracts && npm run lint --workspace=packages/chess-domain && npm run lint --workspace=packages/contracts && npm run lint --workspace=apps/api && npm run lint --workspace=apps/web && npm run check:architecture && npm run check:hygiene",
+    "test:guardrails": "node --test scripts/*.test.mjs",
+    "check:architecture": "node scripts/check-architecture-guardrails.mjs",
+    "check:hygiene": "node scripts/check-repository-hygiene.mjs",
+    "db:validate": "npm run db:validate --workspace=apps/api",
+    "db:generate": "npm run db:generate --workspace=apps/api",
+    "db:migrate": "npm run db:migrate --workspace=apps/api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
