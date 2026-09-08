@@ -7,4 +7,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Product tables are intentionally deferred to their owning feature issues.
+model AppUser {
+  id                Int                 @id @default(autoincrement())
+  authProvider      String              @db.VarChar(32)
+  authSubject       String              @db.VarChar(255)
+  email             String?
+  displayName       String?
+  lichessConnection LichessConnection?
+  oauthLoginStates  OAuthLoginState[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([authProvider, authSubject])
+}
+
+model LichessConnection {
+  id                    Int      @id @default(autoincrement())
+  appUserId             Int      @unique
+  appUser               AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  lichessUserId         String   @unique @db.VarChar(64)
+  username              String   @db.VarChar(64)
+  scopes                String[] @default([])
+  accessTokenCiphertext String
+  accessTokenIv         String
+  accessTokenAuthTag    String
+  expiresAt             DateTime?
+  connectedAt           DateTime @default(now())
+  revokedAt             DateTime?
+  credentialGeneration  String   @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([username])
+}
+
+model OAuthLoginState {
+  id           Int      @id @default(autoincrement())
+  appUserId    Int
+  appUser      AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  provider     String   @db.VarChar(32)
+  state        String   @unique @db.VarChar(128)
+  codeVerifier String?  @db.VarChar(256)
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  consumedAt   DateTime?
+
+  @@index([appUserId, provider])
+  @@index([expiresAt])
+}
