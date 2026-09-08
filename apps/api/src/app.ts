@@ -4,7 +4,15 @@ import { registerAuth, type AuthPluginOptions } from './auth/auth.plugin';
 import {
   registerLichessRoutes,
 } from './modules/lichess/lichess.routes';
-import type { LichessConnectionService } from './modules/lichess/lichess-connection.service';
+import {
+  lichessConnectionService,
+  type LichessConnectionService,
+} from './modules/lichess/lichess-connection.service';
+import {
+  createLichessAccountImportService,
+  type LichessAccountImportService,
+} from './modules/account-imports/account-import.service';
+import { registerAccountImportRoutes } from './modules/account-imports/account-import.routes';
 import prisma from './prisma';
 
 export interface PrismaLifecycle {
@@ -15,6 +23,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
   logger?: FastifyServerOptions['logger'];
   prisma?: PrismaLifecycle;
   lichessService?: LichessConnectionService;
+  accountImportService?: LichessAccountImportService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -36,6 +45,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   }));
 
   await registerLichessRoutes(app, options.lichessService);
+  await registerAccountImportRoutes(
+    app,
+    options.accountImportService ?? createLichessAccountImportService({
+      connectionService: options.lichessService ?? lichessConnectionService,
+    }),
+  );
 
   return app;
 }

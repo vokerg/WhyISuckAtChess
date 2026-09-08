@@ -1,18 +1,24 @@
 import 'dotenv/config';
 import prisma from './prisma';
+import { lichessConnectionService } from './modules/lichess/lichess-connection.service';
+import { createLichessAccountImportService } from './modules/account-imports/account-import.service';
 
 export async function runWorkerUntilStopped(): Promise<void> {
-  console.info('Persistent worker started; no executors are registered in the bootstrap workspace.');
+  const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
+  console.info('Persistent worker started; Lichess account import executor is registered.');
 
-  await new Promise<void>((resolve) => {
-    const stop = (signal: NodeJS.Signals) => {
-      console.info('Stopping persistent worker', { signal });
-      resolve();
-    };
+  let stopping = false;
+  const stop = (signal: NodeJS.Signals) => {
+    console.info('Stopping persistent worker', { signal });
+    stopping = true;
+  };
+  process.once('SIGINT', () => stop('SIGINT'));
+  process.once('SIGTERM', () => stop('SIGTERM'));
 
-    process.once('SIGINT', () => stop('SIGINT'));
-    process.once('SIGTERM', () => stop('SIGTERM'));
-  });
+  while (!stopping) {
+    const ran = await importService.runOnce();
+    if (!ran) await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 }
 
 async function bootstrap() {

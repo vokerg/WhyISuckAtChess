@@ -15,6 +15,9 @@ model AppUser {
   displayName       String?
   lichessConnection LichessConnection?
   oauthLoginStates  OAuthLoginState[]
+  importedGames     ImportedGame[]
+  importRuns        ImportRun[]
+  importCoverages   AccountImportCoverage[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -54,4 +57,123 @@ model OAuthLoginState {
 
   @@index([appUserId, provider])
   @@index([expiresAt])
+}
+
+model ImportedGame {
+  id                         Int                   @id @default(autoincrement())
+  appUserId                  Int
+  appUser                    AppUser               @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  provider                   String                @db.VarChar(32)
+  providerGameId             String                @db.VarChar(128)
+  providerUrl                String?
+  source                     String                @default("LICHESS_API") @db.VarChar(64)
+  connectedLichessUserId     String                @db.VarChar(64)
+  connectedLichessUsername   String                @db.VarChar(64)
+  pgn                        String?
+  rated                      Boolean?
+  variant                    String?               @db.VarChar(32)
+  speedCategory              String?               @db.VarChar(32)
+  performanceCategory        String?               @db.VarChar(32)
+  timeControlRaw             String?
+  timeControlInitial         Int?
+  timeControlIncrement       Int?
+  timeControlSource          String                @default("UNKNOWN") @db.VarChar(32)
+  exactTimeControlKey        String?               @db.VarChar(128)
+  startedAt                  DateTime?
+  endedAt                    DateTime?
+  whiteUsername              String?
+  blackUsername              String?
+  whiteRating                Int?
+  blackRating                Int?
+  userColor                  String?               @db.VarChar(8)
+  opponentUsername           String?
+  result                     String?               @db.VarChar(16)
+  resultForUser              String?               @db.VarChar(16)
+  status                     String?               @db.VarChar(32)
+  openingName                String?
+  openingEco                 String?               @db.VarChar(16)
+  rawClockPresence           String                @default("ABSENT") @db.VarChar(16)
+  rawClockStateCount         Int                   @default(0)
+  rawClockUnit               String                @default("CENTISECONDS") @db.VarChar(24)
+  rawClockAnomalies          Json?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  rawClockStates             LichessClockState[]
+
+  @@unique([appUserId, provider, providerGameId])
+  @@index([appUserId, startedAt])
+  @@index([appUserId, provider, connectedLichessUserId])
+}
+
+model LichessClockState {
+  id                  Int          @id @default(autoincrement())
+  importedGameId      Int
+  importedGame        ImportedGame @relation(fields: [importedGameId], references: [id], onDelete: Cascade)
+  provider            String       @default("LICHESS") @db.VarChar(32)
+  sourceOrdinal       Int
+  valueCentiseconds   Int
+  createdAt           DateTime     @default(now())
+
+  @@unique([importedGameId, sourceOrdinal])
+  @@index([importedGameId, sourceOrdinal])
+}
+
+model ImportRun {
+  id                       Int                    @id @default(autoincrement())
+  appUserId                Int
+  appUser                  AppUser                @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  provider                 String                 @db.VarChar(32)
+  mode                     String                 @default("BOUNDED_INITIAL") @db.VarChar(32)
+  source                   String                 @default("LICHESS_API") @db.VarChar(64)
+  status                   String                 @default("QUEUED") @db.VarChar(24)
+  scopeVersion             Int                    @default(1)
+  scopeHash                String                 @db.VarChar(64)
+  scopeJson                Json
+  requestedFrom            DateTime
+  requestedTo              DateTime
+  lichessUserIdSnapshot    String                 @db.VarChar(64)
+  lichessUsernameSnapshot  String                 @db.VarChar(64)
+  checkpointJson           Json?
+  windowsTotal             Int                    @default(0)
+  windowsCompleted         Int                    @default(0)
+  gamesSeen                Int                    @default(0)
+  gamesMatchedScope        Int                    @default(0)
+  gamesImported            Int                    @default(0)
+  gamesDuplicate           Int                    @default(0)
+  gamesUpdated             Int                    @default(0)
+  gamesSkipped             Int                    @default(0)
+  gamesSkippedOutOfScope   Int                    @default(0)
+  gamesFailed              Int                    @default(0)
+  lastProgressAt           DateTime?
+  workKey                  String                 @unique
+  claimedAt                DateTime?
+  heartbeatAt              DateTime?
+  cancelRequestedAt        DateTime?
+  rateLimitUntil           DateTime?
+  errorCode                String?                @db.VarChar(64)
+  error                    String?
+  startedAt                DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  @@index([appUserId, status, createdAt])
+  @@index([status, heartbeatAt])
+}
+
+model AccountImportCoverage {
+  id                    Int       @id @default(autoincrement())
+  appUserId             Int
+  appUser               AppUser   @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  scopeVersion          Int
+  scopeHash             String    @db.VarChar(64)
+  scopeJson             Json
+  coveredFrom           DateTime?
+  coveredThrough        DateTime?
+  lastCompletedImportRunId Int?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([appUserId, scopeHash])
+  @@index([appUserId, coveredThrough])
 }
