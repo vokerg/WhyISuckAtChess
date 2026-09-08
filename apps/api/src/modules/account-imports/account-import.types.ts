@@ -91,9 +91,9 @@ export interface AccountImportRepository {
   createRun(input: CreateImportRunInput): Promise<StoredImportRun>;
   getRun(appUserId: number, runId: number): Promise<StoredImportRun | null>;
   claimNextRun(now: Date, staleAfter: Date): Promise<StoredImportRun | null>;
-  heartbeat(runId: number, now: Date): Promise<void>;
-  deferRun(runId: number, retryAt: Date, code: string, message: string, now: Date): Promise<void>;
-  updateProgress(runId: number, patch: {
+  heartbeat(runId: number, claimedAt: Date, now: Date): Promise<void>;
+  deferRun(runId: number, claimedAt: Date, retryAt: Date, code: string, message: string, now: Date): Promise<void>;
+  updateProgress(runId: number, claimedAt: Date, patch: {
     windowsCompleted?: number;
     gamesSeen?: number;
     gamesMatchedScope?: number;
@@ -106,8 +106,8 @@ export interface AccountImportRepository {
     checkpointJson?: unknown;
   }): Promise<void>;
   requestCancel(appUserId: number, runId: number, now: Date): Promise<StoredImportRun | null>;
-  commitGames(appUserId: number, games: import('./providers/lichess/lichess-account-import').NormalizedLichessGame[]): Promise<ImportCommitResult>;
-  completeRun(runId: number, run: StoredImportRun, now: Date): Promise<void>;
-  cancelRun(runId: number, now: Date): Promise<void>;
-  failRun(runId: number, code: string, message: string, now: Date): Promise<void>;
+  commitGames(runId: number, appUserId: number, claimedAt: Date, games: import('./providers/lichess/lichess-account-import').NormalizedLichessGame[]): Promise<ImportCommitResult>;
+  completeRun(runId: number, claimedAt: Date, run: StoredImportRun, now: Date): Promise<void>;
+  cancelRun(runId: number, claimedAt: Date, now: Date): Promise<void>;
+  failRun(runId: number, claimedAt: Date, code: string, message: string, now: Date): Promise<void>;
 }

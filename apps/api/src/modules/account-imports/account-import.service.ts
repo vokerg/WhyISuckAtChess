@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { LichessConnectionService } from '../lichess/lichess-connection.service';
-import { createPrismaAccountImportRepository } from './account-import.repository.prisma';
+import { createPrismaAccountImportRepository, ImportLeaseLostError } from './account-import.repository.prisma';
 import type {
   AccountImportRepository,
   CreateImportRunInput,
@@ -67,16 +67,20 @@ export function createLichessAccountImportService(options: AccountImportServiceO
   const cancelRun = (appUserId: number, runId: number) => repository.requestCancel(appUserId, runId, now());
 
   const executeRun = async (run: StoredImportRun): Promise<StoredImportRun | null> => {
+    const claimedAt = run.claimedAt ?? now();
     let credential;
     try {
       credential = await options.connectionService.getCredentialForUser(run.appUserId);
       if (credential.credentialGeneration === undefined) throw new Error('Credential generation is missing.');
       if (credential.lichessUserId !== run.lichessUserIdSnapshot) {
-        await repository.failRun(run.id, 'CREDENTIAL_CHANGED', 'The connected Lichess identity changed while this import was queued.', now());
+        await repository.failRun(run.id, claimedAt, 'CREDENTIAL_CHANGED', 'The connected Lichess identity changed while this import was queued.', now());
         return repository.getRun(run.appUserId, run.id);
       }
     } catch (error) {
-      await repository.failRun(run.id, 'AUTH_REQUIRED', error instanceof Error ? error.message : 'Lichess credential unavailable.', now());
+      if (error instanceof ImportLeaseLostError) {
+        return repository.getRun(run.appUserId, run.id);
+      }
+      await repository.failRun(run.id, claimedAt, 'AUTH_REQUIRED', error instanceof Error ? error.message : 'Lichess credential unavailable.', now());
       return repository.getRun(run.appUserId, run.id);
     }
 
@@ -86,7 +90,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
     try {
       for (let index = startWindow; index < windows.length; index += 1) {
         if (await isCancellationRequested(run)) {
-          await repository.cancelRun(run.id, now());
+          await repository.cancelRun(run.id, claimedAt, now());
           return repository.getRun(run.appUserId, run.id);
         }
 
@@ -108,16 +112,16 @@ export function createLichessAccountImportService(options: AccountImportServiceO
 
         if (response.status === 401 || response.status === 403) {
           await options.connectionService.markCredentialRevokedForUser(run.appUserId, credential.credentialGeneration);
-          await repository.failRun(run.id, 'AUTH_REVOKED', 'Lichess rejected the connected credential.', now());
+          await repository.failRun(run.id, claimedAt, 'AUTH_REVOKED', 'Lichess rejected the connected credential.', now());
           return repository.getRun(run.appUserId, run.id);
         }
         if (response.status === 429) {
           const retryAt = retryAtFromResponse(response, now());
-          await repository.deferRun(run.id, retryAt, 'RATE_LIMITED', 'Lichess rate-limited this import window.', now());
+          await repository.deferRun(run.id, claimedAt, retryAt, 'RATE_LIMITED', 'Lichess rate-limited this import window.', now());
           return repository.getRun(run.appUserId, run.id);
         }
         if (!response.ok) {
-          await repository.failRun(run.id, 'PROVIDER_HTTP_ERROR', `Lichess returned HTTP ${response.status}.`, now());
+          await repository.failRun(run.id, claimedAt, 'PROVIDER_HTTP_ERROR', `Lichess returned HTTP ${response.status}.`, now());
           return repository.getRun(run.appUserId, run.id);
         }
 
@@ -136,41 +140,44 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           matched += 1;
           batch.push(normalized);
           if (batch.length >= COMMIT_BATCH_SIZE) {
-            const committed = await repository.commitGames(run.appUserId, batch);
+            const committed = await repository.commitGames(run.id, run.appUserId, claimedAt, batch);
             importedGames = sumCommitResults(importedGames, committed);
-            await repository.updateProgress(run.id, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped, gamesImported: committed.imported, gamesDuplicate: committed.duplicate, gamesUpdated: committed.updated });
+            await repository.updateProgress(run.id, claimedAt, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped, gamesImported: committed.imported, gamesDuplicate: committed.duplicate, gamesUpdated: committed.updated });
             seen = 0;
             matched = 0;
             skipped = 0;
             batch = [];
-            await repository.heartbeat(run.id, now());
+            await repository.heartbeat(run.id, claimedAt, now());
             if (await isCancellationRequested(run)) {
-              await repository.cancelRun(run.id, now());
+              await repository.cancelRun(run.id, claimedAt, now());
               return repository.getRun(run.appUserId, run.id);
             }
           }
         }
         if (batch.length) {
-          const committed = await repository.commitGames(run.appUserId, batch);
+          const committed = await repository.commitGames(run.id, run.appUserId, claimedAt, batch);
           importedGames = sumCommitResults(importedGames, committed);
-          await repository.updateProgress(run.id, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped, gamesImported: committed.imported, gamesDuplicate: committed.duplicate, gamesUpdated: committed.updated });
+          await repository.updateProgress(run.id, claimedAt, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped, gamesImported: committed.imported, gamesDuplicate: committed.duplicate, gamesUpdated: committed.updated });
         } else if (seen || skipped) {
-          await repository.updateProgress(run.id, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped });
+          await repository.updateProgress(run.id, claimedAt, { gamesSeen: seen, gamesMatchedScope: matched, gamesSkippedOutOfScope: skipped });
         }
-        await repository.updateProgress(run.id, {
+        await repository.updateProgress(run.id, claimedAt, {
           windowsCompleted: 1,
           checkpointJson: { nextWindow: index + 1, lastWindow: { from: window.from.toISOString(), to: window.to.toISOString() } },
         });
-        await repository.heartbeat(run.id, now());
+        await repository.heartbeat(run.id, claimedAt, now());
       }
 
-      await repository.completeRun(run.id, run, now());
+      await repository.completeRun(run.id, claimedAt, run, now());
       return repository.getRun(run.appUserId, run.id);
     } catch (error) {
+      if (error instanceof ImportLeaseLostError) {
+        return repository.getRun(run.appUserId, run.id);
+      }
       if (error instanceof LichessNdjsonRecordError) {
-        await repository.failRun(run.id, 'MALFORMED_RECORD', error.message, now());
+        await repository.failRun(run.id, claimedAt, 'MALFORMED_RECORD', error.message, now());
       } else {
-        await repository.failRun(run.id, 'IMPORT_FAILED', error instanceof Error ? error.message : 'Lichess import failed.', now());
+        await repository.failRun(run.id, claimedAt, 'IMPORT_FAILED', error instanceof Error ? error.message : 'Lichess import failed.', now());
       }
       return repository.getRun(run.appUserId, run.id);
     }

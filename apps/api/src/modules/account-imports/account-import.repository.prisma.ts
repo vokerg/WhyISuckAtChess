@@ -17,6 +17,13 @@ export class ActiveImportRunError extends Error {
   }
 }
 
+export class ImportLeaseLostError extends Error {
+  constructor(readonly runId: number) {
+    super(`The import lease for run ${runId} is no longer owned by this worker.`);
+    this.name = 'ImportLeaseLostError';
+  }
+}
+
 export function createPrismaAccountImportRepository(database: PrismaClient = prisma): AccountImportRepository {
   return {
     createRun: async (input) => database.$transaction(async (transaction) => {
@@ -55,6 +62,7 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
           OR: [
             { status: 'QUEUED', OR: [{ rateLimitUntil: null }, { rateLimitUntil: { lte: now } }] },
             { status: 'RUNNING', heartbeatAt: { lt: staleAfter } },
+            { status: 'CANCEL_REQUESTED', heartbeatAt: { lt: staleAfter } },
           ],
         },
         orderBy: { createdAt: 'asc' },
@@ -80,18 +88,20 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       return toStoredRun(row);
     }),
 
-    heartbeat: async (runId, now) => {
-      await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING' }, data: { heartbeatAt: now } });
+    heartbeat: async (runId, claimedAt, now) => {
+      const updated = await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING', claimedAt }, data: { heartbeatAt: now } });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
 
-    deferRun: async (runId, retryAt, code, message, now) => {
-      await database.importRun.update({
-        where: { id: runId },
+    deferRun: async (runId, claimedAt, retryAt, code, message, now) => {
+      const updated = await database.importRun.updateMany({
+        where: { id: runId, status: 'RUNNING', claimedAt },
         data: { status: 'QUEUED', rateLimitUntil: retryAt, errorCode: code, error: message, heartbeatAt: null, lastProgressAt: now },
       });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
 
-    updateProgress: async (runId, patch) => {
+    updateProgress: async (runId, claimedAt, patch) => {
       const data: Prisma.ImportRunUpdateInput = { lastProgressAt: new Date() };
       if (patch.windowsCompleted !== undefined) data.windowsCompleted = { increment: patch.windowsCompleted };
       if (patch.gamesSeen !== undefined) data.gamesSeen = { increment: patch.gamesSeen };
@@ -103,7 +113,8 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       if (patch.gamesSkippedOutOfScope !== undefined) data.gamesSkippedOutOfScope = { increment: patch.gamesSkippedOutOfScope };
       if (patch.gamesFailed !== undefined) data.gamesFailed = { increment: patch.gamesFailed };
       if (patch.checkpointJson !== undefined) data.checkpointJson = patch.checkpointJson as Prisma.InputJsonValue;
-      await database.importRun.update({ where: { id: runId }, data });
+      const updated = await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING', claimedAt }, data });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
 
     requestCancel: async (appUserId, runId, now) => {
@@ -124,7 +135,10 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       return toStoredRun(row);
     },
 
-    commitGames: async (appUserId, games) => database.$transaction(async (transaction) => {
+    commitGames: async (runId, appUserId, claimedAt, games) => database.$transaction(async (transaction) => {
+      const leased = await transaction.importRun.count({ where: { id: runId, appUserId, status: 'RUNNING', claimedAt } });
+      if (leased !== 1) throw new ImportLeaseLostError(runId);
+
       const result: ImportCommitResult = { imported: 0, duplicate: 0, updated: 0 };
       for (const game of games) {
         const existing = await transaction.importedGame.findUnique({
@@ -206,11 +220,12 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       return result;
     }),
 
-    completeRun: async (runId, run, now) => database.$transaction(async (transaction) => {
-      await transaction.importRun.update({
-        where: { id: runId },
+    completeRun: async (runId, claimedAt, run, now) => database.$transaction(async (transaction) => {
+      const updated = await transaction.importRun.updateMany({
+        where: { id: runId, status: 'RUNNING', claimedAt },
         data: { status: 'COMPLETED', completedAt: now, heartbeatAt: null, lastProgressAt: now, windowsCompleted: run.windowsTotal },
       });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
       await transaction.accountImportCoverage.upsert({
         where: { appUserId_scopeHash: { appUserId: run.appUserId, scopeHash: run.scopeHash } },
         update: { coveredFrom: run.requestedFrom, coveredThrough: run.requestedTo, lastCompletedImportRunId: run.id, scopeJson: run.scopeJson as Prisma.InputJsonValue },
@@ -218,12 +233,14 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       });
     }),
 
-    cancelRun: async (runId, now) => {
-      await database.importRun.update({ where: { id: runId }, data: { status: 'CANCELLED', completedAt: now, heartbeatAt: null, lastProgressAt: now } });
+    cancelRun: async (runId, claimedAt, now) => {
+      const updated = await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING', claimedAt }, data: { status: 'CANCELLED', completedAt: now, heartbeatAt: null, lastProgressAt: now } });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
 
-    failRun: async (runId, code, message, now) => {
-      await database.importRun.update({ where: { id: runId }, data: { status: 'FAILED', errorCode: code, error: message, completedAt: now, heartbeatAt: null, lastProgressAt: now } });
+    failRun: async (runId, claimedAt, code, message, now) => {
+      const updated = await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING', claimedAt }, data: { status: 'FAILED', errorCode: code, error: message, completedAt: now, heartbeatAt: null, lastProgressAt: now } });
+      if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
   };
 }
