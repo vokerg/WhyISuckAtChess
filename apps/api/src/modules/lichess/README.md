@@ -22,8 +22,10 @@ Adapted from CRT at `13a7e2791944ebd52113afe9f76413b10634ddff`, especially `lich
 - no arbitrary public/tracked account model and no anonymous credential fallback;
 - expired, locally revoked, and undecryptable credentials are explicit reconnect-required states;
 - disconnect still removes local authority when the token cannot be decrypted or revoked;
-- reconnect/replacement may replace the current user's Lichess identity, but cannot claim an identity owned by another app user.
+- reconnect/replacement may replace the current user's Lichess identity, but cannot claim an identity owned by another app user;
+- replacement is serialized per app user so concurrent callbacks observe and revoke the credential they actually replace;
+- every stored credential has an immutable generation ID; disconnect and provider-revocation writes are conditional on that generation so stale work cannot delete or revoke a newer reconnect.
 
 ## Import seam
 
-Later import code must call `getCredentialForUser(appUserId)` and receive only the connected Lichess ID, username, usable access token, and expiry. It must not query `LichessConnection` or OAuth state persistence directly. Provider `401/403` handling can mark the credential revoked through `markCredentialRevokedForUser` without exposing token storage to the import module.
+Later import code must call `getCredentialForUser(appUserId)` and receive only the connected Lichess ID, username, usable access token, expiry, and opaque `credentialGeneration`. It must not query `LichessConnection` or OAuth state persistence directly. Provider `401/403` handling must pass that generation back to `markCredentialRevokedForUser(appUserId, credentialGeneration)`; the update is ignored when a reconnect has already installed a newer credential generation.

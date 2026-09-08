@@ -16,6 +16,8 @@ const oauthBaseUrl = 'https://lichess.org/oauth';
 const tokenUrl = 'https://lichess.org/api/token';
 const accountUrl = 'https://lichess.org/api/account';
 const stateTtlMs = 10 * 60 * 1000;
+// Two-key PostgreSQL advisory lock namespace for Lichess connection replacement.
+const connectionLockNamespace = 1279873864;
 
 export type LichessOAuthRedirectStatus = 'cancelled' | 'error' | 'conflict';
 
@@ -44,6 +46,7 @@ export interface ConnectedLichessCredential {
   username: string;
   accessToken: string;
   expiresAt: Date | null;
+  credentialGeneration: string;
 }
 
 interface StoredConnection {
@@ -58,6 +61,7 @@ interface StoredConnection {
   expiresAt: Date | null;
   connectedAt: Date;
   revokedAt: Date | null;
+  credentialGeneration: string;
 }
 
 interface LoginStateInput {
@@ -73,7 +77,7 @@ interface ConsumedLoginState {
   codeVerifier: string;
 }
 
-interface ConnectionUpsertInput {
+interface ConnectionReplacementInput {
   appUserId: number;
   lichessUserId: string;
   username: string;
@@ -83,14 +87,19 @@ interface ConnectionUpsertInput {
   connectedAt: Date;
 }
 
+interface ConnectionReplacementResult {
+  connection: StoredConnection;
+  previousConnection: StoredConnection | null;
+}
+
 export interface LichessConnectionStore {
   deleteExpiredStates(now: Date): Promise<void>;
   createLoginState(input: LoginStateInput): Promise<void>;
   consumeLoginState(state: string, expectedProvider: string, now: Date): Promise<ConsumedLoginState | null>;
   findConnectionForUser(appUserId: number): Promise<StoredConnection | null>;
-  upsertConnection(input: ConnectionUpsertInput): Promise<StoredConnection>;
-  deleteConnection(id: number): Promise<void>;
-  markRevoked(appUserId: number, revokedAt: Date): Promise<void>;
+  replaceConnection(input: ConnectionReplacementInput): Promise<ConnectionReplacementResult>;
+  deleteConnection(appUserId: number, credentialGeneration: string): Promise<boolean>;
+  markRevoked(appUserId: number, credentialGeneration: string, revokedAt: Date): Promise<boolean>;
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
@@ -140,7 +149,12 @@ export function createPrismaLichessConnectionStore(database: PrismaClient = pris
       where: { appUserId },
     }),
 
-    upsertConnection: (input) => database.$transaction(async (transaction) => {
+    replaceConnection: (input) => database.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(${connectionLockNamespace}, ${input.appUserId})`;
+
+      const previousConnection = await transaction.lichessConnection.findUnique({
+        where: { appUserId: input.appUserId },
+      });
       const existingOwner = await transaction.lichessConnection.findUnique({
         where: { lichessUserId: input.lichessUserId },
         select: { appUserId: true },
@@ -149,47 +163,58 @@ export function createPrismaLichessConnectionStore(database: PrismaClient = pris
         throw new LichessIdentityConflictError();
       }
 
+      const credentialGeneration = crypto.randomUUID();
       try {
-        return await transaction.lichessConnection.upsert({
-          where: { appUserId: input.appUserId },
-          update: {
-            lichessUserId: input.lichessUserId,
-            username: input.username,
-            scopes: input.scopes,
-            accessTokenCiphertext: input.encryptedToken.ciphertext,
-            accessTokenIv: input.encryptedToken.iv,
-            accessTokenAuthTag: input.encryptedToken.authTag,
-            expiresAt: input.expiresAt,
-            connectedAt: input.connectedAt,
-            revokedAt: null,
-          },
-          create: {
-            appUserId: input.appUserId,
-            lichessUserId: input.lichessUserId,
-            username: input.username,
-            scopes: input.scopes,
-            accessTokenCiphertext: input.encryptedToken.ciphertext,
-            accessTokenIv: input.encryptedToken.iv,
-            accessTokenAuthTag: input.encryptedToken.authTag,
-            expiresAt: input.expiresAt,
-            connectedAt: input.connectedAt,
-          },
-        });
+        const connection = previousConnection
+          ? await transaction.lichessConnection.update({
+              where: { id: previousConnection.id },
+              data: {
+                lichessUserId: input.lichessUserId,
+                username: input.username,
+                scopes: input.scopes,
+                accessTokenCiphertext: input.encryptedToken.ciphertext,
+                accessTokenIv: input.encryptedToken.iv,
+                accessTokenAuthTag: input.encryptedToken.authTag,
+                expiresAt: input.expiresAt,
+                connectedAt: input.connectedAt,
+                revokedAt: null,
+                credentialGeneration,
+              },
+            })
+          : await transaction.lichessConnection.create({
+              data: {
+                appUserId: input.appUserId,
+                lichessUserId: input.lichessUserId,
+                username: input.username,
+                scopes: input.scopes,
+                accessTokenCiphertext: input.encryptedToken.ciphertext,
+                accessTokenIv: input.encryptedToken.iv,
+                accessTokenAuthTag: input.encryptedToken.authTag,
+                expiresAt: input.expiresAt,
+                connectedAt: input.connectedAt,
+                credentialGeneration,
+              },
+            });
+        return { connection, previousConnection };
       } catch (error) {
         if (isUniqueConstraintError(error)) throw new LichessIdentityConflictError();
         throw error;
       }
     }),
 
-    deleteConnection: async (id) => {
-      await database.lichessConnection.delete({ where: { id } });
+    deleteConnection: async (appUserId, credentialGeneration) => {
+      const deleted = await database.lichessConnection.deleteMany({
+        where: { appUserId, credentialGeneration },
+      });
+      return deleted.count === 1;
     },
 
-    markRevoked: async (appUserId, revokedAt) => {
-      await database.lichessConnection.updateMany({
-        where: { appUserId },
+    markRevoked: async (appUserId, credentialGeneration, revokedAt) => {
+      const revoked = await database.lichessConnection.updateMany({
+        where: { appUserId, credentialGeneration },
         data: { revokedAt },
       });
+      return revoked.count === 1;
     },
   };
 }
@@ -306,11 +331,12 @@ export function createLichessConnectionService(options: LichessConnectionService
         username: connection.username,
         accessToken,
         expiresAt: connection.expiresAt,
+        credentialGeneration: connection.credentialGeneration,
       };
     },
 
-    async markCredentialRevokedForUser(appUserId: number): Promise<void> {
-      await store.markRevoked(appUserId, now());
+    async markCredentialRevokedForUser(appUserId: number, credentialGeneration: string): Promise<boolean> {
+      return store.markRevoked(appUserId, credentialGeneration, now());
     },
 
     async createAuthorizationUrl(appUserId: number): Promise<string> {
@@ -378,10 +404,10 @@ export function createLichessConnectionService(options: LichessConnectionService
       const expiresAt = token.expiresIn === undefined
         ? null
         : new Date(callbackAt.getTime() + token.expiresIn * 1000);
-      const previousConnection = await store.findConnectionForUser(loginState.appUserId);
 
+      let replacement: ConnectionReplacementResult;
       try {
-        await store.upsertConnection({
+        replacement = await store.replaceConnection({
           appUserId: loginState.appUserId,
           lichessUserId: account.id,
           username: account.username,
@@ -399,12 +425,12 @@ export function createLichessConnectionService(options: LichessConnectionService
         throw error;
       }
 
-      if (previousConnection) {
+      if (replacement.previousConnection) {
         try {
           const previousToken = decrypt({
-            ciphertext: previousConnection.accessTokenCiphertext,
-            iv: previousConnection.accessTokenIv,
-            authTag: previousConnection.accessTokenAuthTag,
+            ciphertext: replacement.previousConnection.accessTokenCiphertext,
+            iv: replacement.previousConnection.accessTokenIv,
+            authTag: replacement.previousConnection.accessTokenAuthTag,
           });
           if (previousToken !== token.accessToken) await revokeLichessToken(previousToken);
         } catch {
@@ -426,13 +452,13 @@ export function createLichessConnectionService(options: LichessConnectionService
         try {
           await revokeLichessToken(accessToken);
         } catch {
-          // Upstream revoke is best-effort. Local state below is authoritative.
+          // Upstream revoke is best-effort. Local state below is authoritative for this credential generation.
         }
       } catch {
         // Undecryptable local token must not prevent authoritative local disconnect.
       }
 
-      await store.deleteConnection(connection.id);
+      await store.deleteConnection(appUserId, connection.credentialGeneration);
       return { disconnected: true };
     },
   };

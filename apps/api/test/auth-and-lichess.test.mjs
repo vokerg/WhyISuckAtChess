@@ -14,6 +14,8 @@ class FakeLichessStore {
     this.states = new Map();
     this.connections = new Map();
     this.nextConnectionId = 1;
+    this.nextCredentialGeneration = 1;
+    this.onReplace = null;
   }
 
   async deleteExpiredStates(now) {
@@ -39,16 +41,16 @@ class FakeLichessStore {
     return this.connections.get(appUserId) ?? null;
   }
 
-  async upsertConnection(input) {
+  async replaceConnection(input) {
     for (const connection of this.connections.values()) {
       if (connection.lichessUserId === input.lichessUserId && connection.appUserId !== input.appUserId) {
         throw new LichessIdentityConflictError();
       }
     }
 
-    const existing = this.connections.get(input.appUserId);
+    const previousConnection = this.connections.get(input.appUserId) ?? null;
     const connection = {
-      id: existing?.id ?? this.nextConnectionId++,
+      id: previousConnection?.id ?? this.nextConnectionId++,
       appUserId: input.appUserId,
       lichessUserId: input.lichessUserId,
       username: input.username,
@@ -59,20 +61,25 @@ class FakeLichessStore {
       expiresAt: input.expiresAt,
       connectedAt: input.connectedAt,
       revokedAt: null,
+      credentialGeneration: `generation-${this.nextCredentialGeneration++}`,
     };
     this.connections.set(input.appUserId, connection);
-    return connection;
+    this.onReplace?.(connection, previousConnection);
+    return { connection, previousConnection };
   }
 
-  async deleteConnection(id) {
-    for (const [appUserId, connection] of this.connections) {
-      if (connection.id === id) this.connections.delete(appUserId);
-    }
-  }
-
-  async markRevoked(appUserId, revokedAt) {
+  async deleteConnection(appUserId, credentialGeneration) {
     const connection = this.connections.get(appUserId);
-    if (connection) connection.revokedAt = revokedAt;
+    if (!connection || connection.credentialGeneration !== credentialGeneration) return false;
+    this.connections.delete(appUserId);
+    return true;
+  }
+
+  async markRevoked(appUserId, credentialGeneration, revokedAt) {
+    const connection = this.connections.get(appUserId);
+    if (!connection || connection.credentialGeneration !== credentialGeneration) return false;
+    connection.revokedAt = revokedAt;
+    return true;
   }
 }
 
@@ -102,10 +109,19 @@ function seedConnection(store, overrides = {}) {
     expiresAt: null,
     connectedAt: new Date('2026-09-07T05:00:00Z'),
     revokedAt: null,
+    credentialGeneration: 'generation-seed',
     ...overrides,
   };
   store.connections.set(connection.appUserId, connection);
   return connection;
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((resolver) => {
+    resolve = resolver;
+  });
+  return { promise, resolve };
 }
 
 test('first-seen external auth identity resolves transactionally to one stable AppUser', async () => {
@@ -299,6 +315,152 @@ test('disconnect remains authoritative when a stored token is undecryptable', as
   assert.equal(fetched, false);
 });
 
+test('reconnect racing a slow disconnect cannot delete the freshly replaced credential', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  store.states.set('reconnect-state', {
+    appUserId: 1,
+    provider: 'LICHESS',
+    state: 'reconnect-state',
+    codeVerifier: 'verifier',
+    expiresAt: new Date('2026-09-07T05:10:00Z'),
+    consumed: false,
+  });
+
+  const revokeStarted = deferred();
+  const allowRevoke = deferred();
+  const replacementDone = deferred();
+  store.onReplace = () => replacementDone.resolve();
+
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    encrypt: fakeEncrypt,
+    decrypt: fakeDecrypt,
+    oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+    fetchImpl: async (url, init = {}) => {
+      if (init.method === 'DELETE') {
+        revokeStarted.resolve();
+        await allowRevoke.promise;
+        return new Response(null, { status: 204 });
+      }
+      if (String(url).endsWith('/api/token')) return jsonResponse({ access_token: 'reconnected-token' });
+      if (String(url).endsWith('/api/account')) return jsonResponse({ id: 'lichess-1', username: 'TokenIdentity' });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  const disconnectPromise = service.disconnectForUser(1);
+  await revokeStarted.promise;
+
+  const reconnectPromise = service.handleCallback({ state: 'reconnect-state', code: 'reconnect-code' });
+  await replacementDone.promise;
+  allowRevoke.resolve();
+
+  await Promise.all([disconnectPromise, reconnectPromise]);
+  const connection = await store.findConnectionForUser(1);
+  assert.ok(connection);
+  assert.equal(fakeDecrypt({
+    ciphertext: connection.accessTokenCiphertext,
+    iv: connection.accessTokenIv,
+    authTag: connection.accessTokenAuthTag,
+  }), 'reconnected-token');
+  assert.notEqual(connection.credentialGeneration, 'generation-seed');
+});
+
+test('concurrent reconnect callbacks revoke every superseded token without revoking the final credential', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  for (const state of ['state-a', 'state-b']) {
+    store.states.set(state, {
+      appUserId: 1,
+      provider: 'LICHESS',
+      state,
+      codeVerifier: `verifier-${state}`,
+      expiresAt: new Date('2026-09-07T05:10:00Z'),
+      consumed: false,
+    });
+  }
+
+  const revokedTokens = [];
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    encrypt: fakeEncrypt,
+    decrypt: fakeDecrypt,
+    oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+    fetchImpl: async (url, init = {}) => {
+      if (init.method === 'DELETE') {
+        const authorization = new Headers(init.headers).get('authorization');
+        revokedTokens.push(authorization?.replace('Bearer ', ''));
+        return new Response(null, { status: 204 });
+      }
+      if (String(url).endsWith('/api/token')) {
+        const code = init.body.get('code');
+        return jsonResponse({ access_token: code === 'code-a' ? 'token-a' : 'token-b' });
+      }
+      if (String(url).endsWith('/api/account')) {
+        return jsonResponse({ id: 'lichess-1', username: 'TokenIdentity' });
+      }
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  await Promise.all([
+    service.handleCallback({ state: 'state-a', code: 'code-a' }),
+    service.handleCallback({ state: 'state-b', code: 'code-b' }),
+  ]);
+
+  const connection = await store.findConnectionForUser(1);
+  const finalToken = fakeDecrypt({
+    ciphertext: connection.accessTokenCiphertext,
+    iv: connection.accessTokenIv,
+    authTag: connection.accessTokenAuthTag,
+  });
+  const supersededIssuedToken = finalToken === 'token-a' ? 'token-b' : 'token-a';
+
+  assert.ok(['token-a', 'token-b'].includes(finalToken));
+  assert.ok(revokedTokens.includes('old-token'));
+  assert.ok(revokedTokens.includes(supersededIssuedToken));
+  assert.equal(revokedTokens.includes(finalToken), false);
+});
+
+test('stale provider revocation cannot mark a newer credential generation revoked', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    encrypt: fakeEncrypt,
+    decrypt: fakeDecrypt,
+  });
+
+  const staleCredential = await service.getCredentialForUser(1);
+  await store.replaceConnection({
+    appUserId: 1,
+    lichessUserId: 'lichess-1',
+    username: 'TokenIdentity',
+    scopes: [],
+    encryptedToken: fakeEncrypt('new-token'),
+    expiresAt: null,
+    connectedAt: new Date('2026-09-07T05:01:00Z'),
+  });
+
+  assert.equal(
+    await service.markCredentialRevokedForUser(1, staleCredential.credentialGeneration),
+    false,
+  );
+  assert.equal((await service.getStatusForUser(1)).credentialState, 'usable');
+
+  const currentCredential = await service.getCredentialForUser(1);
+  assert.notEqual(currentCredential.credentialGeneration, staleCredential.credentialGeneration);
+  assert.equal(
+    await service.markCredentialRevokedForUser(1, currentCredential.credentialGeneration),
+    true,
+  );
+  assert.equal((await service.getStatusForUser(1)).credentialState, 'revoked');
+});
+
 test('protected connection route resolves ownership from authenticated app user', async () => {
   const noDatabase = { $disconnect: async () => undefined };
   let requestedUserId = null;
@@ -318,7 +480,7 @@ test('protected connection route resolves ownership from authenticated app user'
       handleCallback: async () => undefined,
       disconnectForUser: async () => ({ disconnected: true }),
       getCredentialForUser: async () => { throw new Error('not expected'); },
-      markCredentialRevokedForUser: async () => undefined,
+      markCredentialRevokedForUser: async () => false,
     },
   });
 

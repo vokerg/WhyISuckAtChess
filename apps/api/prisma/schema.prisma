@@ -34,6 +34,7 @@ model LichessConnection {
   expiresAt             DateTime?
   connectedAt           DateTime @default(now())
   revokedAt             DateTime?
+  credentialGeneration  String   @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
