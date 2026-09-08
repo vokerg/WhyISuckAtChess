@@ -47,3 +47,11 @@ export const LichessDisconnectResponseSchema = z.object({
 }).strict();
 
 export type LichessDisconnectResponse = z.infer<typeof LichessDisconnectResponseSchema>;
+
+export const LichessImportRequestSchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  rated: z.boolean().optional(),
+}).strict();
+
+export type LichessImportRequest = z.infer<typeof LichessImportRequestSchema>;
