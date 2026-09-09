@@ -94,7 +94,7 @@ export function isTimingEligibleGame(input: Pick<TimingContext, 'variant' | 'spe
 
 function isDirectMoveEndStatus(status: string | null | undefined): boolean {
   const value = normalized(status)?.replace(/[_\s-]/g, '');
-  return value !== null && DIRECT_MOVE_END_STATUSES.has(value);
+  return typeof value === 'string' && DIRECT_MOVE_END_STATUSES.has(value);
 }
 
 function isClassifiableTerminalExtra(input: {
@@ -103,7 +103,7 @@ function isClassifiableTerminalExtra(input: {
 }): boolean {
   if (normalized(input.provider) !== 'lichess') return false;
   const status = normalized(input.status)?.replace(/[_\s-]/g, '');
-  return status !== null && TERMINAL_EXTRA_STATUSES.has(status);
+  return typeof status === 'string' && TERMINAL_EXTRA_STATUSES.has(status);
 }
 
 export function alignLichessClockStates(input: {
