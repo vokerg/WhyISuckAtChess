@@ -161,17 +161,26 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
 
         const existingValues = existing.rawClockStates.map((state) => state.valueCentiseconds);
         const clockDecision = decideClockSequence(existing.rawClockPresence, existingValues, game.rawClockPresence, game.rawClockValuesCentiseconds);
+        const existingAnomalies = readStringArray(existing.rawClockAnomalies);
         const anomalies = uniqueStrings([
-          ...readStringArray(existing.rawClockAnomalies),
+          ...existingAnomalies,
           ...game.rawClockAnomalies,
           ...(clockDecision.conflict ? ['CLOCK_SEQUENCE_CONFLICT'] : []),
         ]);
+        const anomaliesChanged = anomalies.length !== existingAnomalies.length;
         const metadataChanged = existing.pgn !== game.pgn
           || existing.status !== game.status
           || existing.startedAt?.getTime() !== game.startedAt?.getTime()
           || existing.endedAt?.getTime() !== game.endedAt?.getTime()
           || existing.timeControlInitial !== game.timeControlInitial
           || existing.timeControlIncrement !== game.timeControlIncrement;
+        const indexingSourceChanged = metadataChanged
+          || clockDecision.update
+          || anomaliesChanged
+          || existing.variant !== game.variant
+          || existing.speedCategory !== game.speedCategory
+          || existing.userColor !== game.userColor
+          || existing.source !== game.source;
 
         const updateData: Prisma.ImportedGameUpdateInput = {
           providerUrl: game.providerUrl,
@@ -204,6 +213,24 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
           rawClockAnomalies: anomalies as Prisma.InputJsonValue,
         };
 
+        if (indexingSourceChanged) {
+          Object.assign(updateData, {
+            plyIndexStatus: 'PENDING',
+            plyIndexPolicyVersion: null,
+            plyIndexedAt: null,
+            plyIndexError: null,
+            indexedRawClockStateCount: 0,
+            clockAlignmentStatus: 'UNAVAILABLE',
+            clockAlignmentVersion: null,
+            alignedClockPlyCount: 0,
+            timingDerivationVersion: null,
+            derivedTimingPlyCount: 0,
+            timingCoverageStatus: 'UNAVAILABLE',
+          } satisfies Prisma.ImportedGameUpdateInput);
+          await transaction.importedGamePly.deleteMany({ where: { importedGameId: existing.id } });
+          await transaction.terminalClockSourceFact.deleteMany({ where: { importedGameId: existing.id } });
+        }
+
         if (clockDecision.update) {
           updateData.rawClockPresence = game.rawClockPresence;
           updateData.rawClockStateCount = game.rawClockValuesCentiseconds.length;
@@ -214,7 +241,7 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
           await transaction.importedGame.update({ where: { id: existing.id }, data: updateData });
         }
 
-        if (metadataChanged || clockDecision.update || anomalies.length !== readStringArray(existing.rawClockAnomalies).length) result.updated += 1;
+        if (metadataChanged || clockDecision.update || anomaliesChanged) result.updated += 1;
         else result.duplicate += 1;
       }
       return result;
