@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
-import prisma from '../dist/prisma.js';
+import prismaModule from '../dist/prisma.js';
 import { createPrismaAccountImportRepository } from '../dist/modules/account-imports/account-import.repository.prisma.js';
 import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-index.service.js';
 
+const prisma = prismaModule.default ?? prismaModule;
 const PGN = '[Event "index fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 const CLOCKS = [5900, 5900, 6000, 5900];
 
