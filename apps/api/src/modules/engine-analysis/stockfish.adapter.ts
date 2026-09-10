@@ -130,11 +130,18 @@ export async function createStockfishEngine(options: {
   const binaryPath = options.binaryPath ?? process.env.STOCKFISH_PATH ?? 'stockfish';
   const child = options.spawnProcess?.(binaryPath) ?? spawn(binaryPath, [], { stdio: 'pipe' });
   const reader = new UciLineReader(child.stdout);
+  let closing = false;
+  const processFailure = new Promise<never>((_, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code, signal) => {
+      if (!closing) reject(new Error(`Stockfish exited unexpectedly (code=${code ?? 'none'}, signal=${signal ?? 'none'})`));
+    });
+  });
   const write = (command: string) => child.stdin.write(`${command}\n`);
   const waitFor = async (predicate: (line: string) => boolean): Promise<string[]> => {
     const seen: string[] = [];
     for (;;) {
-      const line = await reader.next();
+      const line = await Promise.race([reader.next(), processFailure]);
       seen.push(line);
       if (predicate(line)) return seen;
     }
@@ -166,6 +173,7 @@ export async function createStockfishEngine(options: {
     },
     async close(): Promise<void> {
       if (!child.killed) {
+        closing = true;
         write('quit');
         child.kill();
       }
