@@ -61,7 +61,8 @@ export interface DerivedPlyTiming {
 
 const SPEED_SET = new Set<string>(STANDARD_IMPORTED_GAME_SPEEDS);
 const VARIANT_SET = new Set<string>(STANDARD_IMPORTED_GAME_VARIANTS);
-const DIRECT_MOVE_END_STATUSES = new Set(['mate', 'stalemate', 'variantend']);
+const DIRECT_MOVE_END_STATUSES = new Set(['mate', 'stalemate', 'variantend', 'autodraw']);
+const MOVE_ALIGNED_DRAW_STATUSES = new Set(['draw', 'autodraw']);
 const TERMINAL_EXTRA_STATUSES = new Set([
   'timeout',
   'outoftime',
@@ -76,6 +77,10 @@ const TERMINAL_EXTRA_STATUSES = new Set([
 function normalized(value: string | null | undefined): string | null {
   const result = value?.trim().toLowerCase();
   return result ? result : null;
+}
+
+function normalizedStatus(value: string | null | undefined): string | null {
+  return normalized(value)?.replace(/[_\s-]/g, '') ?? null;
 }
 
 export function isStandardImportedGameVariant(variant: string | null | undefined): boolean {
@@ -93,8 +98,20 @@ export function isTimingEligibleGame(input: Pick<TimingContext, 'variant' | 'spe
 }
 
 function isDirectMoveEndStatus(status: string | null | undefined): boolean {
-  const value = normalized(status)?.replace(/[_\s-]/g, '');
+  const value = normalizedStatus(status);
   return typeof value === 'string' && DIRECT_MOVE_END_STATUSES.has(value);
+}
+
+function isFinalMoveWithoutIncrement(
+  status: string | null | undefined,
+  alignment: ClockAlignmentResult,
+): boolean {
+  if (isDirectMoveEndStatus(status)) return true;
+  const value = normalizedStatus(status);
+  return typeof value === 'string'
+    && MOVE_ALIGNED_DRAW_STATUSES.has(value)
+    && alignment.status === 'COMPLETE'
+    && alignment.terminal === undefined;
 }
 
 function isClassifiableTerminalExtra(input: {
@@ -102,7 +119,7 @@ function isClassifiableTerminalExtra(input: {
   status?: string | null;
 }): boolean {
   if (normalized(input.provider) !== 'lichess') return false;
-  const status = normalized(input.status)?.replace(/[_\s-]/g, '');
+  const status = normalizedStatus(input.status);
   return typeof status === 'string' && TERMINAL_EXTRA_STATUSES.has(status);
 }
 
@@ -274,7 +291,8 @@ export function derivePlyTiming(
       continue;
     }
 
-    const finalMoveWithoutIncrement = plyNumber === context.moveCount && isDirectMoveEndStatus(context.status);
+    const finalMoveWithoutIncrement = plyNumber === context.moveCount
+      && isFinalMoveWithoutIncrement(context.status, alignment);
     const effectiveIncrementCentiseconds = finalMoveWithoutIncrement ? 0 : context.incrementSeconds * 100;
     const delta = before + effectiveIncrementCentiseconds - after;
 
