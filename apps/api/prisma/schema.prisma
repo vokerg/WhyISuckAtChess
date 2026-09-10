@@ -112,6 +112,7 @@ model ImportedGame {
   rawClockStates             LichessClockState[]
   plies                      ImportedGamePly[]
   terminalClockFacts         TerminalClockSourceFact[]
+  analysisRuns               GameAnalysisRun[]
 
   @@unique([appUserId, provider, providerGameId])
   @@index([appUserId, startedAt])
@@ -133,12 +134,13 @@ model LichessClockState {
 }
 
 model Position {
-  id              Int               @id @default(autoincrement())
-  positionKey     Bytes             @unique
-  normalizedFen   String            @unique
-  createdAt       DateTime          @default(now())
-  pliesBefore     ImportedGamePly[] @relation("PlyBeforePosition")
-  pliesAfter      ImportedGamePly[] @relation("PlyAfterPosition")
+  id              Int                         @id @default(autoincrement())
+  positionKey     Bytes                       @unique
+  normalizedFen   String                      @unique
+  createdAt       DateTime                    @default(now())
+  pliesBefore     ImportedGamePly[]           @relation("PlyBeforePosition")
+  pliesAfter      ImportedGamePly[]           @relation("PlyAfterPosition")
+  engineAnalyses  StockfishPositionAnalysis[]
 }
 
 model ImportedGamePly {
@@ -186,6 +188,59 @@ model TerminalClockSourceFact {
 
   @@unique([importedGameId, sourceOrdinal])
   @@index([importedGameId])
+}
+
+model GameAnalysisRun {
+  id                  Int                         @id @default(autoincrement())
+  importedGameId      Int
+  importedGame        ImportedGame                @relation(fields: [importedGameId], references: [id], onDelete: Cascade)
+  snapshotId          String                      @unique @default(cuid()) @db.VarChar(32)
+  analysisVersion     String                      @db.VarChar(64)
+  settingsHash        String                      @db.VarChar(64)
+  settingsJson        Json
+  engineName          String?                     @db.VarChar(128)
+  engineVersion       String?                     @db.VarChar(64)
+  status              String                      @default("QUEUED") @db.VarChar(24)
+  attempts            Int                         @default(0)
+  maxAttempts         Int                         @default(3)
+  runAfter            DateTime                    @default(now())
+  workerId            String?                     @db.VarChar(128)
+  claimedAt           DateTime?
+  heartbeatAt         DateTime?
+  cancelRequestedAt   DateTime?
+  error               String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  positionAnalyses    StockfishPositionAnalysis[]
+
+  @@index([status, runAfter])
+  @@index([importedGameId, status, createdAt])
+  @@index([importedGameId, analysisVersion, settingsHash])
+}
+
+model StockfishPositionAnalysis {
+  id              Int             @id @default(autoincrement())
+  analysisRunId   Int
+  analysisRun     GameAnalysisRun @relation(fields: [analysisRunId], references: [id], onDelete: Cascade)
+  positionId      Int
+  position        Position        @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  engineName      String          @db.VarChar(128)
+  engineVersion   String          @db.VarChar(64)
+  settingsHash    String          @db.VarChar(64)
+  depth           Int
+  scoreCp         Int?
+  mateIn          Int?
+  bestMove        String?         @db.VarChar(16)
+  bestPv          String[]        @default([])
+  multiPvJson     Json
+  rawInfoJson     Json
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([analysisRunId, positionId])
+  @@index([positionId])
 }
 
 model ImportRun {
