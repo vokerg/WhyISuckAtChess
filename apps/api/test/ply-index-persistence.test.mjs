@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import prismaModule from '../dist/prisma.js';
 import { createPrismaAccountImportRepository } from '../dist/modules/account-imports/account-import.repository.prisma.js';
+import {
+  PlyIndexSourceChangedError,
+  getImportedGameForPlyIndex,
+  replacePlyProjection,
+} from '../dist/modules/imported-games/ply-index.repository.prisma.js';
 import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-index.service.js';
 
 const prisma = prismaModule.default ?? prismaModule;
@@ -45,7 +50,17 @@ function sourceGame(providerGameId, incrementSeconds) {
   };
 }
 
-test('ply projection is atomic, idempotent, and invalidated by same-length source enrichment', async () => {
+function assertPublicationMetadataCleared(game) {
+  assert.equal(game.indexedRawClockStateCount, 0);
+  assert.equal(game.clockAlignmentStatus, 'UNAVAILABLE');
+  assert.equal(game.clockAlignmentVersion, null);
+  assert.equal(game.alignedClockPlyCount, 0);
+  assert.equal(game.timingDerivationVersion, null);
+  assert.equal(game.derivedTimingPlyCount, 0);
+  assert.equal(game.timingCoverageStatus, 'UNAVAILABLE');
+}
+
+test('ply projection is atomic, fenced to its source snapshot, and clears stale publication metadata', async () => {
   const suffix = randomUUID();
   let userId = null;
 
@@ -125,6 +140,9 @@ test('ply projection is atomic, idempotent, and invalidated by same-length sourc
     assert.equal(retry.status, 'ALREADY_INDEXED');
     assert.equal(retry.pliesIndexed, 4);
 
+    const staleSnapshot = await getImportedGameForPlyIndex(user.id, game.id);
+    assert.ok(staleSnapshot);
+
     const claimedAt = new Date('2026-01-02T00:00:00.000Z');
     const run = await prisma.importRun.create({
       data: {
@@ -152,6 +170,24 @@ test('ply projection is atomic, idempotent, and invalidated by same-length sourc
     );
     assert.equal(commitResult.updated, 1);
 
+    await assert.rejects(
+      replacePlyProjection({
+        importedGameId: game.id,
+        expectedSourceUpdatedAt: staleSnapshot.updatedAt,
+        rows: [],
+        terminal: null,
+        plyIndexPolicyVersion: 1,
+        indexedRawClockStateCount: CLOCKS.length,
+        clockAlignmentStatus: 'COMPLETE',
+        clockAlignmentVersion: 1,
+        alignedClockPlyCount: 0,
+        timingDerivationVersion: 1,
+        derivedTimingPlyCount: 0,
+        timingCoverageStatus: 'UNAVAILABLE',
+      }),
+      (error) => error instanceof PlyIndexSourceChangedError,
+    );
+
     const invalidated = await prisma.importedGame.findUniqueOrThrow({ where: { id: game.id } });
     assert.equal(invalidated.plyIndexStatus, 'PENDING');
     assert.equal(invalidated.plyIndexedAt, null);
@@ -164,6 +200,37 @@ test('ply projection is atomic, idempotent, and invalidated by same-length sourc
     });
     assert.equal(refreshedPly.effectiveIncrementCentiseconds, 300);
     assert.equal(refreshedPly.clockDeltaMoveTimeCentiseconds, 200);
+
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { pgn: null },
+    });
+    const failed = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
+    assert.equal(failed.status, 'FAILED');
+    const failedGame = await prisma.importedGame.findUniqueOrThrow({ where: { id: game.id } });
+    assert.equal(failedGame.plyIndexStatus, 'FAILED');
+    assert.equal(failedGame.plyIndexPolicyVersion, null);
+    assertPublicationMetadataCleared(failedGame);
+    assert.equal(await prisma.importedGamePly.count({ where: { importedGameId: game.id } }), 0);
+
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { pgn: PGN, variant: 'standard' },
+    });
+    const indexedAgain = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
+    assert.equal(indexedAgain.status, 'INDEXED');
+
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { variant: 'chess960' },
+    });
+    const skipped = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
+    assert.equal(skipped.status, 'SKIPPED');
+    const skippedGame = await prisma.importedGame.findUniqueOrThrow({ where: { id: game.id } });
+    assert.equal(skippedGame.plyIndexStatus, 'SKIPPED');
+    assert.equal(skippedGame.plyIndexPolicyVersion, 1);
+    assertPublicationMetadataCleared(skippedGame);
+    assert.equal(await prisma.importedGamePly.count({ where: { importedGameId: game.id } }), 0);
   } finally {
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => undefined);
