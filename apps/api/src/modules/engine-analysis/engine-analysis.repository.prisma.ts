@@ -40,6 +40,13 @@ function retryDelayMs(attempts: number): number {
   return Math.min(60_000, 1_000 * (2 ** Math.max(0, attempts - 1)));
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === 'P2002';
+}
+
 async function createRun(
   tx: Prisma.TransactionClient,
   input: { importedGameId: number; analysisVersion: string; settingsHash: string; settings: StockfishSettings },
@@ -56,25 +63,37 @@ async function createRun(
 
 export const prismaAnalysisRepository: AnalysisRepository = {
   async enqueueEligibleGame(input) {
-    return prisma.$transaction(async (tx) => {
-      const game = await tx.importedGame.findFirst({
-        where: {
-          plyIndexStatus: 'INDEXED',
-          plies: { some: {} },
-          analysisRuns: {
-            none: {
-              analysisVersion: input.analysisVersion,
-              settingsHash: input.settingsHash,
-            },
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const game = await tx.importedGame.findFirst({
+          where: {
+            plyIndexStatus: 'INDEXED',
+            plies: { some: {} },
+            AND: [
+              { analysisRuns: { none: { status: { in: [...ACTIVE_STATUSES] } } } },
+              {
+                analysisRuns: {
+                  none: {
+                    analysisVersion: input.analysisVersion,
+                    settingsHash: input.settingsHash,
+                  },
+                },
+              },
+            ],
           },
-        },
-        orderBy: { id: 'asc' },
-        select: { id: true },
+          orderBy: { id: 'asc' },
+          select: { id: true },
+        });
+        if (!game) return null;
+        const run = await createRun(tx, { ...input, importedGameId: game.id });
+        return run.id;
       });
-      if (!game) return null;
-      const run = await createRun(tx, { ...input, importedGameId: game.id });
-      return run.id;
-    });
+    } catch (error) {
+      // The partial unique index is the final arbiter when multiple workers discover
+      // the same eligible game concurrently. Losing the enqueue race is not a failure.
+      if (isUniqueConstraintError(error)) return null;
+      throw error;
+    }
   },
 
   async claimNext(workerId) {
@@ -98,6 +117,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         data: {
           status: 'RUNNING',
           attempts: { increment: 1 },
+          startedAt: candidate.startedAt ?? now,
           claimedAt: now,
           heartbeatAt: now,
           workerId,
