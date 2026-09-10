@@ -205,7 +205,7 @@ test('ply projection is atomic, fenced to its source snapshot, and clears stale 
       where: { id: game.id },
       data: { pgn: null },
     });
-    const failed = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
+    const failed = await ImportedGamePlyIndexService.indexOne(user.id, game.id, { force: true });
     assert.equal(failed.status, 'FAILED');
     const failedGame = await prisma.importedGame.findUniqueOrThrow({ where: { id: game.id } });
     assert.equal(failedGame.plyIndexStatus, 'FAILED');
