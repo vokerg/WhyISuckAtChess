@@ -2,10 +2,12 @@ import 'dotenv/config';
 import prisma from './prisma';
 import { lichessConnectionService } from './modules/lichess/lichess-connection.service';
 import { createLichessAccountImportService } from './modules/account-imports/account-import.service';
+import { createStockfishAnalysisService } from './modules/engine-analysis/engine-analysis.service';
 
 export async function runWorkerUntilStopped(): Promise<void> {
   const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
-  console.info('Persistent worker started; Lichess account import executor is registered.');
+  const analysisService = createStockfishAnalysisService();
+  console.info('Persistent worker started; Lichess import and Stockfish analysis executors are registered.');
 
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
@@ -16,8 +18,9 @@ export async function runWorkerUntilStopped(): Promise<void> {
   process.once('SIGTERM', () => stop('SIGTERM'));
 
   while (!stopping) {
-    const ran = await importService.runOnce();
-    if (!ran) await new Promise((resolve) => setTimeout(resolve, 1000));
+    const importRan = await importService.runOnce();
+    const analysisRan = await analysisService.runOnce();
+    if (!importRan && !analysisRan) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
 
