@@ -127,6 +127,37 @@ test('does not add increment when the final move directly ends the game', () => 
   assert.equal(result.rows[2].incrementProvenance, 'FINAL_MOVE_NO_INCREMENT');
 });
 
+test('uses alignment cardinality to distinguish direct autodraw from asynchronous draw', () => {
+  const directAlignment = align([5900, 5900, 5700], 3, { status: 'draw' });
+  assert.equal(directAlignment.terminal, undefined);
+  const direct = derivePlyTiming({
+    moveCount: 3,
+    variant: 'standard',
+    speedCategory: 'blitz',
+    status: 'draw',
+    incrementSeconds: 2,
+  }, directAlignment);
+  assert.equal(direct.rows[2].effectiveIncrementCentiseconds, 0);
+  assert.equal(direct.rows[2].clockDeltaMoveTimeCentiseconds, 200);
+  assert.equal(direct.rows[2].incrementProvenance, 'FINAL_MOVE_NO_INCREMENT');
+
+  const asynchronousAlignment = align([5900, 5900, 5700, 5600], 3, {
+    status: 'draw',
+    terminalActiveColor: 'BLACK',
+  });
+  assert.equal(asynchronousAlignment.terminal?.valueCentiseconds, 5600);
+  const asynchronous = derivePlyTiming({
+    moveCount: 3,
+    variant: 'standard',
+    speedCategory: 'blitz',
+    status: 'draw',
+    incrementSeconds: 2,
+  }, asynchronousAlignment);
+  assert.equal(asynchronous.rows[2].effectiveIncrementCentiseconds, 200);
+  assert.equal(asynchronous.rows[2].clockDeltaMoveTimeCentiseconds, 400);
+  assert.equal(asynchronous.rows[2].incrementProvenance, 'GAME_CONTROL');
+});
+
 test('negative clock arithmetic is inconsistent rather than clamped', () => {
   const result = derivePlyTiming({
     moveCount: 3,
