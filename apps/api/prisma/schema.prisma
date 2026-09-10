@@ -96,13 +96,27 @@ model ImportedGame {
   rawClockStateCount         Int                   @default(0)
   rawClockUnit               String                @default("CENTISECONDS") @db.VarChar(24)
   rawClockAnomalies          Json?
+  plyIndexStatus             String                @default("PENDING") @db.VarChar(24)
+  plyIndexPolicyVersion      Int?
+  plyIndexedAt               DateTime?
+  plyIndexError              String?
+  indexedRawClockStateCount  Int                   @default(0)
+  clockAlignmentStatus       String                @default("UNAVAILABLE") @db.VarChar(24)
+  clockAlignmentVersion      Int?
+  alignedClockPlyCount       Int                   @default(0)
+  timingDerivationVersion    Int?
+  derivedTimingPlyCount      Int                   @default(0)
+  timingCoverageStatus       String                @default("UNAVAILABLE") @db.VarChar(24)
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
   rawClockStates             LichessClockState[]
+  plies                      ImportedGamePly[]
+  terminalClockFacts         TerminalClockSourceFact[]
 
   @@unique([appUserId, provider, providerGameId])
   @@index([appUserId, startedAt])
   @@index([appUserId, provider, connectedLichessUserId])
+  @@index([plyIndexStatus, updatedAt])
 }
 
 model LichessClockState {
@@ -116,6 +130,62 @@ model LichessClockState {
 
   @@unique([importedGameId, sourceOrdinal])
   @@index([importedGameId, sourceOrdinal])
+}
+
+model Position {
+  id              Int               @id @default(autoincrement())
+  positionKey     Bytes             @unique
+  normalizedFen   String            @unique
+  createdAt       DateTime          @default(now())
+  pliesBefore     ImportedGamePly[] @relation("PlyBeforePosition")
+  pliesAfter      ImportedGamePly[] @relation("PlyAfterPosition")
+}
+
+model ImportedGamePly {
+  importedGameId                  Int
+  importedGame                    ImportedGame @relation(fields: [importedGameId], references: [id], onDelete: Cascade)
+  plyNumber                       Int
+  beforePositionId                Int
+  beforePosition                  Position     @relation("PlyBeforePosition", fields: [beforePositionId], references: [id], onDelete: Restrict)
+  afterPositionId                 Int
+  afterPosition                   Position     @relation("PlyAfterPosition", fields: [afterPositionId], references: [id], onDelete: Restrict)
+  moveUci                         String       @db.VarChar(16)
+  moverColor                      String       @db.VarChar(8)
+  isUserMove                      Boolean
+  sourceClockOrdinal              Int?
+  sourceClockAfterCentiseconds    Int?
+  sourceClockSemantics            String?      @db.VarChar(40)
+  clockAlignmentVersion           Int?
+  clockBeforeMoveCentiseconds     Int?
+  effectiveIncrementCentiseconds  Int?
+  clockDeltaMoveTimeCentiseconds  Int?
+  beforeClockProvenance           String       @default("UNAVAILABLE") @db.VarChar(40)
+  incrementProvenance             String       @default("UNAVAILABLE") @db.VarChar(40)
+  timingDerivationVersion         Int?
+  timingDerivationStatus          String       @default("UNAVAILABLE") @db.VarChar(24)
+  timingReliabilityFlags          String[]     @default([])
+  timingUnavailableReason         String?      @db.VarChar(64)
+  createdAt                       DateTime     @default(now())
+
+  @@id([importedGameId, plyNumber])
+  @@index([beforePositionId])
+  @@index([afterPositionId])
+  @@index([importedGameId, timingDerivationStatus])
+}
+
+model TerminalClockSourceFact {
+  id                  Int          @id @default(autoincrement())
+  importedGameId      Int
+  importedGame        ImportedGame @relation(fields: [importedGameId], references: [id], onDelete: Cascade)
+  sourceOrdinal       Int
+  activeColor         String       @db.VarChar(8)
+  valueCentiseconds   Int
+  semantics           String       @db.VarChar(48)
+  alignmentVersion    Int
+  createdAt           DateTime     @default(now())
+
+  @@unique([importedGameId, sourceOrdinal])
+  @@index([importedGameId])
 }
 
 model ImportRun {
@@ -162,17 +232,17 @@ model ImportRun {
 }
 
 model AccountImportCoverage {
-  id                    Int       @id @default(autoincrement())
-  appUserId             Int
-  appUser               AppUser   @relation(fields: [appUserId], references: [id], onDelete: Cascade)
-  scopeVersion          Int
-  scopeHash             String    @db.VarChar(64)
-  scopeJson             Json
-  coveredFrom           DateTime?
-  coveredThrough        DateTime?
+  id                       Int      @id @default(autoincrement())
+  appUserId                Int
+  appUser                  AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  scopeVersion             Int
+  scopeHash                String   @db.VarChar(64)
+  scopeJson                Json
+  coveredFrom              DateTime?
+  coveredThrough           DateTime?
   lastCompletedImportRunId Int?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   @@unique([appUserId, scopeHash])
   @@index([appUserId, coveredThrough])
