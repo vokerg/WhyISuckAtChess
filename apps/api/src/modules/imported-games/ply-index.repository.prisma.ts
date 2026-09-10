@@ -4,6 +4,13 @@ import {
   positionKeyHex,
 } from '../positions/position-key';
 
+export class PlyIndexSourceChangedError extends Error {
+  constructor(readonly importedGameId: number) {
+    super(`Imported game ${importedGameId} changed while ply indexing was in flight`);
+    this.name = 'PlyIndexSourceChangedError';
+  }
+}
+
 export interface PlyProjectionInput {
   importedGameId: number;
   plyNumber: number;
@@ -59,6 +66,7 @@ export async function getImportedGameForPlyIndex(appUserId: number, importedGame
       clockAlignmentVersion: true,
       timingDerivationVersion: true,
       plyIndexedAt: true,
+      updatedAt: true,
       rawClockStates: {
         orderBy: { sourceOrdinal: 'asc' },
         select: { sourceOrdinal: true, valueCentiseconds: true },
@@ -85,8 +93,13 @@ function assertUniquePositionInputs(rows: PlyProjectionInput[]) {
   return positionsByKey;
 }
 
+function assertFenceAcquired(importedGameId: number, count: number): void {
+  if (count !== 1) throw new PlyIndexSourceChangedError(importedGameId);
+}
+
 export async function replacePlyProjection(input: {
   importedGameId: number;
+  expectedSourceUpdatedAt: Date;
   rows: PlyProjectionInput[];
   terminal: TerminalClockProjectionInput | null;
   plyIndexPolicyVersion: number;
@@ -101,6 +114,25 @@ export async function replacePlyProjection(input: {
   const expectedFenByKey = assertUniquePositionInputs(input.rows);
 
   return prisma.$transaction(async (tx) => {
+    const indexedAt = new Date();
+    const fenced = await tx.importedGame.updateMany({
+      where: { id: input.importedGameId, updatedAt: input.expectedSourceUpdatedAt },
+      data: {
+        plyIndexStatus: 'INDEXED',
+        plyIndexPolicyVersion: input.plyIndexPolicyVersion,
+        plyIndexedAt: indexedAt,
+        plyIndexError: null,
+        indexedRawClockStateCount: input.indexedRawClockStateCount,
+        clockAlignmentStatus: input.clockAlignmentStatus,
+        clockAlignmentVersion: input.clockAlignmentVersion,
+        alignedClockPlyCount: input.alignedClockPlyCount,
+        timingDerivationVersion: input.timingDerivationVersion,
+        derivedTimingPlyCount: input.derivedTimingPlyCount,
+        timingCoverageStatus: input.timingCoverageStatus,
+      },
+    });
+    assertFenceAcquired(input.importedGameId, fenced.count);
+
     await tx.importedGamePly.deleteMany({ where: { importedGameId: input.importedGameId } });
     await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId: input.importedGameId } });
 
@@ -195,22 +227,8 @@ export async function replacePlyProjection(input: {
       });
     }
 
-    const indexedAt = new Date();
-    const game = await tx.importedGame.update({
+    const game = await tx.importedGame.findUniqueOrThrow({
       where: { id: input.importedGameId },
-      data: {
-        plyIndexStatus: 'INDEXED',
-        plyIndexPolicyVersion: input.plyIndexPolicyVersion,
-        plyIndexedAt: indexedAt,
-        plyIndexError: null,
-        indexedRawClockStateCount: input.indexedRawClockStateCount,
-        clockAlignmentStatus: input.clockAlignmentStatus,
-        clockAlignmentVersion: input.clockAlignmentVersion,
-        alignedClockPlyCount: input.alignedClockPlyCount,
-        timingDerivationVersion: input.timingDerivationVersion,
-        derivedTimingPlyCount: input.derivedTimingPlyCount,
-        timingCoverageStatus: input.timingCoverageStatus,
-      },
       select: { id: true, plyIndexedAt: true },
     });
 
@@ -218,40 +236,66 @@ export async function replacePlyProjection(input: {
   });
 }
 
-export async function markPlyIndexFailure(importedGameId: number, message: string) {
+export async function markPlyIndexFailure(
+  importedGameId: number,
+  message: string,
+  expectedSourceUpdatedAt: Date,
+) {
   return prisma.$transaction(async (tx) => {
-    await tx.importedGamePly.deleteMany({ where: { importedGameId } });
-    await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
-    return tx.importedGame.update({
-      where: { id: importedGameId },
+    const fenced = await tx.importedGame.updateMany({
+      where: { id: importedGameId, updatedAt: expectedSourceUpdatedAt },
       data: {
         plyIndexStatus: 'FAILED',
+        plyIndexPolicyVersion: null,
         plyIndexedAt: null,
         plyIndexError: message,
+        indexedRawClockStateCount: 0,
+        clockAlignmentStatus: 'UNAVAILABLE',
+        clockAlignmentVersion: null,
         alignedClockPlyCount: 0,
+        timingDerivationVersion: null,
         derivedTimingPlyCount: 0,
         timingCoverageStatus: 'UNAVAILABLE',
       },
+    });
+    assertFenceAcquired(importedGameId, fenced.count);
+    await tx.importedGamePly.deleteMany({ where: { importedGameId } });
+    await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
+    return tx.importedGame.findUniqueOrThrow({
+      where: { id: importedGameId },
       select: { id: true, plyIndexError: true },
     });
   });
 }
 
-export async function markPlyIndexSkipped(importedGameId: number, reason: string, policyVersion: number) {
+export async function markPlyIndexSkipped(
+  importedGameId: number,
+  reason: string,
+  policyVersion: number,
+  expectedSourceUpdatedAt: Date,
+) {
   return prisma.$transaction(async (tx) => {
-    await tx.importedGamePly.deleteMany({ where: { importedGameId } });
-    await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
-    return tx.importedGame.update({
-      where: { id: importedGameId },
+    const fenced = await tx.importedGame.updateMany({
+      where: { id: importedGameId, updatedAt: expectedSourceUpdatedAt },
       data: {
         plyIndexStatus: 'SKIPPED',
         plyIndexPolicyVersion: policyVersion,
         plyIndexedAt: null,
         plyIndexError: reason,
+        indexedRawClockStateCount: 0,
+        clockAlignmentStatus: 'UNAVAILABLE',
+        clockAlignmentVersion: null,
         alignedClockPlyCount: 0,
+        timingDerivationVersion: null,
         derivedTimingPlyCount: 0,
         timingCoverageStatus: 'UNAVAILABLE',
       },
+    });
+    assertFenceAcquired(importedGameId, fenced.count);
+    await tx.importedGamePly.deleteMany({ where: { importedGameId } });
+    await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
+    return tx.importedGame.findUniqueOrThrow({
+      where: { id: importedGameId },
       select: { id: true },
     });
   });
