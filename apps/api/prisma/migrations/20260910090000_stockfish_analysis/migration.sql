@@ -36,7 +36,7 @@ CREATE TABLE "StockfishPositionAnalysis" (
     "scoreCp" INTEGER,
     "mateIn" INTEGER,
     "bestMove" VARCHAR(16),
-    "bestPv" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "bestPv" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "multiPvJson" JSONB NOT NULL,
     "rawInfoJson" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
