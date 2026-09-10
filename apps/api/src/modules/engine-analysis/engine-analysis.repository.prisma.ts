@@ -165,8 +165,14 @@ export const prismaAnalysisRepository: AnalysisRepository = {
     if (!run) throw new Error(`Analysis run ${runId} no longer exists`);
     const positions = new Map<number, AnalysisPositionWork>();
     for (const ply of run.importedGame.plies) {
-      positions.set(ply.beforePosition.id, ply.beforePosition);
-      positions.set(ply.afterPosition.id, ply.afterPosition);
+      positions.set(ply.beforePosition.id, {
+        positionId: ply.beforePosition.id,
+        normalizedFen: ply.beforePosition.normalizedFen,
+      });
+      positions.set(ply.afterPosition.id, {
+        positionId: ply.afterPosition.id,
+        normalizedFen: ply.afterPosition.normalizedFen,
+      });
     }
     return [...positions.values()];
   },
