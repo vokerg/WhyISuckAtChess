@@ -14,6 +14,7 @@ export class GameReplayStore {
   readonly currentPlyNumber = signal(0);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly totalPlies = computed(() => this.replay()?.plies.length ?? 0);
 
   readonly currentPly = computed<ImportedGamePly | null>(() => {
     const plyNumber = this.currentPlyNumber();
@@ -32,7 +33,7 @@ export class GameReplayStore {
       : null;
   });
   readonly canGoBackward = computed(() => this.currentPlyNumber() > 0);
-  readonly canGoForward = computed(() => this.currentPlyNumber() < this.stepper.totalPlies);
+  readonly canGoForward = computed(() => this.currentPlyNumber() < this.totalPlies());
   readonly blackPerspective = computed(() => this.replay()?.userColor === 'BLACK');
   readonly gameTitle = computed(() => {
     const game = this.replay();
@@ -40,17 +41,24 @@ export class GameReplayStore {
     return `${game.white.username ?? 'White'} vs ${game.black.username ?? 'Black'}`;
   });
 
+  private loadGeneration = 0;
+
   initialize(gameId: number): void {
+    const generation = ++this.loadGeneration;
     if (!Number.isInteger(gameId) || gameId <= 0) {
+      this.gameId.set(null);
+      this.replay.set(null);
+      this.stepper.setTotalPlies(0);
+      this.setCurrentPly(0);
       this.error.set('Invalid imported game id.');
       this.loading.set(false);
       return;
     }
     this.gameId.set(gameId);
-    void this.load();
+    void this.load(generation);
   }
 
-  async load(): Promise<void> {
+  async load(generation = this.loadGeneration): Promise<void> {
     const gameId = this.gameId();
     if (!gameId) return;
 
@@ -61,13 +69,18 @@ export class GameReplayStore {
     this.setCurrentPly(0);
     try {
       const replay = await firstValueFrom(this.api.getReplay(gameId));
+      if (generation !== this.loadGeneration || gameId !== this.gameId()) return;
       this.replay.set(replay);
       this.stepper.setTotalPlies(replay.plies.length);
       this.setCurrentPly(this.stepper.goToStart());
     } catch (error) {
-      this.error.set(readError(error, 'Could not load imported game replay.'));
+      if (generation === this.loadGeneration && gameId === this.gameId()) {
+        this.error.set(readError(error, 'Could not load imported game replay.'));
+      }
     } finally {
-      this.loading.set(false);
+      if (generation === this.loadGeneration && gameId === this.gameId()) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -93,7 +106,7 @@ export class GameReplayStore {
 
   handleKeyboard(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
-    const tagName = target?.tagName.toLowerCase();
+    const tagName = target?.tagName?.toLowerCase();
     if (target?.isContentEditable || (tagName && ['input', 'textarea', 'select'].includes(tagName))) {
       return;
     }

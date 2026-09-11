@@ -97,7 +97,8 @@ export const importedGameProvenanceSchema = z.object({
   connectedLichessUserId: z.string(),
   connectedLichessUsername: z.string(),
   importedAt: z.iso.datetime({ offset: true }),
-  sourceUpdatedAt: z.iso.datetime({ offset: true }),
+  sourceUpdatedAt: nullableDateTimeSchema,
+  readModelUpdatedAt: z.iso.datetime({ offset: true }),
 }).strict();
 
 export const importedGameSourceClockSchema = z.object({
@@ -123,6 +124,9 @@ export const importedGamePlyTimingSchema = z.object({
 export const importedGamePositionEngineEvidenceSchema = z.object({
   status: z.enum(['AVAILABLE', 'UNAVAILABLE']),
   analysisVersion: z.string().nullable(),
+  settingsHash: z.string().nullable(),
+  engineName: z.string().nullable(),
+  engineVersion: z.string().nullable(),
   depth: z.number().int().nonnegative().nullable(),
   bestMoveUci: z.string().nullable(),
   scoreCpWhite: z.number().int().nullable(),

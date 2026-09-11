@@ -10,6 +10,7 @@ import {
   ImportedGamesQueryService,
   type ImportedGamesQueryService as ImportedGamesQueryServiceType,
 } from './imported-games.service';
+import { InvalidImportedGameCursorError } from './imported-games.errors';
 
 export interface ImportedGameRouteParams {
   gameId: string;
@@ -31,7 +32,10 @@ export async function registerImportedGamesRoutes(
     try {
       return importedGameListResponseSchema.parse(await service.list(auth.userId, parsedQuery.data));
     } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error, 'Could not list imported games') });
+      if (error instanceof InvalidImportedGameCursorError) {
+        return reply.code(400).send({ error: error.message });
+      }
+      throw error;
     }
   });
 
@@ -42,13 +46,9 @@ export async function registerImportedGamesRoutes(
     const gameId = parseGameId(request.params.gameId);
     if (gameId === null) return reply.code(400).send({ error: 'Invalid imported game id' });
 
-    try {
-      const replay = await service.getReplay(auth.userId, gameId);
-      if (!replay) return reply.code(404).send({ message: 'Imported game not found' });
-      return importedGameReplayResponseSchema.parse(replay);
-    } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error, 'Could not load imported game replay') });
-    }
+    const replay = await service.getReplay(auth.userId, gameId);
+    if (!replay) return reply.code(404).send({ message: 'Imported game not found' });
+    return importedGameReplayResponseSchema.parse(replay);
   });
 
   app.get<{ Params: ImportedGameRouteParams }>('/api/imported-games/:gameId', async (request, reply) => {
@@ -58,21 +58,13 @@ export async function registerImportedGamesRoutes(
     const gameId = parseGameId(request.params.gameId);
     if (gameId === null) return reply.code(400).send({ error: 'Invalid imported game id' });
 
-    try {
-      const detail = await service.getDetail(auth.userId, gameId);
-      if (!detail) return reply.code(404).send({ message: 'Imported game not found' });
-      return importedGameDetailResponseSchema.parse(detail);
-    } catch (error) {
-      return reply.code(400).send({ error: errorMessage(error, 'Could not load imported game') });
-    }
+    const detail = await service.getDetail(auth.userId, gameId);
+    if (!detail) return reply.code(404).send({ message: 'Imported game not found' });
+    return importedGameDetailResponseSchema.parse(detail);
   });
 }
 
 function parseGameId(value: string): number | null {
   const gameId = Number(value);
-  return Number.isInteger(gameId) && gameId > 0 ? gameId : null;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
+  return Number.isSafeInteger(gameId) && gameId > 0 && gameId <= 2_147_483_647 ? gameId : null;
 }

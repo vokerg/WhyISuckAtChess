@@ -1,11 +1,22 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { ImportedGameListQuery } from '@why-i-suck-at-chess/contracts';
 import prisma from '../../prisma';
+import { InvalidImportedGameCursorError } from './imported-games.errors';
 
 export interface ImportedGameCursor {
   endedAt: string | null;
   id: number;
 }
+
+const latestEngineRunOrderBy: Prisma.GameAnalysisRunOrderByWithRelationInput[] = [
+  { createdAt: 'desc' },
+  { id: 'desc' },
+];
+
+const latestPositionAnalysisOrderBy: Prisma.StockfishPositionAnalysisOrderByWithRelationInput[] = [
+  { createdAt: 'desc' },
+  { id: 'desc' },
+];
 
 const latestEngineRunSelect = {
   id: true,
@@ -56,7 +67,7 @@ const importedGameListSelect = {
   derivedTimingPlyCount: true,
   timingCoverageStatus: true,
   analysisRuns: {
-    orderBy: { createdAt: 'desc' as const },
+    orderBy: latestEngineRunOrderBy,
     take: 1,
     select: latestEngineRunSelect,
   },
@@ -74,10 +85,13 @@ const importedGamePlySelect = {
       id: true,
       normalizedFen: true,
       engineAnalyses: {
-        orderBy: { createdAt: 'desc' as const },
+        orderBy: latestPositionAnalysisOrderBy,
         take: 1,
         select: {
           analysisVersion: true,
+          settingsHash: true,
+          engineName: true,
+          engineVersion: true,
           depth: true,
           bestMove: true,
           scoreCpWhite: true,
@@ -167,7 +181,7 @@ export function decodeImportedGameCursor(cursor?: string): ImportedGameCursor | 
     }
     return { endedAt: typeof value.endedAt === 'string' ? value.endedAt : null, id: value.id };
   } catch {
-    throw new Error('Invalid imported-games cursor');
+    throw new InvalidImportedGameCursorError();
   }
 }
 
@@ -221,7 +235,9 @@ export function createPrismaImportedGamesRepository(
     async findList(appUserId, query, cursor) {
       const afterCursor = cursorWhere(cursor, query.sort);
       const rows = await database.importedGame.findMany({
-        where: afterCursor ? { AND: [{ appUserId }, afterCursor] } : { appUserId },
+        where: afterCursor
+          ? { AND: [{ appUserId, provider: 'LICHESS' }, afterCursor] }
+          : { appUserId, provider: 'LICHESS' },
         orderBy: orderBy(query.sort),
         take: query.limit + 1,
         select: importedGameListSelect,
@@ -231,7 +247,7 @@ export function createPrismaImportedGamesRepository(
 
     async findDetail(appUserId, gameId) {
       const row = await database.importedGame.findFirst({
-        where: { id: gameId, appUserId },
+        where: { id: gameId, appUserId, provider: 'LICHESS' },
         select: importedGameDetailSelect,
       });
       return row as unknown as ImportedGameDetailRow | null;
@@ -239,7 +255,7 @@ export function createPrismaImportedGamesRepository(
 
     async findReplay(appUserId, gameId) {
       const row = await database.importedGame.findFirst({
-        where: { id: gameId, appUserId },
+        where: { id: gameId, appUserId, provider: 'LICHESS' },
         select: importedGameReplaySelect,
       });
       return row as unknown as ImportedGameReplayRow | null;

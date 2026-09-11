@@ -24,4 +24,6 @@ Every detail/replay ply keeps the layers separate:
 
 `ABSENT`, `INVALID`, `UNALIGNED`, partial timing, and missing engine coverage are represented as explicit states. They are never mapped to a good move or fabricated duration. The API maps database/provider values into contracts and does not expose Prisma rows or Lichess DTOs.
 
+Replay provenance distinguishes the provider's last-move/source timestamp (`sourceUpdatedAt`, when available) from the local read-model timestamp (`readModelUpdatedAt`). Per-ply game-specific engine evidence is exposed only when it belongs to the latest complete engine run; reusable position evidence remains a separate optional layer.
+
 The Angular replay store owns only navigation state. `ChessgroundBoardComponent` receives a FEN, last move, and evidence annotations; it does not calculate timing, engine results, or diagnosis policy.

@@ -97,7 +97,24 @@ function replayRow(overrides = {}) {
       engineAnalysisRun: null,
       scoreLossCp: null,
       classificationCode: null,
-    }],
+  }],
+  ...overrides,
+};
+}
+
+function engineRun(overrides = {}) {
+  return {
+    id: 41,
+    status: 'SUCCEEDED',
+    coverageStatus: 'COMPLETE',
+    positionsDone: 2,
+    positionsTotal: 2,
+    pliesDone: 1,
+    pliesTotal: 1,
+    engineName: 'Stockfish',
+    engineVersion: '18',
+    completedAt: new Date('2026-09-11T10:02:00.000Z'),
+    createdAt: new Date('2026-09-11T10:01:00.000Z'),
     ...overrides,
   };
 }
@@ -138,11 +155,87 @@ test('read service maps owned rows into bounded list and replay contracts', asyn
   assert.equal(replay.plies[0].sourceClock.status, 'UNAVAILABLE');
   assert.equal(replay.plies[0].timing.unavailableReason, 'CLOCKS_ABSENT');
   assert.deepEqual(replay.plies[0].beforePosition, { id: 11, normalizedFen: 'startpos' });
+  assert.equal(replay.provenance.sourceUpdatedAt, '2026-09-11T10:00:00.000Z');
+  assert.equal(replay.provenance.readModelUpdatedAt, '2026-09-11T10:01:00.000Z');
   assert.equal('rawClockStates' in replay, false);
 
   const detail = await service.getDetail(42, 7);
   importedGameDetailResponseSchema.parse(detail);
   assert.equal(detail.pgn, '[Result "1-0"]');
+});
+
+test('invalid pagination cursors fail before a repository query', async () => {
+  let queried = false;
+  const service = createImportedGamesQueryService({
+    async findList() {
+      queried = true;
+      return [];
+    },
+    async findDetail() { return null; },
+    async findReplay() { return null; },
+  });
+
+  await assert.rejects(
+    service.list(42, importedGameListQuerySchema.parse({ cursor: 'not-a-valid-cursor' })),
+    /Invalid imported-games cursor/,
+  );
+  assert.equal(queried, false);
+});
+
+test('read model hides stale or incomplete game-specific engine evidence', async () => {
+  const basePly = replayRow().plies[0];
+  const repository = {
+    async findList() { return []; },
+    async findDetail() { return null; },
+    async findReplay() {
+      return replayRow({
+        analysisRuns: [engineRun({ id: 42, status: 'RUNNING', coverageStatus: 'PARTIAL', completedAt: null })],
+        plies: [{
+          ...basePly,
+          engineAnalysisRunId: 41,
+          engineAnalysisRun: { id: 41, status: 'SUCCEEDED', coverageStatus: 'COMPLETE' },
+          scoreLossCp: 220,
+          classificationCode: 4,
+        }],
+      });
+    },
+  };
+  const service = createImportedGamesQueryService(repository);
+
+  const replay = await service.getReplay(42, 7);
+  importedGameReplayResponseSchema.parse(replay);
+  assert.equal(replay.engine.status, 'RUNNING');
+  assert.equal(replay.plies[0].engine.status, 'UNAVAILABLE');
+  assert.equal(replay.plies[0].engine.analysisRunId, null);
+  assert.equal(replay.plies[0].engine.scoreLossCp, null);
+});
+
+test('read model exposes game-specific engine evidence only for the latest complete run', async () => {
+  const basePly = replayRow().plies[0];
+  const repository = {
+    async findList() { return []; },
+    async findDetail() { return null; },
+    async findReplay() {
+      return replayRow({
+        analysisRuns: [engineRun()],
+        plies: [{
+          ...basePly,
+          engineAnalysisRunId: 41,
+          engineAnalysisRun: { id: 41, status: 'SUCCEEDED', coverageStatus: 'COMPLETE' },
+          scoreLossCp: 220,
+          classificationCode: 4,
+        }],
+      });
+    },
+  };
+  const service = createImportedGamesQueryService(repository);
+
+  const replay = await service.getReplay(42, 7);
+  importedGameReplayResponseSchema.parse(replay);
+  assert.equal(replay.engine.status, 'COMPLETED');
+  assert.equal(replay.plies[0].engine.status, 'AVAILABLE');
+  assert.equal(replay.plies[0].engine.analysisRunId, 41);
+  assert.equal(replay.plies[0].engine.scoreLossCp, 220);
 });
 
 test('Prisma projections enforce ownership and bounded list/detail selection', async () => {
@@ -164,14 +257,14 @@ test('Prisma projections enforce ownership and bounded list/detail selection', a
   await repository.findReplay(73, 901);
   await repository.findDetail(73, 901);
 
-  assert.deepEqual(calls[0][1].where, { appUserId: 73 });
+  assert.deepEqual(calls[0][1].where, { appUserId: 73, provider: 'LICHESS' });
   assert.equal(calls[0][1].take, 3);
   assert.equal('plies' in calls[0][1].select, false);
   assert.equal('rawClockStates' in calls[0][1].select, false);
-  assert.deepEqual(calls[1][1].where, { id: 901, appUserId: 73 });
+  assert.deepEqual(calls[1][1].where, { id: 901, appUserId: 73, provider: 'LICHESS' });
   assert.equal('pgn' in calls[1][1].select, false, 'replay does not load raw PGN');
   assert.equal('plies' in calls[1][1].select, true);
-  assert.deepEqual(calls[2][1].where, { id: 901, appUserId: 73 });
+  assert.deepEqual(calls[2][1].where, { id: 901, appUserId: 73, provider: 'LICHESS' });
   assert.equal('pgn' in calls[2][1].select, true);
 });
 

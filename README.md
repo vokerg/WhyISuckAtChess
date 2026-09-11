@@ -49,7 +49,7 @@ For a PostgreSQL migration smoke check, point `DATABASE_URL` at a disposable dat
 npm run db:migrate
 ```
 
-Development processes are intentionally separate:
+Development processes are intentionally separate (the Angular dev server proxies `/api` to the local Fastify server):
 
 ```bash
 npm run dev          # API + Angular web shell

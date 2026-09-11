@@ -87,6 +87,9 @@ const ply = {
     beforePosition: {
       status: 'UNAVAILABLE',
       analysisVersion: null,
+      settingsHash: null,
+      engineName: null,
+      engineVersion: null,
       depth: null,
       bestMoveUci: null,
       scoreCpWhite: null,
@@ -105,6 +108,7 @@ test('imported-game contracts preserve exact controls and explicit unavailable e
       connectedLichessUsername: 'Player',
       importedAt: '2026-09-11T10:06:00.000Z',
       sourceUpdatedAt: '2026-09-11T10:06:00.000Z',
+      readModelUpdatedAt: '2026-09-11T10:06:00.000Z',
     },
     clockSource: {
       presence: 'ABSENT',

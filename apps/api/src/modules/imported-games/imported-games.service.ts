@@ -79,6 +79,12 @@ function latestEngineRun(row: GameProjectionRow) {
   return row.analysisRuns[0] ?? null;
 }
 
+type CurrentEngineRun = {
+  id: number;
+  status: string;
+  coverageStatus: string;
+};
+
 function toEngineSummary(row: GameProjectionRow): ImportedGameEngineSummary {
   const run = latestEngineRun(row);
   return {
@@ -137,11 +143,18 @@ function toCommon(row: GameProjectionRow): ImportedGameListItem {
   };
 }
 
-function toPly(row: ImportedGameReplayRow['plies'][number]): ImportedGamePly {
+function toPly(
+  row: ImportedGameReplayRow['plies'][number],
+  currentEngineRun: CurrentEngineRun | null,
+): ImportedGamePly {
   const positionAnalysis = row.beforePosition.engineAnalyses[0] ?? null;
   const sourceClockAvailable = row.sourceClockOrdinal !== null
     && row.sourceClockAfterCentiseconds !== null;
-  const engineAvailable = row.engineAnalysisRun?.status === 'SUCCEEDED'
+  const engineAvailable = currentEngineRun?.id === row.engineAnalysisRunId
+    && currentEngineRun.status === 'SUCCEEDED'
+    && currentEngineRun.coverageStatus === 'COMPLETE'
+    && row.engineAnalysisRun?.status === 'SUCCEEDED'
+    && row.engineAnalysisRun.coverageStatus === 'COMPLETE'
     && (row.scoreLossCp !== null || row.classificationCode !== null);
 
   return {
@@ -181,12 +194,15 @@ function toPly(row: ImportedGameReplayRow['plies'][number]): ImportedGamePly {
     },
     engine: {
       status: engineAvailable ? 'AVAILABLE' : 'UNAVAILABLE',
-      analysisRunId: row.engineAnalysisRunId,
-      scoreLossCp: row.scoreLossCp,
-      classificationCode: row.classificationCode,
+      analysisRunId: engineAvailable ? row.engineAnalysisRunId : null,
+      scoreLossCp: engineAvailable ? row.scoreLossCp : null,
+      classificationCode: engineAvailable ? row.classificationCode : null,
       beforePosition: {
         status: positionAnalysis ? 'AVAILABLE' : 'UNAVAILABLE',
         analysisVersion: positionAnalysis?.analysisVersion ?? null,
+        settingsHash: positionAnalysis?.settingsHash ?? null,
+        engineName: positionAnalysis?.engineName ?? null,
+        engineVersion: positionAnalysis?.engineVersion ?? null,
         depth: positionAnalysis?.depth ?? null,
         bestMoveUci: positionAnalysis?.bestMove ?? null,
         scoreCpWhite: positionAnalysis?.scoreCpWhite ?? null,
@@ -198,6 +214,7 @@ function toPly(row: ImportedGameReplayRow['plies'][number]): ImportedGamePly {
 }
 
 function toReplay(row: ImportedGameReplayRow | ImportedGameDetailRow): ImportedGameReplay {
+  const currentEngineRun = latestEngineRun(row);
   return {
     ...toCommon(row),
     provenance: {
@@ -205,7 +222,8 @@ function toReplay(row: ImportedGameReplayRow | ImportedGameDetailRow): ImportedG
       connectedLichessUserId: row.connectedLichessUserId,
       connectedLichessUsername: row.connectedLichessUsername,
       importedAt: row.createdAt.toISOString(),
-      sourceUpdatedAt: row.updatedAt.toISOString(),
+      sourceUpdatedAt: toIso(row.endedAt),
+      readModelUpdatedAt: row.updatedAt.toISOString(),
     },
     clockSource: {
       presence: clockPresence(row.rawClockPresence),
@@ -213,7 +231,7 @@ function toReplay(row: ImportedGameReplayRow | ImportedGameDetailRow): ImportedG
       unit: row.rawClockUnit,
       anomalies: stringArray(row.rawClockAnomalies),
     },
-    plies: row.plies.map(toPly),
+    plies: row.plies.map((ply) => toPly(ply, currentEngineRun)),
   };
 }
 
