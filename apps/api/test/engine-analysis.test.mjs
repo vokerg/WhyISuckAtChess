@@ -130,6 +130,7 @@ function baseClaim() {
     maxAttempts: 3,
     analysisVersion: 'test-v1',
     settingsHash: settingsHash(DEFAULT_STOCKFISH_SETTINGS),
+    sourcePlyIndexedAt: new Date('2026-09-11T10:00:00.000Z'),
     workerId: 'test-worker',
     claimToken: 'claim-11',
   };
