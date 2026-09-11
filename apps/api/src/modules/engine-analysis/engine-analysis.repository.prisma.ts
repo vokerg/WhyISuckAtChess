@@ -286,7 +286,12 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         where: {
           id: candidate.id,
           status: candidate.status,
+          sourcePlyIndexedAt: candidate.sourcePlyIndexedAt,
           cancelRequestedAt: null,
+          importedGame: {
+            plyIndexStatus: 'INDEXED',
+            plyIndexedAt: candidate.sourcePlyIndexedAt,
+          },
         },
         data: {
           status: 'RUNNING',
@@ -325,7 +330,12 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         id: run.id,
         status: 'RUNNING',
         claimToken: run.claimToken,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
         cancelRequestedAt: null,
+        importedGame: {
+          plyIndexStatus: 'INDEXED',
+          plyIndexedAt: run.sourcePlyIndexedAt,
+        },
       },
       data: { engineName, engineVersion, heartbeatAt: new Date() },
     });
@@ -357,7 +367,6 @@ export const prismaAnalysisRepository: AnalysisRepository = {
             },
           },
         },
-      },
     });
     if (!storedRun) {
       throw new Error('Analysis source ply projection changed while work was in flight');
@@ -413,7 +422,12 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         id: run.id,
         status: 'RUNNING',
         claimToken: run.claimToken,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
         cancelRequestedAt: null,
+        importedGame: {
+          plyIndexStatus: 'INDEXED',
+          plyIndexedAt: run.sourcePlyIndexedAt,
+        },
       },
       data: {
         positionsTotal: input.positionsTotal,
@@ -476,7 +490,12 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           id: run.id,
           status: 'RUNNING',
           claimToken: run.claimToken,
+          sourcePlyIndexedAt: run.sourcePlyIndexedAt,
           cancelRequestedAt: null,
+          importedGame: {
+            plyIndexStatus: 'INDEXED',
+            plyIndexedAt: run.sourcePlyIndexedAt,
+          },
         },
         data: {
           positionsDone: input.positionsDone,
@@ -511,7 +530,12 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           id: run.id,
           status: 'RUNNING',
           claimToken: run.claimToken,
+          sourcePlyIndexedAt: run.sourcePlyIndexedAt,
           cancelRequestedAt: null,
+          importedGame: {
+            plyIndexStatus: 'INDEXED',
+            plyIndexedAt: run.sourcePlyIndexedAt,
+          },
         },
         data: {
           status: 'SUCCEEDED',
@@ -532,6 +556,11 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         id: run.id,
         status: 'RUNNING',
         claimToken: run.claimToken,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        importedGame: {
+          plyIndexStatus: 'INDEXED',
+          plyIndexedAt: run.sourcePlyIndexedAt,
+        },
       },
       select: {
         positionsDone: true,
@@ -547,6 +576,11 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         id: run.id,
         status: 'RUNNING',
         claimToken: run.claimToken,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        importedGame: {
+          plyIndexStatus: 'INDEXED',
+          plyIndexedAt: run.sourcePlyIndexedAt,
+        },
       },
       data: terminal
         ? {
