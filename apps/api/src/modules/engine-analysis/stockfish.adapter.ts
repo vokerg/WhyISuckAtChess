@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { scoreFromSideToMoveToWhite } from '@why-i-suck-at-chess/chess-domain';
 
 export interface StockfishSettings {
   depth: number;
@@ -8,7 +9,7 @@ export interface StockfishSettings {
   hashMb: number;
 }
 
-export interface StockfishPvLine {
+export interface ParsedStockfishInfoLine {
   multiPv: number;
   depth: number;
   scoreCp: number | null;
@@ -17,10 +18,19 @@ export interface StockfishPvLine {
   raw: string;
 }
 
+export interface StockfishPvLine {
+  multiPv: number;
+  depth: number;
+  scoreCpWhite: number | null;
+  mateWhite: number | null;
+  pv: string[];
+  raw: string;
+}
+
 export interface StockfishPositionAnalysis {
   depth: number;
-  scoreCp: number | null;
-  mateIn: number | null;
+  scoreCpWhite: number | null;
+  mateWhite: number | null;
   bestMove: string | null;
   bestPv: string[];
   multiPv: StockfishPvLine[];
@@ -42,12 +52,13 @@ export const DEFAULT_STOCKFISH_SETTINGS: StockfishSettings = Object.freeze({
 });
 
 export const STOCKFISH_ANALYSIS_VERSION = 'stockfish-depth16-multipv3-v1';
+export const DEFAULT_STOCKFISH_COMMAND_TIMEOUT_MS = 30_000;
 
 export function settingsHash(settings: StockfishSettings): string {
   return createHash('sha256').update(JSON.stringify(settings)).digest('hex');
 }
 
-export function parseStockfishInfo(line: string): StockfishPvLine | null {
+export function parseStockfishInfo(line: string): ParsedStockfishInfoLine | null {
   if (!line.startsWith('info ')) return null;
   const tokens = line.trim().split(/\s+/);
   const valueAfter = (name: string): string | undefined => {
@@ -66,27 +77,48 @@ export function parseStockfishInfo(line: string): StockfishPvLine | null {
   }
   const pvIndex = tokens.indexOf('pv');
   const pv = pvIndex >= 0 ? tokens.slice(pvIndex + 1) : [];
-  if (!Number.isInteger(multiPv) || (!Number.isFinite(scoreCp) && scoreCp !== null) || (!Number.isFinite(mateIn) && mateIn !== null)) {
+  if (
+    !Number.isInteger(multiPv)
+    || (!Number.isFinite(scoreCp) && scoreCp !== null)
+    || (!Number.isFinite(mateIn) && mateIn !== null)
+  ) {
     return null;
   }
   return { multiPv, depth, scoreCp, mateIn, pv, raw: line };
 }
 
-export function summarizeStockfishSearch(lines: string[], bestMove: string | null): StockfishPositionAnalysis {
-  const parsed = lines.map(parseStockfishInfo).filter((line): line is StockfishPvLine => line !== null);
+export function summarizeStockfishSearch(
+  lines: string[],
+  bestMove: string | null,
+  fenOrActiveColor: string | 'w' | 'b' = 'w',
+): StockfishPositionAnalysis {
+  const parsed = lines.map(parseStockfishInfo).filter(
+    (line): line is ParsedStockfishInfoLine => line !== null,
+  );
   if (parsed.length === 0) throw new Error('Stockfish returned no parseable search info');
-  const maxDepth = Math.max(...parsed.map((line) => line.depth));
-  const latestByMultiPv = new Map<number, StockfishPvLine>();
+
+  const latestByMultiPv = new Map<number, ParsedStockfishInfoLine>();
   for (const line of parsed) {
     const previous = latestByMultiPv.get(line.multiPv);
     if (!previous || line.depth >= previous.depth) latestByMultiPv.set(line.multiPv, line);
   }
-  const multiPv = [...latestByMultiPv.values()].sort((a, b) => a.multiPv - b.multiPv);
+
+  const multiPv = [...latestByMultiPv.values()]
+    .sort((a, b) => a.multiPv - b.multiPv)
+    .map((line): StockfishPvLine => ({
+      multiPv: line.multiPv,
+      depth: line.depth,
+      scoreCpWhite: scoreFromSideToMoveToWhite(line.scoreCp, fenOrActiveColor),
+      mateWhite: scoreFromSideToMoveToWhite(line.mateIn, fenOrActiveColor),
+      pv: line.pv,
+      raw: line.raw,
+    }));
   const principal = multiPv.find((line) => line.multiPv === 1) ?? multiPv[0];
+
   return {
-    depth: maxDepth,
-    scoreCp: principal.scoreCp,
-    mateIn: principal.mateIn,
+    depth: Math.max(...multiPv.map((line) => line.depth)),
+    scoreCpWhite: principal.scoreCpWhite,
+    mateWhite: principal.mateWhite,
     bestMove,
     bestPv: principal.pv,
     multiPv,
@@ -121,62 +153,111 @@ class UciLineReader {
   }
 }
 
+function configuredTimeoutMs(explicit?: number): number {
+  if (explicit !== undefined) return explicit;
+  const fromEnv = Number(process.env.STOCKFISH_COMMAND_TIMEOUT_MS);
+  return Number.isFinite(fromEnv) && fromEnv > 0
+    ? Math.trunc(fromEnv)
+    : DEFAULT_STOCKFISH_COMMAND_TIMEOUT_MS;
+}
+
 export async function createStockfishEngine(options: {
   binaryPath?: string;
   settings?: StockfishSettings;
+  commandTimeoutMs?: number;
   spawnProcess?: (binaryPath: string) => ChildProcessWithoutNullStreams;
 } = {}): Promise<StockfishEngine> {
   const settings = options.settings ?? DEFAULT_STOCKFISH_SETTINGS;
+  const commandTimeoutMs = configuredTimeoutMs(options.commandTimeoutMs);
   const binaryPath = options.binaryPath ?? process.env.STOCKFISH_PATH ?? 'stockfish';
   const child = options.spawnProcess?.(binaryPath) ?? spawn(binaryPath, [], { stdio: 'pipe' });
   const reader = new UciLineReader(child.stdout);
   let closing = false;
+
   const processFailure = new Promise<never>((_, reject) => {
-    child.once('error', reject);
+    child.once('error', (error) => {
+      if (!closing) reject(error);
+    });
     child.once('exit', (code, signal) => {
-      if (!closing) reject(new Error(`Stockfish exited unexpectedly (code=${code ?? 'none'}, signal=${signal ?? 'none'})`));
+      if (!closing) {
+        reject(new Error(
+          `Stockfish exited unexpectedly (code=${code ?? 'none'}, signal=${signal ?? 'none'})`,
+        ));
+      }
     });
   });
+  void processFailure.catch(() => {});
+
   const write = (command: string) => child.stdin.write(`${command}\n`);
-  const waitFor = async (predicate: (line: string) => boolean): Promise<string[]> => {
+  const waitFor = async (
+    predicate: (line: string) => boolean,
+    operation: string,
+  ): Promise<string[]> => {
     const seen: string[] = [];
+    const deadline = Date.now() + commandTimeoutMs;
     for (;;) {
-      const line = await Promise.race([reader.next(), processFailure]);
-      seen.push(line);
-      if (predicate(line)) return seen;
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error(`Stockfish ${operation} timed out after ${commandTimeoutMs}ms`);
+
+      let timeout: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Stockfish ${operation} timed out after ${commandTimeoutMs}ms`)),
+          remaining,
+        );
+      });
+
+      try {
+        const line = await Promise.race([reader.next(), processFailure, timeoutPromise]);
+        seen.push(line);
+        if (predicate(line)) return seen;
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
     }
   };
 
-  write('uci');
-  const uciLines = await waitFor((line) => line === 'uciok');
-  const nameLine = uciLines.find((line) => line.startsWith('id name ')) ?? 'id name Stockfish unknown';
-  const engineName = nameLine.slice('id name '.length).trim();
-  const versionMatch = engineName.match(/(\d+(?:\.\d+)?(?:[-\w.]*)?)/);
-  const engineVersion = versionMatch?.[1] ?? 'unknown';
-  write(`setoption name Threads value ${settings.threads}`);
-  write(`setoption name Hash value ${settings.hashMb}`);
-  write(`setoption name MultiPV value ${settings.multiPv}`);
-  write('isready');
-  await waitFor((line) => line === 'readyok');
+  try {
+    write('uci');
+    const uciLines = await waitFor((line) => line === 'uciok', 'uci initialization');
+    const nameLine = uciLines.find((line) => line.startsWith('id name ')) ?? 'id name Stockfish unknown';
+    const engineName = nameLine.slice('id name '.length).trim();
+    const versionMatch = engineName.match(/(\d+(?:\.\d+)?(?:[-\w.]*)?)/);
+    const engineVersion = versionMatch?.[1] ?? 'unknown';
 
-  return {
-    engineName,
-    engineVersion,
-    async analyzeFen(fen: string): Promise<StockfishPositionAnalysis> {
-      write('ucinewgame');
-      write(`position fen ${fen}`);
-      write(`go depth ${settings.depth}`);
-      const lines = await waitFor((line) => line.startsWith('bestmove '));
-      const bestMoveLine = lines.at(-1) ?? '';
-      const bestMove = bestMoveLine.split(/\s+/)[1] ?? null;
-      return summarizeStockfishSearch(lines.filter((line) => line.startsWith('info ')), bestMove === '(none)' ? null : bestMove);
-    },
-    async close(): Promise<void> {
-      if (!child.killed) {
-        closing = true;
-        write('quit');
-        child.kill();
-      }
-    },
-  };
+    write(`setoption name Threads value ${settings.threads}`);
+    write(`setoption name Hash value ${settings.hashMb}`);
+    write(`setoption name MultiPV value ${settings.multiPv}`);
+    write('isready');
+    await waitFor((line) => line === 'readyok', 'readiness check');
+
+    return {
+      engineName,
+      engineVersion,
+      async analyzeFen(fen: string): Promise<StockfishPositionAnalysis> {
+        write('ucinewgame');
+        write(`position fen ${fen}`);
+        write(`go depth ${settings.depth}`);
+        const lines = await waitFor((line) => line.startsWith('bestmove '), 'position analysis');
+        const bestMoveLine = lines.at(-1) ?? '';
+        const bestMove = bestMoveLine.split(/\s+/)[1] ?? null;
+        return summarizeStockfishSearch(
+          lines.filter((line) => line.startsWith('info ')),
+          bestMove === '(none)' ? null : bestMove,
+          fen,
+        );
+      },
+      async close(): Promise<void> {
+        if (!child.killed) {
+          closing = true;
+          write('quit');
+          child.kill();
+        }
+      },
+    };
+  } catch (error) {
+    closing = true;
+    if (!child.killed) child.kill();
+    throw error;
+  }
 }
