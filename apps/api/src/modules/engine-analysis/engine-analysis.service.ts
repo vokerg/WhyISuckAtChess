@@ -129,9 +129,10 @@ export function createStockfishAnalysisService(options: {
           engineName: engine.engineName,
           engineVersion: engine.engineVersion,
         });
-        const analyses = new Map<number, StockfishPositionAnalysis>(
-          cached.map((analysis) => [analysis.positionId, analysis]),
-        );
+        const analyses = new Map<number, StockfishPositionAnalysis>();
+        for (const analysis of cached) {
+          analyses.set(analysis.positionId, analysis);
+        }
         const cacheHits = analyses.size;
         const cacheMisses = work.positions.length - cacheHits;
 
