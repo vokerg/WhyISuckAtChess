@@ -203,6 +203,7 @@ model GameAnalysisRun {
   analysisVersion     String            @db.VarChar(64)
   settingsHash        String            @db.VarChar(64)
   settingsJson        Json
+  sourcePlyIndexedAt  DateTime?
   engineName          String?           @db.VarChar(128)
   engineVersion       String?           @db.VarChar(64)
   status              String            @default("QUEUED") @db.VarChar(24)
@@ -230,7 +231,7 @@ model GameAnalysisRun {
 
   @@index([status, runAfter])
   @@index([importedGameId, status, createdAt])
-  @@index([importedGameId, analysisVersion, settingsHash])
+  @@index([importedGameId, analysisVersion, settingsHash, sourcePlyIndexedAt], map: "GameAnalysisRun_source_snapshot_idx")
 }
 
 model StockfishPositionAnalysis {
