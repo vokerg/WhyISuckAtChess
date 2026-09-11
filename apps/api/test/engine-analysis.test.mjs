@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
+  createStockfishEngine,
   DEFAULT_STOCKFISH_SETTINGS,
   parseStockfishInfo,
   settingsHash,
@@ -33,6 +36,27 @@ test('Stockfish adapter preserves raw UCI facts and normalizes scores to white p
   assert.equal(result.multiPv[2].mateWhite, 3);
   assert.deepEqual(result.rawInfo, lines);
   assert.equal(settingsHash(DEFAULT_STOCKFISH_SETTINGS), settingsHash({ ...DEFAULT_STOCKFISH_SETTINGS }));
+});
+
+test('Stockfish adapter rejects a hung UCI command at the configured timeout', async () => {
+  const child = new EventEmitter();
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.killed = false;
+  child.kill = () => {
+    child.killed = true;
+    return true;
+  };
+
+  await assert.rejects(
+    () => createStockfishEngine({
+      commandTimeoutMs: 5,
+      spawnProcess: () => child,
+    }),
+    /uci initialization timed out/,
+  );
+  assert.equal(child.killed, true);
 });
 
 function fakeAnalysis(scoreCpWhite = 12, options = {}) {
