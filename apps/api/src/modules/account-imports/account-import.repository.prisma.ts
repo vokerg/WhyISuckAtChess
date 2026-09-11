@@ -277,7 +277,7 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
     }),
 
     cancelRun: async (runId, claimedAt, now) => {
-      const updated = await database.importRun.updateMany({ where: { id: runId, status: 'RUNNING', claimedAt }, data: { status: 'CANCELLED', completedAt: now, heartbeatAt: null, lastProgressAt: now } });
+      const updated = await database.importRun.updateMany({ where: { id: runId, status: { in: ['RUNNING', 'CANCEL_REQUESTED'] }, claimedAt }, data: { status: 'CANCELLED', completedAt: now, heartbeatAt: null, lastProgressAt: now } });
       if (updated.count !== 1) throw new ImportLeaseLostError(runId);
     },
 
