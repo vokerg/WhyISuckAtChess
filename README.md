@@ -56,7 +56,7 @@ npm run dev          # API + Angular web shell
 npm run dev:worker   # persistent Lichess import -> ply indexing -> Stockfish worker
 ```
 
-The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the previously delivered Lichess connection/import endpoints. The web app contains an investigation-first imported-game library and replay surface. Provider/OAuth/import/Stockfish/diagnosis behavior remains split across its owning modules; this issue does not add diagnosis aggregation or tactical detection.
+The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the previously delivered Lichess connection/import endpoints. The web app contains an investigation-first imported-game library and replay surface. Provider/OAuth/import/Stockfish behavior remains split across its owning modules. Tactical detection, sessions, and diagnosis aggregation remain later evidence phases.
 
 ## Guardrails
 
