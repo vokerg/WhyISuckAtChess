@@ -9,6 +9,7 @@ import type {
 import type { NormalizedLichessGame } from './providers/lichess/lichess-account-import';
 
 const ACTIVE_STATUSES = ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED'] as const;
+const ACTIVE_ANALYSIS_STATUSES = ['QUEUED', 'RUNNING', 'RETRY_WAIT'] as const;
 
 export class ActiveImportRunError extends Error {
   constructor(readonly activeRunId: number) {
@@ -227,6 +228,21 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
             derivedTimingPlyCount: 0,
             timingCoverageStatus: 'UNAVAILABLE',
           } satisfies Prisma.ImportedGameUpdateInput);
+          const invalidatedAt = new Date();
+          await transaction.gameAnalysisRun.updateMany({
+            where: {
+              importedGameId: existing.id,
+              status: { in: [...ACTIVE_ANALYSIS_STATUSES] },
+            },
+            data: {
+              status: 'SUPERSEDED',
+              coverageStatus: 'INCOMPLETE',
+              cancelRequestedAt: invalidatedAt,
+              completedAt: invalidatedAt,
+              workerId: null,
+              claimToken: null,
+            },
+          });
           await transaction.importedGamePly.deleteMany({ where: { importedGameId: existing.id } });
           await transaction.terminalClockSourceFact.deleteMany({ where: { importedGameId: existing.id } });
         }
