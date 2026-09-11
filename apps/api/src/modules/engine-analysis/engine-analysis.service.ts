@@ -117,7 +117,7 @@ export function createStockfishAnalysisService(options: {
           return true;
         }
 
-        const work = await repository.loadGameWork(run.id);
+        const work = await repository.loadGameWork(run);
         if (work.positions.length === 0 || work.plies.length === 0) {
           throw new Error('Indexed game has no analysis work');
         }
