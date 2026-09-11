@@ -143,6 +143,21 @@ test('ply projection is atomic, fenced to its source snapshot, and clears stale 
     const staleSnapshot = await getImportedGameForPlyIndex(user.id, game.id);
     assert.ok(staleSnapshot);
 
+    const activeAnalysis = await prisma.gameAnalysisRun.create({
+      data: {
+        importedGameId: game.id,
+        analysisVersion: 'test-analysis-v1',
+        settingsHash: 'settings-hash',
+        settingsJson: { depth: 16 },
+        sourcePlyIndexedAt: indexed.plyIndexedAt,
+        status: 'RUNNING',
+        workerId: 'analysis-worker',
+        claimToken: 'analysis-claim',
+        claimedAt: new Date('2026-01-01T00:02:00.000Z'),
+        heartbeatAt: new Date('2026-01-01T00:02:00.000Z'),
+      },
+    });
+
     const claimedAt = new Date('2026-01-02T00:00:00.000Z');
     const run = await prisma.importRun.create({
       data: {
@@ -192,9 +207,31 @@ test('ply projection is atomic, fenced to its source snapshot, and clears stale 
     assert.equal(invalidated.plyIndexStatus, 'PENDING');
     assert.equal(invalidated.plyIndexedAt, null);
     assert.equal(await prisma.importedGamePly.count({ where: { importedGameId: game.id } }), 0);
+    const supersededAnalysis = await prisma.gameAnalysisRun.findUniqueOrThrow({
+      where: { id: activeAnalysis.id },
+    });
+    assert.equal(supersededAnalysis.status, 'SUPERSEDED');
+    assert.equal(supersededAnalysis.claimToken, null);
 
-    const reindexed = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
-    assert.equal(reindexed.status, 'INDEXED');
+    let reconciled = false;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await ImportedGamePlyIndexService.runOnce();
+      const current = await prisma.importedGame.findUniqueOrThrow({
+        where: { id: game.id },
+        select: { plyIndexStatus: true },
+      });
+      if (current.plyIndexStatus !== 'PENDING') {
+        reconciled = true;
+        break;
+      }
+    }
+    assert.equal(reconciled, true, 'persistent reconciler should consume pending ply-index work');
+    const reindexed = await prisma.importedGame.findUniqueOrThrow({
+      where: { id: game.id },
+      select: { plyIndexStatus: true, plyIndexedAt: true },
+    });
+    assert.equal(reindexed.plyIndexStatus, 'INDEXED');
+    assert.ok(reindexed.plyIndexedAt);
     const refreshedPly = await prisma.importedGamePly.findUniqueOrThrow({
       where: { importedGameId_plyNumber: { importedGameId: game.id, plyNumber: 3 } },
     });
