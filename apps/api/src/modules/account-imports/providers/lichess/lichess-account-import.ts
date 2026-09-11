@@ -163,10 +163,13 @@ export function normalizeLichessGame(
     : readOptionalString(game.winner) === 'white'
       ? '1-0'
       : readOptionalString(game.winner) === 'black' ? '0-1' : readPgnHeader(pgn, 'Result');
-  const resultForUser = userColor && result
-    ? result === '1/2-1/2' ? 'draw'
-      : (result === '1-0') === (userColor === 'white') ? 'win' : 'loss'
-    : null;
+  const resultForUser: NormalizedLichessGame['resultForUser'] = !userColor || !result
+    ? null
+    : result === '1/2-1/2'
+      ? 'draw'
+      : result === '1-0' || result === '0-1'
+        ? (result === '1-0') === (userColor === 'white') ? 'win' : 'loss'
+        : 'unknown';
   const clock = normalizeClocks(game);
   const timeControl = normalizeTimeControl(game.clock, pgn);
 
