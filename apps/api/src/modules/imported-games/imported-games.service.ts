@@ -76,13 +76,20 @@ function stringArray(value: unknown): string[] {
 }
 
 function latestEngineRun(row: GameProjectionRow) {
-  return row.analysisRuns[0] ?? null;
+  const run = row.analysisRuns[0] ?? null;
+  if (!run || !row.plyIndexedAt || !run.sourcePlyIndexedAt) return null;
+  return run.sourcePlyIndexedAt.getTime() === row.plyIndexedAt.getTime() ? run : null;
 }
 
 type CurrentEngineRun = {
   id: number;
   status: string;
   coverageStatus: string;
+  analysisVersion: string;
+  settingsHash: string;
+  engineName: string | null;
+  engineVersion: string | null;
+  sourcePlyIndexedAt: Date | null;
 };
 
 function toEngineSummary(row: GameProjectionRow): ImportedGameEngineSummary {
@@ -150,12 +157,20 @@ function toPly(
   const positionAnalysis = row.beforePosition.engineAnalyses[0] ?? null;
   const sourceClockAvailable = row.sourceClockOrdinal !== null
     && row.sourceClockAfterCentiseconds !== null;
-  const engineAvailable = currentEngineRun?.id === row.engineAnalysisRunId
+  const authoritativeRun = currentEngineRun?.id === row.engineAnalysisRunId
     && currentEngineRun.status === 'SUCCEEDED'
     && currentEngineRun.coverageStatus === 'COMPLETE'
     && row.engineAnalysisRun?.status === 'SUCCEEDED'
-    && row.engineAnalysisRun.coverageStatus === 'COMPLETE'
+    && row.engineAnalysisRun.coverageStatus === 'COMPLETE';
+  const engineAvailable = authoritativeRun
     && (row.scoreLossCp !== null || row.classificationCode !== null);
+  const positionAnalysisAvailable = authoritativeRun
+    && currentEngineRun !== null
+    && positionAnalysis !== null
+    && positionAnalysis.analysisVersion === currentEngineRun.analysisVersion
+    && positionAnalysis.settingsHash === currentEngineRun.settingsHash
+    && positionAnalysis.engineName === currentEngineRun.engineName
+    && positionAnalysis.engineVersion === currentEngineRun.engineVersion;
 
   return {
     plyNumber: row.plyNumber,
@@ -198,15 +213,15 @@ function toPly(
       scoreLossCp: engineAvailable ? row.scoreLossCp : null,
       classificationCode: engineAvailable ? row.classificationCode : null,
       beforePosition: {
-        status: positionAnalysis ? 'AVAILABLE' : 'UNAVAILABLE',
-        analysisVersion: positionAnalysis?.analysisVersion ?? null,
-        settingsHash: positionAnalysis?.settingsHash ?? null,
-        engineName: positionAnalysis?.engineName ?? null,
-        engineVersion: positionAnalysis?.engineVersion ?? null,
-        depth: positionAnalysis?.depth ?? null,
-        bestMoveUci: positionAnalysis?.bestMove ?? null,
-        scoreCpWhite: positionAnalysis?.scoreCpWhite ?? null,
-        mateWhite: positionAnalysis?.mateWhite ?? null,
+        status: positionAnalysisAvailable ? 'AVAILABLE' : 'UNAVAILABLE',
+        analysisVersion: positionAnalysisAvailable ? positionAnalysis.analysisVersion : null,
+        settingsHash: positionAnalysisAvailable ? positionAnalysis.settingsHash : null,
+        engineName: positionAnalysisAvailable ? positionAnalysis.engineName : null,
+        engineVersion: positionAnalysisAvailable ? positionAnalysis.engineVersion : null,
+        depth: positionAnalysisAvailable ? positionAnalysis.depth : null,
+        bestMoveUci: positionAnalysisAvailable ? positionAnalysis.bestMove : null,
+        scoreCpWhite: positionAnalysisAvailable ? positionAnalysis.scoreCpWhite : null,
+        mateWhite: positionAnalysisAvailable ? positionAnalysis.mateWhite : null,
       },
     },
     annotations: [],

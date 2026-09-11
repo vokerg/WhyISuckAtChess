@@ -66,6 +66,27 @@ export function createLichessAccountImportService(options: AccountImportServiceO
   const getRun = (appUserId: number, runId: number) => repository.getRun(appUserId, runId);
   const cancelRun = (appUserId: number, runId: number) => repository.requestCancel(appUserId, runId, now());
 
+  const settleLeaseLoss = async (
+    run: StoredImportRun,
+    claimedAt: Date,
+  ): Promise<StoredImportRun | null> => {
+    const current = await repository.getRun(run.appUserId, run.id);
+    if (
+      current?.status !== 'CANCEL_REQUESTED'
+      || !current.claimedAt
+      || current.claimedAt.getTime() !== claimedAt.getTime()
+    ) {
+      return current;
+    }
+
+    try {
+      await repository.cancelRun(run.id, claimedAt, now());
+    } catch (error) {
+      if (!(error instanceof ImportLeaseLostError)) throw error;
+    }
+    return repository.getRun(run.appUserId, run.id);
+  };
+
   const executeRun = async (run: StoredImportRun): Promise<StoredImportRun | null> => {
     const claimedAt = run.claimedAt ?? now();
     let credential;
@@ -78,9 +99,22 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       }
     } catch (error) {
       if (error instanceof ImportLeaseLostError) {
-        return repository.getRun(run.appUserId, run.id);
+        return settleLeaseLoss(run, claimedAt);
       }
-      await repository.failRun(run.id, claimedAt, 'AUTH_REQUIRED', error instanceof Error ? error.message : 'Lichess credential unavailable.', now());
+      try {
+        await repository.failRun(
+          run.id,
+          claimedAt,
+          'AUTH_REQUIRED',
+          error instanceof Error ? error.message : 'Lichess credential unavailable.',
+          now(),
+        );
+      } catch (failureError) {
+        if (failureError instanceof ImportLeaseLostError) {
+          return settleLeaseLoss(run, claimedAt);
+        }
+        throw failureError;
+      }
       return repository.getRun(run.appUserId, run.id);
     }
 
@@ -172,7 +206,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       return repository.getRun(run.appUserId, run.id);
     } catch (error) {
       if (error instanceof ImportLeaseLostError) {
-        return repository.getRun(run.appUserId, run.id);
+        return settleLeaseLoss(run, claimedAt);
       }
       if (error instanceof LichessNdjsonRecordError) {
         await repository.failRun(run.id, claimedAt, 'MALFORMED_RECORD', error.message, now());

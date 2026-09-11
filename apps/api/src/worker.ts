@@ -3,11 +3,12 @@ import prisma from './prisma';
 import { lichessConnectionService } from './modules/lichess/lichess-connection.service';
 import { createLichessAccountImportService } from './modules/account-imports/account-import.service';
 import { createStockfishAnalysisService } from './modules/engine-analysis/engine-analysis.service';
+import { ImportedGamePlyIndexService } from './modules/imported-games/ply-index.service';
 
 export async function runWorkerUntilStopped(): Promise<void> {
   const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
   const analysisService = createStockfishAnalysisService();
-  console.info('Persistent worker started; Lichess import and Stockfish analysis executors are registered.');
+  console.info('Persistent worker started; Lichess import, ply indexing, and Stockfish analysis executors are registered.');
 
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
@@ -19,8 +20,11 @@ export async function runWorkerUntilStopped(): Promise<void> {
 
   while (!stopping) {
     const importRan = await importService.runOnce();
+    const indexRan = await ImportedGamePlyIndexService.runOnce();
     const analysisRan = await analysisService.runOnce();
-    if (!importRan && !analysisRan) await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (!importRan && !indexRan && !analysisRan) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 }
 

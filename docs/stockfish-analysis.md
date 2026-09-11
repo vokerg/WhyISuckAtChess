@@ -6,6 +6,8 @@ Issue #13 implements the worker-owned engine-evidence stage between deterministi
 
 Stockfish runs only in the persistent worker (`npm run dev:worker` in `apps/api`, or the root worker script). HTTP handlers do not spawn or wait for the engine.
 
+The persistent worker reconciles the durable handoff in order: account import makes games `PENDING` for indexing, the ply-index reconciler publishes an `INDEXED` projection, and only then can Stockfish claim the game. The handoff is derived from database state, so process death between stages cannot lose work.
+
 Automatic analysis is eligible when an imported game:
 
 - comes from Lichess;
@@ -70,7 +72,7 @@ These labels are move-quality evidence only. Tactical mechanism, timing cause, s
 
 ## Durable run state, coverage, and freshness
 
-`GameAnalysisRun.snapshotId` identifies one game-specific analysis attempt/policy snapshot. A run records engine/settings provenance, retry state, worker claim state, and explicit progress:
+`GameAnalysisRun.snapshotId` identifies one game-specific analysis attempt/policy snapshot. `sourcePlyIndexedAt` binds that attempt to the exact published ply projection it analysed. A run records source/engine/settings provenance, retry state, worker claim state, and explicit progress:
 
 - `positionsTotal` / `positionsDone`;
 - `pliesTotal` / `pliesDone`;
@@ -79,15 +81,15 @@ These labels are move-quality evidence only. Tactical mechanism, timing cause, s
 
 A run may publish `SUCCEEDED` only when both position and ply progress are complete. Successful runs use `coverageStatus = COMPLETE`. Failed or interrupted work retains explicit partial/unavailable coverage instead of becoming implicit “no problem detected” evidence.
 
-Consumers needing current engine evidence must select the newest compatible **SUCCEEDED + COMPLETE** run for the game and use the per-ply values associated with that run. They must not infer completeness from the mere existence of cached position rows.
+Consumers needing current engine evidence must select the newest compatible **SUCCEEDED + COMPLETE** run for the game's current `plyIndexedAt` projection and use the per-ply values associated with that run. Cached before-position evidence is exposed only when its analysis version, settings hash, engine name, and engine version match that authoritative run. Consumers must not infer completeness from the mere existence of cached position rows.
 
 ## Retry, leases, fencing, and supersession
 
-Claims use an opaque `claimToken`. Every write and completion transition verifies that the run is still `RUNNING`, the token still owns the lease, and cancellation has not been requested.
+Claims use an opaque `claimToken`. Every write and completion transition verifies that the run is still `RUNNING`, the token still owns the lease, cancellation has not been requested, and the imported game's current `plyIndexedAt` still matches `sourcePlyIndexedAt`. Publishing a replacement ply projection supersedes active analysis before replacing game-specific ply evidence.
 
 Workers reconcile stale `RUNNING` rows before claiming new work. A run whose heartbeat exceeds the stale threshold (five minutes by default, configurable with `STOCKFISH_STALE_AFTER_MS`) is returned to retry or terminally failed when attempts are exhausted. A replacement claim receives a new token, so a late write from the expired worker is rejected.
 
-Explicit reanalysis marks active work `SUPERSEDED`, clears its claim, records incomplete coverage, and creates a new run. Position cache evidence with compatible provenance remains reusable.
+Explicit reanalysis marks active work `SUPERSEDED`, clears its claim, records incomplete coverage, and creates a new run against the current indexed projection. Re-indexing similarly makes the new projection automatically eligible under the same engine policy; a terminal run for an unchanged projection still prevents an automatic retry loop. Position cache evidence with compatible provenance remains reusable.
 
 Stockfish startup/search failures retry on the same run with bounded exponential backoff. The UCI timeout prevents a hung engine command from leaving the worker blocked indefinitely.
 

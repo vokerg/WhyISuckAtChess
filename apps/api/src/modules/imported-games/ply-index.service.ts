@@ -6,6 +6,7 @@ import {
 import {
   PlyIndexSourceChangedError,
   countPlyRowsForGame,
+  findNextPendingImportedGameForPlyIndex,
   getImportedGameForPlyIndex,
   markPlyIndexFailure,
   markPlyIndexSkipped,
@@ -236,4 +237,16 @@ export const ImportedGamePlyIndexService = {
     options,
     MAX_SOURCE_SNAPSHOT_RETRIES,
   ),
+
+  runOnce: async (): Promise<boolean> => {
+    const candidate = await findNextPendingImportedGameForPlyIndex();
+    if (!candidate) return false;
+    await indexOneAttempt(
+      candidate.appUserId,
+      candidate.id,
+      {},
+      MAX_SOURCE_SNAPSHOT_RETRIES,
+    );
+    return true;
+  },
 };

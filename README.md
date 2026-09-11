@@ -30,7 +30,7 @@ The API reserves module seams for auth, Lichess, account imports, jobs, imported
 
 ## Developer setup
 
-Requirements: Node.js 22.12+ and npm 10+. PostgreSQL is required only for migration/database checks at this stage.
+Requirements: Node.js 22.12+, npm 10+, and PostgreSQL for the API/worker persistence path.
 
 ```bash
 npm install
@@ -53,13 +53,13 @@ Development processes are intentionally separate (the Angular dev server proxies
 
 ```bash
 npm run dev          # API + Angular web shell
-npm run dev:worker   # persistent worker process; no executors are registered yet
+npm run dev:worker   # persistent Lichess import -> ply indexing -> Stockfish worker
 ```
 
-The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the previously delivered Lichess connection/import endpoints. The web app contains an investigation-first imported-game library and replay surface. Provider/OAuth/import/Stockfish/diagnosis behavior remains split across its owning modules; this issue does not add diagnosis aggregation or tactical detection.
+The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the previously delivered Lichess connection/import endpoints. The web app contains an investigation-first imported-game library and replay surface. Provider/OAuth/import/Stockfish behavior remains split across its owning modules. Tactical detection, sessions, and diagnosis aggregation remain later evidence phases.
 
 ## Guardrails
 
 `npm run check:architecture` enforces the initial dependency rules: no Prisma imports from `packages/chess-domain`, no provider/Lichess imports from diagnosis, and no AI dependency inside deterministic detector directories when those directories appear. `npm run check:hygiene` rejects committed generated/vendor content, environment secrets, and omitted CRT product workspaces.
 
-CI installs the workspace, validates and deploys the empty bootstrap Prisma migration against PostgreSQL, then runs typecheck, lint/guardrails, build, and tests.
+CI installs the workspace, validates and applies the full Prisma migration history against PostgreSQL, then runs typecheck, lint/guardrails, build, and tests.

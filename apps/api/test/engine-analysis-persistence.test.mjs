@@ -46,6 +46,7 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
     });
     userId = user.id;
 
+    const initialPlyIndexedAt = new Date('2026-09-11T10:00:00.000Z');
     const game = await prisma.importedGame.create({
       data: {
         appUserId: user.id,
@@ -56,6 +57,7 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
         variant: 'standard',
         speedCategory: 'bullet',
         plyIndexStatus: 'INDEXED',
+        plyIndexedAt: initialPlyIndexedAt,
       },
     });
     const before = await createPosition('before');
@@ -89,7 +91,8 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       '18',
     ), true);
 
-    const work = await prismaAnalysisRepository.loadGameWork(firstClaim.id);
+    assert.equal(firstClaim.sourcePlyIndexedAt.getTime(), initialPlyIndexedAt.getTime());
+    const work = await prismaAnalysisRepository.loadGameWork(firstClaim);
     assert.equal(work.positions.length, 2);
     assert.equal(work.plies.length, 1);
 
@@ -191,6 +194,22 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
     });
     assert.equal(newestSucceeded.id, replacementId);
 
+    const revisedPlyIndexedAt = new Date('2026-09-11T10:05:00.000Z');
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: revisedPlyIndexedAt },
+    });
+    const revisedRunId = await prismaAnalysisRepository.enqueueEligibleGame({
+      analysisVersion: 'test-v1',
+      settingsHash: hash,
+      settings: DEFAULT_STOCKFISH_SETTINGS,
+    });
+    assert.ok(revisedRunId, 'a new indexed projection should become eligible under the same engine policy');
+    const revisedRun = await prisma.gameAnalysisRun.findUniqueOrThrow({ where: { id: revisedRunId } });
+    assert.equal(revisedRun.sourcePlyIndexedAt.getTime(), revisedPlyIndexedAt.getTime());
+    await prisma.gameAnalysisRun.delete({ where: { id: revisedRunId } });
+
+    const stalePlyIndexedAt = new Date('2026-09-11T11:00:00.000Z');
     const staleGame = await prisma.importedGame.create({
       data: {
         appUserId: user.id,
@@ -201,6 +220,7 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
         variant: 'standard',
         speedCategory: 'blitz',
         plyIndexStatus: 'INDEXED',
+        plyIndexedAt: stalePlyIndexedAt,
       },
     });
     const staleRun = await prisma.gameAnalysisRun.create({
@@ -209,6 +229,7 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
         analysisVersion: 'test-v1',
         settingsHash: hash,
         settingsJson: DEFAULT_STOCKFISH_SETTINGS,
+        sourcePlyIndexedAt: stalePlyIndexedAt,
         status: 'RUNNING',
         attempts: 1,
         maxAttempts: 3,
@@ -226,6 +247,7 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       maxAttempts: staleRun.maxAttempts,
       analysisVersion: staleRun.analysisVersion,
       settingsHash: staleRun.settingsHash,
+      sourcePlyIndexedAt: stalePlyIndexedAt,
       workerId: 'dead-worker',
       claimToken: 'dead-claim',
     };
@@ -250,6 +272,20 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       positionsDone: 0,
       pliesDone: 0,
     }), false, 'expired claims must be fenced from late writes');
+
+    const changedProjectionAt = new Date('2026-09-11T11:05:00.000Z');
+    await prisma.importedGame.update({
+      where: { id: staleGame.id },
+      data: { plyIndexedAt: changedProjectionAt },
+    });
+    assert.equal(await prismaAnalysisRepository.persistBatch(newClaim, {
+      engineName: 'Stockfish 18',
+      engineVersion: '18',
+      positionResults: [],
+      plyResults: [],
+      positionsDone: 0,
+      pliesDone: 0,
+    }), false, 'a current claim must be fenced when the indexed ply projection changes');
   } finally {
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});

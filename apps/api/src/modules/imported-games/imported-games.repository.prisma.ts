@@ -21,6 +21,9 @@ const latestPositionAnalysisOrderBy: Prisma.StockfishPositionAnalysisOrderByWith
 const latestEngineRunSelect = {
   id: true,
   status: true,
+  analysisVersion: true,
+  settingsHash: true,
+  sourcePlyIndexedAt: true,
   coverageStatus: true,
   positionsDone: true,
   positionsTotal: true,
