@@ -8,8 +8,6 @@ import type {
 } from './stockfish.adapter';
 
 const ACTIVE_STATUSES = ['QUEUED', 'RUNNING', 'RETRY_WAIT'] as const;
-const ELIGIBLE_SPEEDS = ['bullet', 'blitz', 'rapid'] as const;
-const ELIGIBLE_VARIANTS = ['chess', 'standard'] as const;
 
 export interface AnalysisRunClaim {
   id: number;
