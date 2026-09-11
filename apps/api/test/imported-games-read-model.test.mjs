@@ -106,6 +106,9 @@ function engineRun(overrides = {}) {
   return {
     id: 41,
     status: 'SUCCEEDED',
+    analysisVersion: 'test-v1',
+    settingsHash: 'settings-v1',
+    sourcePlyIndexedAt: new Date('2026-09-11T10:01:00.000Z'),
     coverageStatus: 'COMPLETE',
     positionsDone: 2,
     positionsTotal: 2,
@@ -236,6 +239,45 @@ test('read model exposes game-specific engine evidence only for the latest compl
   assert.equal(replay.plies[0].engine.status, 'AVAILABLE');
   assert.equal(replay.plies[0].engine.analysisRunId, 41);
   assert.equal(replay.plies[0].engine.scoreLossCp, 220);
+});
+
+test('read model never splices mismatched position-cache provenance into a complete game run', async () => {
+  const basePly = replayRow().plies[0];
+  const repository = {
+    async findList() { return []; },
+    async findDetail() { return null; },
+    async findReplay() {
+      return replayRow({
+        analysisRuns: [engineRun()],
+        plies: [{
+          ...basePly,
+          beforePosition: {
+            ...basePly.beforePosition,
+            engineAnalyses: [{
+              analysisVersion: 'different-policy',
+              settingsHash: 'different-settings',
+              engineName: 'Stockfish 18',
+              engineVersion: '18',
+              depth: 20,
+              bestMove: 'd2d4',
+              scoreCpWhite: 30,
+              mateWhite: null,
+            }],
+          },
+          engineAnalysisRunId: 41,
+          engineAnalysisRun: { id: 41, status: 'SUCCEEDED', coverageStatus: 'COMPLETE' },
+          scoreLossCp: 220,
+          classificationCode: 4,
+        }],
+      });
+    },
+  };
+  const service = createImportedGamesQueryService(repository);
+
+  const replay = await service.getReplay(42, 7);
+  assert.equal(replay.plies[0].engine.status, 'AVAILABLE');
+  assert.equal(replay.plies[0].engine.beforePosition.status, 'UNAVAILABLE');
+  assert.equal(replay.plies[0].engine.beforePosition.bestMoveUci, null);
 });
 
 test('Prisma projections enforce ownership and bounded list/detail selection', async () => {
