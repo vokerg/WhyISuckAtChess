@@ -1,0 +1,44 @@
+<main class="games-page">
+  <header class="page-heading">
+    <p class="eyebrow">Evidence library</p>
+    <h1>Imported games</h1>
+    <p>Start with the games themselves. Every replay keeps source provenance, clocks, and timing coverage visible.</p>
+  </header>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  @if (loading() && games().length === 0) {
+    <p class="state">Loading imported games…</p>
+  } @else if (games().length === 0 && !error()) {
+    <p class="state">No imported games yet. Connect Lichess and import a game history to begin.</p>
+  } @else {
+    <section class="game-grid" aria-label="Imported games">
+      @for (game of games(); track game.id) {
+        <a class="game-card" [routerLink]="['/games', game.id]">
+          <div class="card-heading">
+            <strong>{{ game.white.username ?? 'White' }} vs {{ game.black.username ?? 'Black' }}</strong>
+            <span [class.loss]="game.resultForUser === 'LOSS'">{{ resultLabel(game) }}</span>
+          </div>
+          <p class="metadata">
+            {{ game.speedCategory ?? 'Speed unavailable' }} ·
+            {{ game.timeControl.exactKey ?? game.timeControl.raw ?? 'Time control unavailable' }}
+          </p>
+          <p class="metadata">
+            {{ game.endedAt ?? 'Date unavailable' }} · timing {{ game.timing.coverageStatus.toLowerCase() }}
+          </p>
+          <div class="coverage-row">
+            <span>Index {{ game.indexing.status.toLowerCase() }}</span>
+            <span>Engine {{ game.engine.status.toLowerCase() }}</span>
+          </div>
+        </a>
+      }
+    </section>
+    @if (nextCursor(); as cursor) {
+      <button type="button" class="load-more" [disabled]="loading()" (click)="loadMore()">
+        {{ loading() ? 'Loading…' : 'Load more' }}
+      </button>
+    }
+  }
+</main>

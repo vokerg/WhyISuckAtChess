@@ -55,3 +55,5 @@ export const LichessImportRequestSchema = z.object({
 }).strict();
 
 export type LichessImportRequest = z.infer<typeof LichessImportRequestSchema>;
+
+export * from './imported-games.schemas';

@@ -1,0 +1,106 @@
+<main class="replay-page">
+  <a class="back-link" routerLink="/games">← Imported games</a>
+
+  @if (store.loading()) {
+    <section class="state-card" aria-live="polite">Loading replay evidence…</section>
+  } @else if (store.error(); as error) {
+    <section class="state-card error" role="alert">{{ error }}</section>
+  } @else if (store.replay(); as game) {
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">Lichess evidence replay</p>
+        <h1>{{ store.gameTitle() }}</h1>
+        <p class="subtitle">
+          {{ game.resultForUser ?? 'Result unavailable' }} · {{ game.speedCategory ?? 'Speed unavailable' }}
+          · {{ game.timeControl.exactKey ?? game.timeControl.raw ?? 'Time control unavailable' }}
+        </p>
+      </div>
+      @if (game.providerUrl) {
+        <a class="external-link" [href]="game.providerUrl" target="_blank" rel="noreferrer">Open on Lichess ↗</a>
+      }
+    </header>
+
+    <section class="replay-layout" aria-label="Game replay">
+      <div class="board-column">
+        <app-chessground-board
+          [fen]="store.currentFen()"
+          [side]="game.userColor ?? 'WHITE'"
+          [lastMove]="store.lastMove()"
+          [positionVersion]="store.currentPlyNumber()"
+          [evidenceAnnotations]="store.currentPly()?.annotations ?? []"
+        />
+        <nav class="replay-controls" aria-label="Replay controls">
+          <button type="button" (click)="store.goToStart()" [disabled]="!store.canGoBackward()">|‹</button>
+          <button type="button" (click)="store.goToPrevious()" [disabled]="!store.canGoBackward()">‹</button>
+          <span>Position {{ store.currentPlyNumber() }} / {{ game.plies.length }}</span>
+          <button type="button" (click)="store.goToNext()" [disabled]="!store.canGoForward()">›</button>
+          <button type="button" (click)="store.goToEnd()" [disabled]="!store.canGoForward()">›|</button>
+        </nav>
+        <p class="keyboard-hint">Keyboard: ←/→, Home/End</p>
+      </div>
+
+      <aside class="evidence-column">
+        <section class="evidence-card">
+          <h2>Game facts</h2>
+          <dl>
+            <div><dt>Time control</dt><dd>{{ game.timeControl.exactKey ?? game.timeControl.raw ?? 'Unavailable' }}</dd></div>
+            <div><dt>Initial time</dt><dd>{{ game.timeControl.initialSeconds === null ? 'Unavailable' : formatClock(game.timeControl.initialSeconds * 100) }}</dd></div>
+            <div><dt>Increment</dt><dd>{{ game.timeControl.incrementSeconds === null ? 'Unknown' : `${game.timeControl.incrementSeconds}s` }}</dd></div>
+            <div><dt>Indexing</dt><dd>{{ game.indexing.status }}</dd></div>
+          </dl>
+        </section>
+
+        <section class="evidence-card">
+          <h2>Source clocks</h2>
+          <p class="status-line">{{ game.clockSource.presence }} · {{ game.clockSource.stateCount }} source states</p>
+          @if (game.clockSource.anomalies.length) {
+            <p class="caveat">{{ game.clockSource.anomalies.join(' · ') }}</p>
+          } @else {
+            <p class="caveat">Raw provider clock values are preserved separately from derived timing.</p>
+          }
+        </section>
+
+        <section class="evidence-card current-evidence">
+          <h2>Selected move</h2>
+          @if (store.currentPly(); as ply) {
+            <p class="selected-move"><span>{{ formatMove(ply.plyNumber) }}</span> {{ ply.moveUci }}</p>
+            <dl>
+              <div><dt>Clock after</dt><dd>{{ formatClock(ply.sourceClock.afterCentiseconds) }}</dd></div>
+              <div><dt>Thinking time</dt><dd>{{ timingText(ply) }}</dd></div>
+              <div><dt>Timing state</dt><dd>{{ ply.timing.status }}</dd></div>
+              <div><dt>Engine evidence</dt><dd>{{ ply.engine.status }}</dd></div>
+            </dl>
+            @if (ply.timing.reliabilityFlags.length) {
+              <p class="caveat">{{ ply.timing.reliabilityFlags.join(' · ') }}</p>
+            }
+          } @else {
+            <p class="caveat">Starting position. No move-specific evidence selected.</p>
+          }
+        </section>
+      </aside>
+    </section>
+
+    <section class="moves-card">
+      <div class="section-heading">
+        <h2>Moves</h2>
+        <span>{{ game.plies.length }} indexed plies</span>
+      </div>
+      <div class="move-list">
+        @for (ply of game.plies; track ply.plyNumber) {
+          <button
+            type="button"
+            class="move-button"
+            [class.selected]="store.currentPlyNumber() === ply.plyNumber"
+            (click)="store.selectPly(ply.plyNumber)"
+          >
+            <span>{{ formatMove(ply.plyNumber) }}</span>
+            <strong>{{ ply.moveUci }}</strong>
+            <small>{{ ply.sourceClock.status === 'AVAILABLE' ? formatClock(ply.sourceClock.afterCentiseconds) : 'clock unavailable' }}</small>
+          </button>
+        } @empty {
+          <p class="caveat">No indexed plies are available for this game.</p>
+        }
+      </div>
+    </section>
+  }
+</main>

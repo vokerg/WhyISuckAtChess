@@ -6,12 +6,7 @@ import { RouterOutlet } from '@angular/router';
   standalone: true,
   imports: [RouterOutlet],
   template: `
-    <main class="shell">
-      <p class="eyebrow">Why I Suck at Chess</p>
-      <h1>Evidence first. Diagnosis later.</h1>
-      <p>The application workspace is ready for the Lichess ingestion and analysis pipeline.</p>
-      <router-outlet />
-    </main>
+    <router-outlet />
   `,
 })
 export class AppComponent {}

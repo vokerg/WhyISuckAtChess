@@ -13,6 +13,13 @@ import {
   type LichessAccountImportService,
 } from './modules/account-imports/account-import.service';
 import { registerAccountImportRoutes } from './modules/account-imports/account-import.routes';
+import {
+  registerImportedGamesRoutes,
+} from './modules/imported-games/imported-games.routes';
+import {
+  ImportedGamesQueryService as defaultImportedGamesQueryService,
+  type ImportedGamesQueryService,
+} from './modules/imported-games/imported-games.service';
 import prisma from './prisma';
 
 export interface PrismaLifecycle {
@@ -24,6 +31,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
   prisma?: PrismaLifecycle;
   lichessService?: LichessConnectionService;
   accountImportService?: LichessAccountImportService;
+  importedGamesService?: ImportedGamesQueryService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -50,6 +58,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
     options.accountImportService ?? createLichessAccountImportService({
       connectionService: options.lichessService ?? lichessConnectionService,
     }),
+  );
+  await registerImportedGamesRoutes(
+    app,
+    options.importedGamesService ?? defaultImportedGamesQueryService,
   );
 
   return app;
