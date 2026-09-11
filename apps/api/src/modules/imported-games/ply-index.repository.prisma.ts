@@ -44,6 +44,23 @@ export interface TerminalClockProjectionInput {
   alignmentVersion: number;
 }
 
+export async function findNextPendingImportedGameForPlyIndex() {
+  return prisma.importedGame.findFirst({
+    where: {
+      provider: 'LICHESS',
+      plyIndexStatus: 'PENDING',
+    },
+    orderBy: [
+      { updatedAt: 'asc' },
+      { id: 'asc' },
+    ],
+    select: {
+      id: true,
+      appUserId: true,
+    },
+  });
+}
+
 export async function getImportedGameForPlyIndex(appUserId: number, importedGameId: number) {
   return prisma.importedGame.findFirst({
     where: { id: importedGameId, appUserId },
