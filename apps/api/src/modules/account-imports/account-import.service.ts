@@ -101,7 +101,20 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       if (error instanceof ImportLeaseLostError) {
         return settleLeaseLoss(run, claimedAt);
       }
-      await repository.failRun(run.id, claimedAt, 'AUTH_REQUIRED', error instanceof Error ? error.message : 'Lichess credential unavailable.', now());
+      try {
+        await repository.failRun(
+          run.id,
+          claimedAt,
+          'AUTH_REQUIRED',
+          error instanceof Error ? error.message : 'Lichess credential unavailable.',
+          now(),
+        );
+      } catch (failureError) {
+        if (failureError instanceof ImportLeaseLostError) {
+          return settleLeaseLoss(run, claimedAt);
+        }
+        throw failureError;
+      }
       return repository.getRun(run.appUserId, run.id);
     }
 
