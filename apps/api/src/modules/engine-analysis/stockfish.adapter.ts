@@ -55,7 +55,22 @@ export const STOCKFISH_ANALYSIS_VERSION = 'stockfish-depth16-multipv3-v1';
 export const DEFAULT_STOCKFISH_COMMAND_TIMEOUT_MS = 30_000;
 
 export function settingsHash(settings: StockfishSettings): string {
-  return createHash('sha256').update(JSON.stringify(settings)).digest('hex');
+  // Keep the persisted provenance key stable when callers construct the same
+  // settings with a different object insertion order.
+  const canonicalSettings = {
+    depth: settings.depth,
+    multiPv: settings.multiPv,
+    threads: settings.threads,
+    hashMb: settings.hashMb,
+  };
+  return createHash('sha256').update(JSON.stringify(canonicalSettings)).digest('hex');
+}
+
+export function toUciFen(fen: string): string {
+  const fields = fen.trim().split(/\s+/);
+  if (fields.length >= 6) return fields.join(' ');
+  if (fields.length === 4) return `${fields.join(' ')} 0 1`;
+  throw new Error('Stockfish requires a four- or six-field FEN');
 }
 
 export function parseStockfishInfo(line: string): ParsedStockfishInfoLine | null {
@@ -236,7 +251,7 @@ export async function createStockfishEngine(options: {
       engineVersion,
       async analyzeFen(fen: string): Promise<StockfishPositionAnalysis> {
         write('ucinewgame');
-        write(`position fen ${fen}`);
+        write(`position fen ${toUciFen(fen)}`);
         write(`go depth ${settings.depth}`);
         const lines = await waitFor((line) => line.startsWith('bestmove '), 'position analysis');
         const bestMoveLine = lines.at(-1) ?? '';

@@ -8,6 +8,7 @@ import {
   parseStockfishInfo,
   settingsHash,
   summarizeStockfishSearch,
+  toUciFen,
 } from '../dist/modules/engine-analysis/stockfish.adapter.js';
 import { createStockfishAnalysisService } from '../dist/modules/engine-analysis/engine-analysis.service.js';
 
@@ -36,6 +37,18 @@ test('Stockfish adapter preserves raw UCI facts and normalizes scores to white p
   assert.equal(result.multiPv[2].mateWhite, 3);
   assert.deepEqual(result.rawInfo, lines);
   assert.equal(settingsHash(DEFAULT_STOCKFISH_SETTINGS), settingsHash({ ...DEFAULT_STOCKFISH_SETTINGS }));
+  assert.equal(
+    settingsHash(DEFAULT_STOCKFISH_SETTINGS),
+    settingsHash({ hashMb: 64, threads: 1, multiPv: 3, depth: 16 }),
+  );
+  assert.equal(
+    toUciFen('8/8/8/8/8/8/8/K6k w - -'),
+    '8/8/8/8/8/8/8/K6k w - - 0 1',
+  );
+  assert.equal(
+    toUciFen('8/8/8/8/8/8/8/K6k b - - 4 17'),
+    '8/8/8/8/8/8/8/K6k b - - 4 17',
+  );
 });
 
 test('Stockfish adapter rejects a hung UCI command at the configured timeout', async () => {
@@ -56,6 +69,36 @@ test('Stockfish adapter rejects a hung UCI command at the configured timeout', a
     }),
     /uci initialization timed out/,
   );
+  assert.equal(child.killed, true);
+});
+
+test('Stockfish adapter rejects a hung search and disposes the engine process', async () => {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.killed = false;
+  child.kill = () => {
+    child.killed = true;
+    return true;
+  };
+  child.stdin = {
+    write: (value) => {
+      const command = String(value).trim();
+      if (command === 'uci') child.stdout.write('id name Stockfish 18\nuciok\n');
+      if (command === 'isready') child.stdout.write('readyok\n');
+      return true;
+    },
+  };
+
+  const engine = await createStockfishEngine({
+    commandTimeoutMs: 100,
+    spawnProcess: () => child,
+  });
+  await assert.rejects(
+    () => engine.analyzeFen('8/8/8/8/8/8/8/K6k w - -'),
+    /position analysis timed out/,
+  );
+  await engine.close();
   assert.equal(child.killed, true);
 });
 
@@ -186,6 +229,43 @@ test('analysis service reuses cached positions, analyses only misses, and classi
   assert.equal(plyWrites[0].scoreLossCp, 100);
   assert.equal(plyWrites[0].classificationCode, 5);
   assert.equal(succeeded, true);
+});
+
+test('analysis service normalizes mate scores and black mover loss deterministically', async () => {
+  const batches = [];
+  const repository = baseRepository({
+    loadGameWork: async () => ({
+      positions: [
+        { positionId: 1, normalizedFen: 'fen-1' },
+        { positionId: 2, normalizedFen: 'fen-2' },
+      ],
+      plies: [{
+        plyNumber: 1,
+        beforePositionId: 1,
+        afterPositionId: 2,
+        moveUci: 'h7h6',
+        moverColor: 'BLACK',
+      }],
+    }),
+    persistBatch: async (_run, input) => {
+      batches.push(input);
+      return true;
+    },
+  });
+  const service = createStockfishAnalysisService({
+    repository,
+    engineFactory: async () => fakeEngine({
+      analyzeFen: async (fen) => fen === 'fen-1'
+        ? fakeAnalysis(null, { bestMove: 'a7a6', mateWhite: -3 })
+        : fakeAnalysis(null, { bestMove: 'e2e4', mateWhite: 3 }),
+    }),
+    workerId: 'test-worker',
+  });
+
+  assert.equal(await service.runOnce(), true);
+  const ply = batches.flatMap((batch) => batch.plyResults)[0];
+  assert.equal(ply.scoreLossCp, 2_000);
+  assert.equal(ply.classificationCode, 6);
 });
 
 test('analysis service stops cooperatively when a superseded run rejects a batch write', async () => {

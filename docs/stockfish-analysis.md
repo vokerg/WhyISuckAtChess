@@ -24,6 +24,8 @@ The default deterministic profile is:
 
 `STOCKFISH_PATH` selects the executable when needed. `STOCKFISH_COMMAND_TIMEOUT_MS` bounds each UCI initialization/readiness/search wait and defaults to 30 seconds. A semantic engine-policy change must use a new analysis version; the settings JSON and SHA-256 settings hash are persisted on every game run.
 
+The settings hash serializes the four profile fields in a fixed order, so equivalent settings objects produce the same provenance key.
+
 ## Reusable normalized-position cache
 
 Engine search results are reusable position evidence, not game-run-owned rows.
