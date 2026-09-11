@@ -1,15 +1,21 @@
--- Tie every game-analysis run to the exact published ply projection it analysed.
--- Historical rows are backfilled only when the game's current projection is still known;
--- NULL therefore means legacy/unknown provenance and is never eligible for new worker claims.
+-- Tie every new game-analysis run to the exact published ply projection it analyses.
+-- Existing runs predate this provenance token, so their source projection cannot be proven.
+-- Leave terminal legacy rows with NULL provenance so consumers ignore them and the current
+-- projection becomes eligible for one safe re-analysis.
 ALTER TABLE "GameAnalysisRun"
 ADD COLUMN "sourcePlyIndexedAt" TIMESTAMP(3);
 
-UPDATE "GameAnalysisRun" AS run
-SET "sourcePlyIndexedAt" = game."plyIndexedAt"
-FROM "ImportedGame" AS game
-WHERE run."importedGameId" = game."id"
-  AND game."plyIndexStatus" = 'INDEXED'
-  AND game."plyIndexedAt" IS NOT NULL;
+-- A legacy active run cannot safely continue after this migration because its source
+-- projection is unknown. Supersede it rather than allowing it to block current work.
+UPDATE "GameAnalysisRun"
+SET
+    "status" = 'SUPERSEDED',
+    "coverageStatus" = 'INCOMPLETE',
+    "cancelRequestedAt" = CURRENT_TIMESTAMP,
+    "completedAt" = CURRENT_TIMESTAMP,
+    "workerId" = NULL,
+    "claimToken" = NULL
+WHERE "status" IN ('QUEUED', 'RUNNING', 'RETRY_WAIT');
 
 DROP INDEX IF EXISTS "GameAnalysisRun_importedGameId_analysisVersion_settingsHash_idx";
 
