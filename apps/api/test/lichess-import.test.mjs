@@ -7,7 +7,10 @@ import {
   readLichessNdjson,
 } from '../dist/modules/account-imports/providers/lichess/lichess-account-import.js';
 import { createLichessAccountImportService, planImportWindows } from '../dist/modules/account-imports/account-import.service.js';
-import { decideClockSequence } from '../dist/modules/account-imports/account-import.repository.prisma.js';
+import {
+  decideClockSequence,
+  ImportLeaseLostError,
+} from '../dist/modules/account-imports/account-import.repository.prisma.js';
 
 test('Lichess export URL is half-open, authenticated NDJSON, and requests clocks', () => {
   const from = new Date('2026-01-01T00:00:00.000Z');
@@ -51,6 +54,22 @@ test('normalization preserves clock presence, order, valid values, and time-cont
   assert.equal(invalid.rawClockPresence, 'INVALID');
   assert.deepEqual(invalid.rawClockValuesCentiseconds, [6000, 5800]);
   assert.ok(invalid.rawClockAnomalies.includes('CLOCK_SAMPLE_INVALID'));
+});
+
+test('unknown provider results never become invented wins or losses', () => {
+  const identity = { lichessUserId: 'u1', username: 'Alice' };
+  const normalized = normalizeLichessGame({
+    id: 'unfinished-result',
+    status: 'unknown',
+    pgn: '[Result "*"]\n',
+    players: {
+      white: { user: { id: 'u1', name: 'Alice' } },
+      black: { user: { id: 'u2', name: 'Bob' } },
+    },
+  }, identity);
+
+  assert.equal(normalized.result, '*');
+  assert.equal(normalized.resultForUser, 'unknown');
 });
 
 test('valid clock evidence is never downgraded by absent, invalid, or shorter reimports', () => {
@@ -118,6 +137,61 @@ test('worker executor sends the connected credential and commits source games', 
   assert.equal(calls[0].headers.Accept, 'application/x-ndjson');
   assert.equal(new URL(calls[0].url).searchParams.get('clocks'), 'true');
   assert.equal(run.status, 'COMPLETED');
+});
+
+test('worker finalizes cancellation immediately when a running lease is cancelled during persistence', async () => {
+  const from = new Date('2026-01-01T00:00:00.000Z');
+  const claimedAt = new Date('2026-01-01T00:00:01.000Z');
+  const run = {
+    id: 8, appUserId: 3, provider: 'LICHESS', mode: 'BOUNDED_INITIAL', source: 'LICHESS_API', status: 'RUNNING',
+    scopeVersion: 1, scopeHash: 'hash-cancel', scopeJson: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+    requestedFrom: from, requestedTo: new Date('2026-01-02T00:00:00.000Z'), lichessUserIdSnapshot: 'u1',
+    lichessUsernameSnapshot: 'Alice', checkpointJson: null, windowsTotal: 1, windowsCompleted: 0, gamesSeen: 0,
+    gamesMatchedScope: 0, gamesImported: 0, gamesDuplicate: 0, gamesUpdated: 0, gamesSkipped: 0,
+    gamesSkippedOutOfScope: 0, gamesFailed: 0, lastProgressAt: claimedAt, workKey: 'cancel-work',
+    claimedAt, heartbeatAt: claimedAt, cancelRequestedAt: null, rateLimitUntil: null, errorCode: null, error: null,
+    startedAt: claimedAt, completedAt: null, createdAt: from, updatedAt: claimedAt,
+  };
+  let cancelFinalizations = 0;
+  const repository = {
+    async claimNextRun() { return null; },
+    async getRun() { return run; },
+    async heartbeat() {},
+    async updateProgress() {},
+    async commitGames() {
+      run.status = 'CANCEL_REQUESTED';
+      run.cancelRequestedAt = claimedAt;
+      throw new ImportLeaseLostError(run.id);
+    },
+    async completeRun() { throw new Error('must not complete'); },
+    async cancelRun(_id, lease) {
+      assert.equal(lease.getTime(), claimedAt.getTime());
+      cancelFinalizations += 1;
+      run.status = 'CANCELLED';
+      run.completedAt = claimedAt;
+    },
+    async failRun() { throw new Error('must not fail'); },
+    async deferRun() { throw new Error('must not defer'); },
+  };
+  const service = createLichessAccountImportService({
+    repository,
+    connectionService: {
+      async getCredentialForUser() {
+        return { lichessUserId: 'u1', username: 'Alice', accessToken: 'secret', credentialGeneration: 'generation-1' };
+      },
+      async markCredentialRevokedForUser() { return true; },
+    },
+    fetchImpl: async () => new Response(JSON.stringify({
+      id: 'game-cancel', speed: 'bullet', rated: true, variant: 'standard', createdAt: from.getTime(),
+      lastMoveAt: from.getTime() + 1000, status: 'outoftime', winner: 'white',
+      players: { white: { user: { id: 'u1', name: 'Alice' } }, black: { user: { id: 'u2', name: 'Bob' } } },
+    }) + '\n'),
+    now: () => claimedAt,
+  });
+
+  const result = await service.executeRun(run);
+  assert.equal(cancelFinalizations, 1);
+  assert.equal(result.status, 'CANCELLED');
 });
 
 test('malformed NDJSON is classified separately from a valid record', async () => {
