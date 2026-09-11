@@ -19,6 +19,7 @@ export interface AnalysisRunClaim {
   maxAttempts: number;
   analysisVersion: string;
   settingsHash: string;
+  sourcePlyIndexedAt: Date;
   workerId: string;
   claimToken: string;
 }
@@ -58,7 +59,7 @@ export interface AnalysisRepository {
     engineName: string,
     engineVersion: string,
   ): Promise<boolean>;
-  loadGameWork(runId: number): Promise<AnalysisGameWork>;
+  loadGameWork(run: AnalysisRunClaim): Promise<AnalysisGameWork>;
   loadCachedPositionAnalyses(input: {
     positionIds: number[];
     analysisVersion: string;
@@ -114,6 +115,7 @@ async function createRun(
     analysisVersion: string;
     settingsHash: string;
     settings: StockfishSettings;
+    sourcePlyIndexedAt: Date;
   },
 ): Promise<GameAnalysisRun> {
   return tx.gameAnalysisRun.create({
@@ -122,6 +124,7 @@ async function createRun(
       analysisVersion: input.analysisVersion,
       settingsHash: input.settingsHash,
       settingsJson: input.settings as unknown as Prisma.InputJsonValue,
+      sourcePlyIndexedAt: input.sourcePlyIndexedAt,
     },
   });
 }
@@ -145,7 +148,12 @@ async function currentClaim(
       id: run.id,
       status: 'RUNNING',
       claimToken: run.claimToken,
+      sourcePlyIndexedAt: run.sourcePlyIndexedAt,
       cancelRequestedAt: null,
+      importedGame: {
+        plyIndexStatus: 'INDEXED',
+        plyIndexedAt: run.sourcePlyIndexedAt,
+      },
     },
   });
 }
@@ -154,33 +162,46 @@ export const prismaAnalysisRepository: AnalysisRepository = {
   async enqueueEligibleGame(input) {
     try {
       return await prisma.$transaction(async (tx) => {
-        const game = await tx.importedGame.findFirst({
+        const candidates = await tx.importedGame.findMany({
           where: {
             provider: 'LICHESS',
             plyIndexStatus: 'INDEXED',
+            plyIndexedAt: { not: null },
             speedCategory: { in: [...ELIGIBLE_SPEEDS] },
             OR: [
               { variant: null },
               { variant: { in: [...ELIGIBLE_VARIANTS] } },
             ],
             plies: { some: {} },
-            AND: [
-              { analysisRuns: { none: { status: { in: [...ACTIVE_STATUSES] } } } },
-              {
-                analysisRuns: {
-                  none: {
-                    analysisVersion: input.analysisVersion,
-                    settingsHash: input.settingsHash,
-                  },
-                },
-              },
-            ],
+            analysisRuns: { none: { status: { in: [...ACTIVE_STATUSES] } } },
           },
           orderBy: { id: 'asc' },
-          select: { id: true },
+          take: 25,
+          select: {
+            id: true,
+            plyIndexedAt: true,
+            analysisRuns: {
+              where: {
+                analysisVersion: input.analysisVersion,
+                settingsHash: input.settingsHash,
+              },
+              select: { sourcePlyIndexedAt: true },
+            },
+          },
         });
-        if (!game) return null;
-        const run = await createRun(tx, { ...input, importedGameId: game.id });
+        const game = candidates.find((candidate) => (
+          candidate.plyIndexedAt !== null
+          && !candidate.analysisRuns.some((run) => (
+            run.sourcePlyIndexedAt?.getTime() === candidate.plyIndexedAt!.getTime()
+          ))
+        ));
+        if (!game?.plyIndexedAt) return null;
+
+        const run = await createRun(tx, {
+          ...input,
+          importedGameId: game.id,
+          sourcePlyIndexedAt: game.plyIndexedAt,
+        });
         return run.id;
       });
     } catch (error) {
@@ -188,7 +209,6 @@ export const prismaAnalysisRepository: AnalysisRepository = {
       throw error;
     }
   },
-
   async recoverStaleRuns(staleBefore) {
     const staleRuns = await prisma.gameAnalysisRun.findMany({
       where: {
@@ -255,6 +275,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           status: { in: ['QUEUED', 'RETRY_WAIT'] },
           runAfter: { lte: now },
           cancelRequestedAt: null,
+          sourcePlyIndexedAt: { not: null },
         },
         orderBy: [{ runAfter: 'asc' }, { id: 'asc' }],
       });
@@ -291,6 +312,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         maxAttempts: run.maxAttempts,
         analysisVersion: run.analysisVersion,
         settingsHash: run.settingsHash,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt!,
         workerId,
         claimToken,
       };
@@ -310,9 +332,16 @@ export const prismaAnalysisRepository: AnalysisRepository = {
     return updated.count === 1;
   },
 
-  async loadGameWork(runId) {
-    const run = await prisma.gameAnalysisRun.findUnique({
-      where: { id: runId },
+  async loadGameWork(run) {
+    const storedRun = await prisma.gameAnalysisRun.findFirst({
+      where: {
+        id: run.id,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        importedGame: {
+          plyIndexStatus: 'INDEXED',
+          plyIndexedAt: run.sourcePlyIndexedAt,
+        },
+      },
       select: {
         importedGame: {
           select: {
@@ -330,11 +359,13 @@ export const prismaAnalysisRepository: AnalysisRepository = {
         },
       },
     });
-    if (!run) throw new Error('Analysis run ' + runId + ' no longer exists');
+    if (!storedRun) {
+      throw new Error('Analysis source ply projection changed while work was in flight');
+    }
 
     const positions = new Map<number, AnalysisPositionWork>();
     const plies: AnalysisPlyWork[] = [];
-    for (const ply of run.importedGame.plies) {
+    for (const ply of storedRun.importedGame.plies) {
       positions.set(ply.beforePosition.id, {
         positionId: ply.beforePosition.id,
         normalizedFen: ply.beforePosition.normalizedFen,
@@ -353,7 +384,6 @@ export const prismaAnalysisRepository: AnalysisRepository = {
     }
     return { positions: [...positions.values()], plies };
   },
-
   async loadCachedPositionAnalyses(input) {
     if (input.positionIds.length === 0) return [];
     const rows = await prisma.stockfishPositionAnalysis.findMany({
@@ -542,6 +572,14 @@ export const prismaAnalysisRepository: AnalysisRepository = {
 
   async requestReanalysis(input) {
     return prisma.$transaction(async (tx) => {
+      const game = await tx.importedGame.findUnique({
+        where: { id: input.importedGameId },
+        select: { plyIndexStatus: true, plyIndexedAt: true },
+      });
+      if (!game || game.plyIndexStatus !== 'INDEXED' || !game.plyIndexedAt) {
+        throw new Error('Imported game must have a current indexed ply projection before analysis');
+      }
+
       const now = new Date();
       await tx.gameAnalysisRun.updateMany({
         where: {
@@ -557,8 +595,11 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           claimToken: null,
         },
       });
-      const run = await createRun(tx, input);
+      const run = await createRun(tx, {
+        ...input,
+        sourcePlyIndexedAt: game.plyIndexedAt,
+      });
       return run.id;
     });
-  },
+  }
 };
