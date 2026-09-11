@@ -1,7 +1,6 @@
 import { Chess } from 'chess.js';
 import { normalizeFenForPosition } from './position';
-
-export type ChessColor = 'WHITE' | 'BLACK';
+import type { ChessColor } from './engine-evaluation';
 
 export interface ReconstructedPly {
   plyNumber: number;
