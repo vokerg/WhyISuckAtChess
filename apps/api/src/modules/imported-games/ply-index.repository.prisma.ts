@@ -1,8 +1,32 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
   assertPositionKeyMatchesFen,
   positionKeyHex,
 } from '../positions/position-key';
+
+const ACTIVE_ANALYSIS_STATUSES = ['QUEUED', 'RUNNING', 'RETRY_WAIT'] as const;
+
+async function supersedeActiveAnalysisRuns(
+  tx: Prisma.TransactionClient,
+  importedGameId: number,
+  invalidatedAt: Date,
+): Promise<void> {
+  await tx.gameAnalysisRun.updateMany({
+    where: {
+      importedGameId,
+      status: { in: [...ACTIVE_ANALYSIS_STATUSES] },
+    },
+    data: {
+      status: 'SUPERSEDED',
+      coverageStatus: 'INCOMPLETE',
+      cancelRequestedAt: invalidatedAt,
+      completedAt: invalidatedAt,
+      workerId: null,
+      claimToken: null,
+    },
+  });
+}
 
 export class PlyIndexSourceChangedError extends Error {
   constructor(readonly importedGameId: number) {
@@ -149,6 +173,7 @@ export async function replacePlyProjection(input: {
       },
     });
     assertFenceAcquired(input.importedGameId, fenced.count);
+    await supersedeActiveAnalysisRuns(tx, input.importedGameId, indexedAt);
 
     await tx.importedGamePly.deleteMany({ where: { importedGameId: input.importedGameId } });
     await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId: input.importedGameId } });
@@ -276,6 +301,7 @@ export async function markPlyIndexFailure(
       },
     });
     assertFenceAcquired(importedGameId, fenced.count);
+    await supersedeActiveAnalysisRuns(tx, importedGameId, new Date());
     await tx.importedGamePly.deleteMany({ where: { importedGameId } });
     await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
     return tx.importedGame.findUniqueOrThrow({
@@ -309,6 +335,7 @@ export async function markPlyIndexSkipped(
       },
     });
     assertFenceAcquired(importedGameId, fenced.count);
+    await supersedeActiveAnalysisRuns(tx, importedGameId, new Date());
     await tx.importedGamePly.deleteMany({ where: { importedGameId } });
     await tx.terminalClockSourceFact.deleteMany({ where: { importedGameId } });
     return tx.importedGame.findUniqueOrThrow({
