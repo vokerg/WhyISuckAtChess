@@ -162,45 +162,47 @@ export const prismaAnalysisRepository: AnalysisRepository = {
   async enqueueEligibleGame(input) {
     try {
       return await prisma.$transaction(async (tx) => {
-        const candidates = await tx.importedGame.findMany({
-          where: {
-            provider: 'LICHESS',
-            plyIndexStatus: 'INDEXED',
-            plyIndexedAt: { not: null },
-            speedCategory: { in: [...ELIGIBLE_SPEEDS] },
-            OR: [
-              { variant: null },
-              { variant: { in: [...ELIGIBLE_VARIANTS] } },
-            ],
-            plies: { some: {} },
-            analysisRuns: { none: { status: { in: [...ACTIVE_STATUSES] } } },
-          },
-          orderBy: { id: 'asc' },
-          take: 25,
-          select: {
-            id: true,
-            plyIndexedAt: true,
-            analysisRuns: {
-              where: {
-                analysisVersion: input.analysisVersion,
-                settingsHash: input.settingsHash,
-              },
-              select: { sourcePlyIndexedAt: true },
-            },
-          },
-        });
-        const game = candidates.find((candidate) => (
-          candidate.plyIndexedAt !== null
-          && !candidate.analysisRuns.some((run) => (
-            run.sourcePlyIndexedAt?.getTime() === candidate.plyIndexedAt!.getTime()
-          ))
-        ));
-        if (!game?.plyIndexedAt) return null;
+        const candidates = await tx.$queryRaw<Array<{
+          id: number;
+          sourcePlyIndexedAt: Date;
+        }>>(Prisma.sql`
+          SELECT game."id", game."plyIndexedAt" AS "sourcePlyIndexedAt"
+          FROM "ImportedGame" AS game
+          WHERE game."provider" = 'LICHESS'
+            AND game."plyIndexStatus" = 'INDEXED'
+            AND game."plyIndexedAt" IS NOT NULL
+            AND game."speedCategory" IN ('bullet', 'blitz', 'rapid')
+            AND (game."variant" IS NULL OR game."variant" IN ('chess', 'standard'))
+            AND EXISTS (
+              SELECT 1
+              FROM "ImportedGamePly" AS ply
+              WHERE ply."importedGameId" = game."id"
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "GameAnalysisRun" AS active
+              WHERE active."importedGameId" = game."id"
+                AND active."status" IN ('QUEUED', 'RUNNING', 'RETRY_WAIT')
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM "GameAnalysisRun" AS prior
+              WHERE prior."importedGameId" = game."id"
+                AND prior."analysisVersion" = ${input.analysisVersion}
+                AND prior."settingsHash" = ${input.settingsHash}
+                AND prior."sourcePlyIndexedAt" = game."plyIndexedAt"
+            )
+          ORDER BY game."id" ASC
+          LIMIT 1
+          FOR UPDATE OF game SKIP LOCKED
+        `);
+        const game = candidates[0];
+        if (!game) return null;
 
         const run = await createRun(tx, {
           ...input,
           importedGameId: game.id,
-          sourcePlyIndexedAt: game.plyIndexedAt,
+          sourcePlyIndexedAt: game.sourcePlyIndexedAt,
         });
         return run.id;
       });
@@ -278,8 +280,30 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           sourcePlyIndexedAt: { not: null },
         },
         orderBy: [{ runAfter: 'asc' }, { id: 'asc' }],
+        include: {
+          importedGame: {
+            select: { plyIndexStatus: true, plyIndexedAt: true },
+          },
+        },
       });
       if (!candidate) return null;
+
+      const sourceIsCurrent = candidate.importedGame.plyIndexStatus === 'INDEXED'
+        && candidate.importedGame.plyIndexedAt?.getTime() === candidate.sourcePlyIndexedAt?.getTime();
+      if (!sourceIsCurrent) {
+        await tx.gameAnalysisRun.updateMany({
+          where: { id: candidate.id, status: candidate.status },
+          data: {
+            status: 'SUPERSEDED',
+            coverageStatus: 'INCOMPLETE',
+            cancelRequestedAt: now,
+            completedAt: now,
+            workerId: null,
+            claimToken: null,
+          },
+        });
+        return null;
+      }
 
       const claimToken = randomUUID();
       const claimed = await tx.gameAnalysisRun.updateMany({
