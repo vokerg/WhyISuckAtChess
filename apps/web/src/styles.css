@@ -1,20 +1,11 @@
-:root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
-}
+@import '@lichess-org/chessground/assets/chessground.base.css';
+@import '@lichess-org/chessground/assets/chessground.brown.css';
+@import '@lichess-org/chessground/assets/chessground.cburnett.css';
 
 body {
   margin: 0;
-}
-
-.shell {
-  max-width: 48rem;
-  margin: 12vh auto;
-  padding: 2rem;
-}
-
-.eyebrow {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  min-height: 100vh;
+  background: #f6efe5;
+  color: #3d281b;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }

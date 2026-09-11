@@ -26,7 +26,7 @@ packages/contracts       verified wire schemas/types
 scripts                   architecture and repository guardrails
 ```
 
-The API reserves module seams for auth, Lichess, account imports, jobs, imported games, timing, positions, analysis, evidence, sessions, and diagnosis. Issue #9 deliberately implements none of those features beyond the bootstrap boundary.
+The API reserves module seams for auth, Lichess, account imports, jobs, imported games, timing, positions, analysis, evidence, sessions, and diagnosis. The imported-game evidence read model now provides owned, bounded list/detail/replay endpoints while later detector and diagnosis modules remain separate.
 
 ## Developer setup
 
@@ -49,14 +49,14 @@ For a PostgreSQL migration smoke check, point `DATABASE_URL` at a disposable dat
 npm run db:migrate
 ```
 
-Development processes are intentionally separate:
+Development processes are intentionally separate (the Angular dev server proxies `/api` to the local Fastify server):
 
 ```bash
 npm run dev          # API + Angular web shell
 npm run dev:worker   # persistent worker process; no executors are registered yet
 ```
 
-The API exposes only `GET /health`. The web app contains only a bootstrap shell. Provider/OAuth/import/Stockfish/diagnosis behavior belongs to later issues.
+The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the previously delivered Lichess connection/import endpoints. The web app contains an investigation-first imported-game library and replay surface. Provider/OAuth/import/Stockfish/diagnosis behavior remains split across its owning modules; this issue does not add diagnosis aggregation or tactical detection.
 
 ## Guardrails
 
