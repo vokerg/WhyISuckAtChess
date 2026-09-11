@@ -391,6 +391,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
             },
           },
         },
+      },
     });
     if (!storedRun) {
       throw new Error('Analysis source ply projection changed while work was in flight');
