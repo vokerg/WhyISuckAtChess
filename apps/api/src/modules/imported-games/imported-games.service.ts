@@ -165,6 +165,7 @@ function toPly(
   const engineAvailable = authoritativeRun
     && (row.scoreLossCp !== null || row.classificationCode !== null);
   const positionAnalysisAvailable = authoritativeRun
+    && currentEngineRun !== null
     && positionAnalysis !== null
     && positionAnalysis.analysisVersion === currentEngineRun.analysisVersion
     && positionAnalysis.settingsHash === currentEngineRun.settingsHash
