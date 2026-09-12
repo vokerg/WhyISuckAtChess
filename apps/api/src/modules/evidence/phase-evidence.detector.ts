@@ -50,7 +50,10 @@ function rangeFinding(range: PositionRange, index: number): EvidenceFindingDraft
   return {
     key: 'phase-range-' + index,
     type: 'POSITION_PHASE_RANGE',
-    availability: range.start.phase === 'UNKNOWN' ? 'INCOMPLETE' : 'PRESENT',
+    availability: (
+      range.start.phase === 'UNKNOWN'
+      || range.start.endgameFamily === 'UNKNOWN'
+    ) ? 'INCOMPLETE' : 'PRESENT',
     source: sourceForRange(range),
     measurements: {
       positionCount: range.positionCount,
@@ -74,9 +77,12 @@ function rangeFinding(range: PositionRange, index: number): EvidenceFindingDraft
       startPositionId: range.start.positionId,
       endPositionId: range.end.positionId,
     },
-    ...(range.start.phase === 'UNKNOWN'
-      ? { unavailableReason: 'position-phase-unavailable' }
-      : {}),
+    ...(
+      range.start.phase === 'UNKNOWN'
+      || range.start.endgameFamily === 'UNKNOWN'
+    )
+      ? { unavailableReason: 'phase-or-endgame-family-unavailable' }
+      : {},
   };
 }
 
@@ -225,7 +231,7 @@ export function detectPhaseEvidence(
         classifierVersion: POSITION_PHASE_CLASSIFIER_VERSION,
         unknownBoundaryPlies: unknownBoundaryPlies.slice(0, 32),
       },
-      unavailableReason: 'required-board-position-unavailable-or-invalid',
+      unavailableReason: 'phase-or-endgame-family-unavailable',
     });
   }
 
@@ -233,7 +239,7 @@ export function detectPhaseEvidence(
     coverage: {
       status: unknownPositionCount > 0 ? 'INCOMPLETE' : 'COMPLETE',
       reason: unknownPositionCount > 0
-        ? 'required-board-position-unavailable-or-invalid'
+        ? 'phase-or-endgame-family-unavailable'
         : null,
       details: {
         classifierVersion: POSITION_PHASE_CLASSIFIER_VERSION,
