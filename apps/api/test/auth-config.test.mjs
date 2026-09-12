@@ -39,16 +39,16 @@ test('missing AUTH_MODE fails closed even outside production', () => {
   withAuthEnv({ NODE_ENV: 'development' }, () => {
     assert.throws(
       () => loadAuthConfig(),
-      /AUTH_MODE is required and must be either dev-single-user or clerk/,
+      /AUTH_MODE is required; expected dev-single-user or clerk/,
     );
   });
 });
 
-test('unsupported AUTH_MODE fails closed', () => {
+test('unsupported AUTH_MODE fails closed with the configured value identified', () => {
   withAuthEnv({ AUTH_MODE: 'anything-else', NODE_ENV: 'development' }, () => {
     assert.throws(
       () => loadAuthConfig(),
-      /AUTH_MODE is required and must be either dev-single-user or clerk/,
+      /Unsupported AUTH_MODE "anything-else"; expected dev-single-user or clerk/,
     );
   });
 });
