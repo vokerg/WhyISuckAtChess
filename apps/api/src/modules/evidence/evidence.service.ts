@@ -203,7 +203,13 @@ export function createEvidenceService(options: {
         }
         const result = await detector.detect(snapshot);
         validateEvidenceDetectorResult(snapshot, result);
-        await repository.completeRun(run, result);
+        const completed = await repository.completeRun(run, result);
+        if (!completed) {
+          await repository.markFailure(
+            run,
+            'Evidence source projection changed before completion.',
+          );
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await repository.markFailure(run, message);
