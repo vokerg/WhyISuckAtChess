@@ -651,9 +651,9 @@ export const prismaEvidenceRepository: EvidenceRepository = {
           timingDerivationStatus: ply.timingDerivationStatus,
           timingReliabilityFlags: ply.timingReliabilityFlags,
           timingUnavailableReason: ply.timingUnavailableReason,
-          engineAnalysisRunId: ply.engineAnalysisRunId,
-          scoreLossCp: ply.scoreLossCp,
-          classificationCode: ply.classificationCode,
+          engineAnalysisRunId: analysisRun ? ply.engineAnalysisRunId : null,
+          scoreLossCp: analysisRun ? ply.scoreLossCp : null,
+          classificationCode: analysisRun ? ply.classificationCode : null,
         })),
       };
     });
