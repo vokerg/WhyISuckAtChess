@@ -19,8 +19,11 @@ function requiredEnv(name: string): string {
 }
 
 export function loadAuthConfig(): AuthConfig {
-  const configuredMode = process.env['AUTH_MODE']?.trim();
-  const mode = configuredMode || (process.env['NODE_ENV'] === 'production' ? undefined : 'dev-single-user');
+  const mode = process.env['AUTH_MODE']?.trim();
+
+  if (!mode) {
+    throw new Error('AUTH_MODE is required; expected dev-single-user or clerk');
+  }
 
   if (mode === 'dev-single-user') {
     if (process.env['NODE_ENV'] === 'production') {
@@ -57,5 +60,5 @@ export function loadAuthConfig(): AuthConfig {
     };
   }
 
-  throw new Error('AUTH_MODE must be either dev-single-user or clerk');
+  throw new Error(`Unsupported AUTH_MODE "${mode}"; expected dev-single-user or clerk`);
 }
