@@ -45,7 +45,7 @@ test('classifies deterministic endgame material families', () => {
     'OPPOSITE_COLORED_BISHOPS',
   );
   assert.equal(
-    classifyEndgameFamily('8/8/8/3k4/8/4K3/3BP3/5b2 w - -'),
+    classifyEndgameFamily('8/8/8/3k4/1b6/4K3/3BP3/8 w - -'),
     'SAME_COLORED_BISHOPS',
   );
   assert.equal(
