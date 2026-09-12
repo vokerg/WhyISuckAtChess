@@ -546,3 +546,177 @@ test('material evidence worker publishes board facts before analysis and refresh
     await prisma.$disconnect();
   }
 });
+
+
+test('late board-only publication cannot supersede an already published analysis-backed projection', async () => {
+  const suffix = randomUUID();
+  const positionIds = [];
+  let userId = null;
+
+  try {
+    const user = await prisma.appUser.create({
+      data: { authProvider: 'TEST', authSubject: 'evidence-race-' + suffix },
+    });
+    userId = user.id;
+
+    const indexedAt = new Date('2026-09-12T11:00:00.000Z');
+    const game = await prisma.importedGame.create({
+      data: {
+        appUserId: user.id,
+        provider: 'LICHESS',
+        providerGameId: 'evidence-race-' + suffix,
+        connectedLichessUserId: 'fixture-user',
+        connectedLichessUsername: 'FixtureUser',
+        variant: 'standard',
+        speedCategory: 'bullet',
+        userColor: 'WHITE',
+        resultForUser: 'LOSS',
+        plyIndexStatus: 'INDEXED',
+        plyIndexPolicyVersion: 1,
+        plyIndexedAt: indexedAt,
+        timingCoverageStatus: 'COMPLETE',
+      },
+    });
+
+    const before = await createPosition('race-before');
+    const after = await createPosition('race-after');
+    positionIds.push(before.id, after.id);
+    await prisma.importedGamePly.create({
+      data: {
+        importedGameId: game.id,
+        plyNumber: 1,
+        beforePositionId: before.id,
+        afterPositionId: after.id,
+        moveUci: 'a2a3',
+        moverColor: 'WHITE',
+        isUserMove: true,
+      },
+    });
+
+    const detectorKey = 'fixture.material-race-' + suffix;
+    const detector = {
+      key: detectorKey,
+      version: 'v1',
+      requiresCompleteAnalysis: false,
+      refreshOnCompleteAnalysis: true,
+    };
+
+    const boardRun = await prisma.evidenceRun.create({
+      data: {
+        importedGameId: game.id,
+        detectorKey,
+        detectorVersion: detector.version,
+        workKey: 'board-' + suffix,
+        sourcePlyIndexedAt: indexedAt,
+      },
+    });
+    const boardClaim = await prismaEvidenceRepository.claimNext(
+      'board-race-' + suffix,
+      [detector],
+    );
+    assert.equal(boardClaim.id, boardRun.id);
+    assert.equal(boardClaim.sourceAnalysisRunId, null);
+
+    const analysisRun = await prisma.gameAnalysisRun.create({
+      data: {
+        importedGameId: game.id,
+        analysisVersion: 'race-analysis-v1',
+        settingsHash: 'race-settings-' + suffix,
+        settingsJson: { depth: 16, multiPv: 3 },
+        sourcePlyIndexedAt: indexedAt,
+        engineName: 'FixtureFish',
+        engineVersion: '1',
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        positionsTotal: 2,
+        positionsDone: 2,
+        pliesTotal: 1,
+        pliesDone: 1,
+        attempts: 1,
+        startedAt: new Date('2026-09-12T11:00:01.000Z'),
+        completedAt: new Date('2026-09-12T11:00:02.000Z'),
+      },
+    });
+    await prisma.importedGamePly.update({
+      where: {
+        importedGameId_plyNumber: {
+          importedGameId: game.id,
+          plyNumber: 1,
+        },
+      },
+      data: {
+        engineAnalysisRunId: analysisRun.id,
+        scoreLossCp: 100,
+        classificationCode: 5,
+      },
+    });
+
+    const analysisEvidenceRun = await prisma.evidenceRun.create({
+      data: {
+        importedGameId: game.id,
+        detectorKey,
+        detectorVersion: detector.version,
+        workKey: 'analysis-' + suffix,
+        sourcePlyIndexedAt: indexedAt,
+        sourceAnalysisRunId: analysisRun.id,
+        sourceAnalysisSnapshotId: analysisRun.snapshotId,
+      },
+    });
+    const analysisClaim = await prismaEvidenceRepository.claimNext(
+      'analysis-race-' + suffix,
+      [detector],
+    );
+    assert.equal(analysisClaim.id, analysisEvidenceRun.id);
+    assert.equal(analysisClaim.sourceAnalysisRunId, analysisRun.id);
+    assert.equal(
+      await prismaEvidenceRepository.completeRun(analysisClaim, {
+        coverage: { status: 'COMPLETE' },
+        findings: [],
+      }),
+      true,
+    );
+
+    let current = await prismaEvidenceRepository.listCurrentEvidenceForGame(game.id);
+    assert.equal(current.length, 1);
+    assert.equal(current[0].id, analysisEvidenceRun.id);
+    assert.equal(current[0].sourceAnalysisRunId, analysisRun.id);
+
+    assert.equal(
+      await prismaEvidenceRepository.completeRun(boardClaim, {
+        coverage: {
+          status: 'INCOMPLETE',
+          reason: 'complete-engine-analysis-unavailable',
+        },
+        findings: [],
+      }),
+      false,
+      'a late board-only result must be fenced after analysis-backed publication',
+    );
+    await prismaEvidenceRepository.markFailure(
+      boardClaim,
+      'Evidence source projection changed before completion.',
+    );
+
+    const staleBoardRun = await prisma.evidenceRun.findUniqueOrThrow({
+      where: { id: boardRun.id },
+    });
+    assert.equal(staleBoardRun.status, 'SUPERSEDED');
+    assert.equal(staleBoardRun.isCurrent, false);
+    assert.ok(staleBoardRun.supersededAt);
+
+    current = await prismaEvidenceRepository.listCurrentEvidenceForGame(game.id);
+    assert.equal(current.length, 1);
+    assert.equal(current[0].id, analysisEvidenceRun.id);
+    assert.equal(current[0].sourceAnalysisRunId, analysisRun.id);
+  } finally {
+    if (userId !== null) {
+      await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
+    }
+    if (positionIds.length > 0) {
+      await prisma.position.deleteMany({
+        where: { id: { in: positionIds } },
+      }).catch(() => {});
+    }
+    await prisma.$disconnect();
+  }
+});
