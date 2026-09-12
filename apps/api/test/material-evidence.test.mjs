@@ -159,6 +159,8 @@ test('emits exact material-state change measurements for a capture', () => {
   assert.equal(change.measurements.materialBalanceBefore, -6);
   assert.equal(change.measurements.materialBalanceAfter, 3);
   assert.equal(change.measurements.materialDeltaForUser, 9);
+  assert.equal(change.details.beforePositionId, 101);
+  assert.equal(change.details.afterPositionId, 102);
   assert.equal(change.details.capturedPiece, 'q');
 });
 
