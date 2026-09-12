@@ -5,6 +5,25 @@ import { createLichessAccountImportService } from './modules/account-imports/acc
 import { createStockfishAnalysisService } from './modules/engine-analysis/engine-analysis.service';
 import { ImportedGamePlyIndexService } from './modules/imported-games/ply-index.service';
 
+export interface WorkerCycleExecutor {
+  runOnce(): Promise<boolean>;
+}
+
+export interface WorkerCycleDependencies {
+  importService: WorkerCycleExecutor;
+  plyIndexService: WorkerCycleExecutor;
+  analysisService: WorkerCycleExecutor;
+}
+
+export async function runWorkerCycle(
+  dependencies: WorkerCycleDependencies,
+): Promise<boolean> {
+  const importRan = await dependencies.importService.runOnce();
+  const indexRan = await dependencies.plyIndexService.runOnce();
+  const analysisRan = await dependencies.analysisService.runOnce();
+  return importRan || indexRan || analysisRan;
+}
+
 export async function runWorkerUntilStopped(): Promise<void> {
   const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
   const analysisService = createStockfishAnalysisService();
@@ -19,10 +38,12 @@ export async function runWorkerUntilStopped(): Promise<void> {
   process.once('SIGTERM', () => stop('SIGTERM'));
 
   while (!stopping) {
-    const importRan = await importService.runOnce();
-    const indexRan = await ImportedGamePlyIndexService.runOnce();
-    const analysisRan = await analysisService.runOnce();
-    if (!importRan && !indexRan && !analysisRan) {
+    const ran = await runWorkerCycle({
+      importService,
+      plyIndexService: ImportedGamePlyIndexService,
+      analysisService,
+    });
+    if (!ran) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
