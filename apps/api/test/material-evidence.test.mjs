@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { evidenceDetectors } from '../dist/modules/evidence/evidence.registry.js';
 import {
   MATERIAL_EVIDENCE_DETECTOR_KEY,
   MATERIAL_EVIDENCE_DETECTOR_VERSION,
@@ -100,6 +101,7 @@ test('registers the material detector as complete-analysis evidence', () => {
   assert.equal(materialEvidenceDetector.key, MATERIAL_EVIDENCE_DETECTOR_KEY);
   assert.equal(materialEvidenceDetector.version, MATERIAL_EVIDENCE_DETECTOR_VERSION);
   assert.equal(materialEvidenceDetector.requiresCompleteAnalysis, true);
+  assert.equal(evidenceDetectors.includes(materialEvidenceDetector), true);
 });
 
 test('detects a materially bad move that leaves an undefended queen en prise in bullet', () => {
