@@ -120,6 +120,7 @@ export interface EvidenceDetectorIdentity {
   key: string;
   version: string;
   requiresCompleteAnalysis: boolean;
+  refreshOnCompleteAnalysis?: boolean;
 }
 
 export interface EvidenceDetector extends EvidenceDetectorIdentity {
