@@ -16,7 +16,8 @@ A detector implements the `EvidenceDetector` interface under `apps/api/src/modul
 
 - stable `key` and `version`;
 - whether complete current Stockfish analysis is required;
-- one typed `EvidenceInputSnapshot` containing one imported game, current indexed plies/positions, timing facts, and exact analysis provenance when required;
+- optionally, whether a board-capable detector should run before analysis and refresh against a new immutable source when complete analysis later becomes available;
+- one typed `EvidenceInputSnapshot` containing one imported game, current indexed plies/positions, timing facts, and exact analysis provenance when present;
 - one `EvidenceDetectorResult` containing explicit coverage plus bounded `EvidenceFindingDraft[]`.
 
 Each finding has a stable detector-local key, evidence type, optional source ply range/position, structured measurements/details, and an explicit availability state. Missing evidence is represented as `UNAVAILABLE` or `INCOMPLETE`; it must not be silently converted into a negative finding.
@@ -34,6 +35,8 @@ Detector-specific payload types may become stricter as #28-#33 land. They remain
 - durable run/claim/retry/coverage state.
 
 Its `workKey` is deterministic over those immutable inputs. Re-running the same detector/version against the same source projection is therefore idempotent.
+
+A detector with `refreshOnCompleteAnalysis=true` may first publish against the indexed board projection with no analysis id, then become eligible once more when a complete current analysis snapshot appears. The analysis-backed run has a distinct work key and supersedes the earlier board-only current run only after successful publication. If publication is staggered, that successful analysis-backed publication also fences any older board-only claim still in flight, so the older incomplete projection cannot become current again.
 
 `EvidenceEvent` stores:
 

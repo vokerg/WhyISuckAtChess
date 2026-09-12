@@ -154,6 +154,56 @@ async function eligibleSource(
     return rows[0] ?? null;
   }
 
+  if (detector.refreshOnCompleteAnalysis) {
+    const rows = await tx.$queryRaw<EligibleEvidenceSource[]>(Prisma.sql`
+      SELECT
+        game."id" AS "importedGameId",
+        game."plyIndexedAt" AS "sourcePlyIndexedAt",
+        analysis."id" AS "sourceAnalysisRunId",
+        analysis."snapshotId" AS "sourceAnalysisSnapshotId"
+      FROM "ImportedGame" AS game
+      LEFT JOIN LATERAL (
+        SELECT run."id", run."snapshotId"
+        FROM "GameAnalysisRun" AS run
+        WHERE run."importedGameId" = game."id"
+          AND run."status" = 'SUCCEEDED'
+          AND run."coverageStatus" = 'COMPLETE'
+          AND run."sourcePlyIndexedAt" = game."plyIndexedAt"
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "ImportedGamePly" AS mismatch
+            WHERE mismatch."importedGameId" = game."id"
+              AND mismatch."engineAnalysisRunId" IS DISTINCT FROM run."id"
+          )
+        ORDER BY run."completedAt" DESC NULLS LAST, run."id" DESC
+        LIMIT 1
+      ) AS analysis ON TRUE
+      WHERE game."provider" = 'LICHESS'
+        AND game."plyIndexStatus" = 'INDEXED'
+        AND game."plyIndexedAt" IS NOT NULL
+        AND game."speedCategory" IN ('bullet', 'blitz', 'rapid')
+        AND (game."variant" IS NULL OR game."variant" IN ('chess', 'standard'))
+        AND EXISTS (
+          SELECT 1
+          FROM "ImportedGamePly" AS ply
+          WHERE ply."importedGameId" = game."id"
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "EvidenceRun" AS prior
+          WHERE prior."importedGameId" = game."id"
+            AND prior."detectorKey" = ${detector.key}
+            AND prior."detectorVersion" = ${detector.version}
+            AND prior."sourcePlyIndexedAt" = game."plyIndexedAt"
+            AND prior."sourceAnalysisRunId" IS NOT DISTINCT FROM analysis."id"
+        )
+      ORDER BY game."id" ASC
+      LIMIT 1
+      FOR UPDATE OF game SKIP LOCKED
+    `);
+    return rows[0] ?? null;
+  }
+
   const rows = await tx.$queryRaw<EligibleEvidenceSource[]>(Prisma.sql`
     SELECT
       game."id" AS "importedGameId",
@@ -191,6 +241,7 @@ async function sourceIsCurrent(
   tx: Prisma.TransactionClient,
   run: {
     importedGameId: number;
+    detectorKey: string;
     sourcePlyIndexedAt: Date;
     sourceAnalysisRunId: number | null;
     sourceAnalysisSnapshotId: string | null;
@@ -214,7 +265,23 @@ async function sourceIsCurrent(
   }
 
   if (run.sourceAnalysisSnapshotId === null) {
-    return run.sourceAnalysisRunId === null;
+    if (run.sourceAnalysisRunId !== null) return false;
+
+    // Board-only runs are useful until an analysis-backed projection is successfully
+    // published. Once that happens, a late board-only worker must never make its
+    // older incomplete projection current again.
+    const analysisBackedCurrent = await tx.evidenceRun.findFirst({
+      where: {
+        importedGameId: run.importedGameId,
+        detectorKey: run.detectorKey,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        sourceAnalysisRunId: { not: null },
+        status: 'SUCCEEDED',
+        isCurrent: true,
+      },
+      select: { id: true },
+    });
+    return analysisBackedCurrent === null;
   }
   if (run.sourceAnalysisRunId === null) return false;
 
@@ -267,6 +334,7 @@ async function activeClaim(
     },
     select: {
       importedGameId: true,
+      detectorKey: true,
       sourcePlyIndexedAt: true,
       sourceAnalysisRunId: true,
       sourceAnalysisSnapshotId: true,

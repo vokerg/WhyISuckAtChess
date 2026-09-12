@@ -30,6 +30,9 @@ function detectorIdentity(detector: EvidenceDetector): EvidenceDetectorIdentity 
     key: detector.key,
     version: detector.version,
     requiresCompleteAnalysis: detector.requiresCompleteAnalysis,
+    ...(detector.refreshOnCompleteAnalysis === true
+      ? { refreshOnCompleteAnalysis: true }
+      : {}),
   };
 }
 
