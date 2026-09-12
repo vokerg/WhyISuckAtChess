@@ -104,8 +104,14 @@ export function detectMaterialEvidence(
           capturedValue: playedMove.capturedValue,
           promotionGain: playedMove.promotionGain,
           scoreLossCp: ply.isUserMove ? ply.scoreLossCp : null,
+          scoreCpWhiteBefore: before.analysis?.scoreCpWhite ?? null,
+          scoreCpWhiteAfter: after.analysis?.scoreCpWhite ?? null,
+          mateWhiteBefore: before.analysis?.mateWhite ?? null,
+          mateWhiteAfter: after.analysis?.mateWhite ?? null,
         },
         details: {
+          beforePositionId: ply.beforePositionId,
+          afterPositionId: ply.afterPositionId,
           moveUci: ply.moveUci,
           moverColor: ply.moverColor,
           isUserMove: ply.isUserMove,
@@ -167,6 +173,8 @@ export function detectMaterialEvidence(
             mateWhiteBefore: before.analysis.mateWhite,
           },
           details: {
+            beforePositionId: ply.beforePositionId,
+            afterPositionId: ply.afterPositionId,
             playedMoveUci: ply.moveUci,
             bestMoveUci: bestMove,
             attackerSquare: bestMaterialMove.from,
@@ -212,6 +220,8 @@ export function detectMaterialEvidence(
           mateWhiteAfter: after.analysis.mateWhite,
         },
         details: {
+          beforePositionId: ply.beforePositionId,
+          afterPositionId: ply.afterPositionId,
           playedMoveUci: ply.moveUci,
           bestReplyUci: after.analysis.bestMove,
           attackerSquare: bestReply.from,
