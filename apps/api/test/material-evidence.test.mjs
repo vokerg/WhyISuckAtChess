@@ -145,6 +145,25 @@ test('detects a missed free queen capture and suppresses the duplicate hanging c
   assert.equal(missed[0].measurements.capturedValue, 9);
 });
 
+test('dedupes a missed capture when the same attacker moves and is captured on its new square', () => {
+  const result = detectMaterialEvidence(snapshot({
+    beforeFen: '1r2k3/8/8/3q4/2B5/8/8/4K3 w - -',
+    afterFen: '1r2k3/8/8/1B1q4/8/8/8/4K3 b - -',
+    moveUci: 'c4b5',
+    beforeBestMove: 'c4d5',
+    afterBestMove: 'b8b5',
+    scoreLossCp: 600,
+  }));
+
+  const missed = result.findings.filter((finding) => finding.type === 'MISSED_MATERIAL_WIN');
+  const hanging = result.findings.filter((finding) => finding.type === 'HANGING_MATERIAL');
+  assert.equal(missed.length, 1);
+  assert.equal(hanging.length, 0);
+  assert.equal(missed[0].details.attackerSquare, 'c4');
+  assert.equal(missed[0].details.bestMoveUci, 'c4d5');
+  assert.equal(missed[0].details.playedMoveUci, 'c4b5');
+});
+
 test('emits exact material-state change measurements for a capture', () => {
   const result = detectMaterialEvidence(snapshot({
     beforeFen: '4k3/8/8/3q4/2B5/8/8/4K3 w - -',
