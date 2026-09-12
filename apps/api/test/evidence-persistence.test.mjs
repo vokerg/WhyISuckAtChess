@@ -292,34 +292,6 @@ test('evidence persistence is idempotent, provenance-fenced, version-superseding
     assert.equal(afterSourceReplacement[2].isCurrent, true);
     assert.equal(afterSourceReplacement[2].events.length, 1);
 
-    const noAnalysisGame = await prisma.importedGame.create({
-      data: {
-        appUserId: user.id,
-        provider: 'LICHESS',
-        providerGameId: 'claim-' + suffix,
-        connectedLichessUserId: 'fixture-user',
-        connectedLichessUsername: 'FixtureUser',
-        variant: 'standard',
-        speedCategory: 'blitz',
-        plyIndexStatus: 'INDEXED',
-        plyIndexedAt: indexedAt,
-      },
-    });
-    const claimBefore = await createPosition('claim-before');
-    const claimAfter = await createPosition('claim-after');
-    positionIds.push(claimBefore.id, claimAfter.id);
-    await prisma.importedGamePly.create({
-      data: {
-        importedGameId: noAnalysisGame.id,
-        plyNumber: 1,
-        beforePositionId: claimBefore.id,
-        afterPositionId: claimAfter.id,
-        moveUci: 'e2e4',
-        moverColor: 'WHITE',
-        isUserMove: true,
-      },
-    });
-
     const noAnalysisDetector = {
       key: 'fixture.no-analysis',
       version: 'v1',
@@ -332,6 +304,13 @@ test('evidence persistence is idempotent, provenance-fenced, version-superseding
       [noAnalysisDetector],
     );
     assert.equal(oldClaim.id, queuedId);
+    assert.equal(oldClaim.importedGameId, game.id);
+
+    const noAnalysisSnapshot = await prismaEvidenceRepository.loadSnapshot(oldClaim);
+    assert.equal(noAnalysisSnapshot.provenance.analysis, null);
+    assert.equal(noAnalysisSnapshot.plies[0].engineAnalysisRunId, null);
+    assert.equal(noAnalysisSnapshot.plies[0].scoreLossCp, null);
+    assert.equal(noAnalysisSnapshot.plies[0].classificationCode, null);
 
     await prisma.evidenceRun.update({
       where: { id: queuedId },
