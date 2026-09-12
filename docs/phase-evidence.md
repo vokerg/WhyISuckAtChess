@@ -51,7 +51,7 @@ Invalid/unparseable positions classify as `UNKNOWN` and produce incomplete cover
 
 When the stabilized game phase is `ENDGAME`, material composition is classified into one of these deterministic families:
 
-- `PAWN`: no queens, rooks, bishops, or knights remain;
+- `PAWN`: no queens, rooks, bishops, or knights remain and at least one pawn remains;
 - `ROOK`: rook-only non-pawn material;
 - `QUEEN`: one or more queens remain, with no rooks (minor pieces may also remain);
 - `BISHOP_VS_KNIGHT`: minor-only material with bishop(s) on one side and knight(s) on the other;
@@ -60,7 +60,7 @@ When the stabilized game phase is `ENDGAME`, material composition is classified 
 - `MINOR_PIECE`: other bishop/knight-only endings;
 - `ROOK_AND_MINOR`: rook plus bishop/knight material with no queens;
 - `MIXED_PIECE`: remaining endgames containing both queens and rooks or another mixed major-piece composition;
-- `UNKNOWN`: board state could not be classified.
+- `UNKNOWN`: board state could not be classified, or the material does not map meaningfully to a supported family (for example bare kings).
 
 Non-endgame positions use `NONE` as the family. Promotions are classified from the promoted board state, so a pawn ending may legitimately become a queen or mixed-piece ending without leaving the stabilized endgame phase.
 
