@@ -43,6 +43,8 @@ npm test
 npm run lint
 ```
 
+`AUTH_MODE` must be set explicitly. The checked-in `.env.example` uses `AUTH_MODE=dev-single-user` for local development; production-like deployments must configure Clerk explicitly and may not use the development single-user mode.
+
 For a PostgreSQL migration smoke check, point `DATABASE_URL` at a disposable database and run:
 
 ```bash
