@@ -56,6 +56,11 @@ test('classifies deterministic endgame material families', () => {
     classifyEndgameFamily('6qr/8/8/3k4/8/4K3/4P3/RQ6 w - -'),
     'MIXED_PIECE',
   );
+  assert.equal(
+    classifyEndgameFamily('8/8/8/3k4/8/4K3/8/8 w - -'),
+    'UNKNOWN',
+    'bare kings are not forced into the pawn-ending family',
+  );
 });
 
 test('keeps game phase monotonic across structural reversals such as promotion', () => {
