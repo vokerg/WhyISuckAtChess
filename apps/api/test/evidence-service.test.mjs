@@ -5,6 +5,7 @@ import {
   createEvidenceService,
   validateEvidenceDetectorResult,
 } from '../dist/modules/evidence/evidence.service.js';
+import { runWorkerCycle } from '../dist/worker.js';
 
 function snapshot() {
   return {
@@ -272,4 +273,22 @@ test('empty evidence registry leaves the worker stage idle', async () => {
     }),
   });
   assert.equal(await service.runOnce(), false);
+});
+
+test('worker cycle owns the evidence execution stage after analysis', async () => {
+  const calls = [];
+  const executor = (name, result) => ({
+    async runOnce() {
+      calls.push(name);
+      return result;
+    },
+  });
+
+  assert.equal(await runWorkerCycle({
+    importService: executor('import', false),
+    plyIndexService: executor('index', false),
+    analysisService: executor('analysis', false),
+    evidenceService: executor('evidence', true),
+  }), true);
+  assert.deepEqual(calls, ['import', 'index', 'analysis', 'evidence']);
 });
