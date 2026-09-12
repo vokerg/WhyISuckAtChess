@@ -113,6 +113,7 @@ model ImportedGame {
   plies                      ImportedGamePly[]
   terminalClockFacts         TerminalClockSourceFact[]
   analysisRuns               GameAnalysisRun[]
+  evidenceRuns               EvidenceRun[]
 
   @@unique([appUserId, provider, providerGameId])
   @@index([appUserId, startedAt])
@@ -141,6 +142,7 @@ model Position {
   pliesBefore     ImportedGamePly[]           @relation("PlyBeforePosition")
   pliesAfter      ImportedGamePly[]           @relation("PlyAfterPosition")
   engineAnalyses  StockfishPositionAnalysis[]
+  evidenceEvents  EvidenceEvent[]
 }
 
 model ImportedGamePly {
@@ -228,6 +230,7 @@ model GameAnalysisRun {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   analysedPlies       ImportedGamePly[]
+  evidenceRuns         EvidenceRun[]
 
   @@index([status, runAfter])
   @@index([importedGameId, status, createdAt])
@@ -253,6 +256,65 @@ model StockfishPositionAnalysis {
 
   @@unique([positionId, analysisVersion, settingsHash, engineName, engineVersion], map: "StockfishPositionAnalysis_cache_key")
   @@index([analysisVersion, settingsHash, engineName, engineVersion], map: "StockfishPositionAnalysis_provenance_idx")
+}
+
+model EvidenceRun {
+  id                       Int               @id @default(autoincrement())
+  importedGameId           Int
+  importedGame             ImportedGame      @relation(fields: [importedGameId], references: [id], onDelete: Cascade)
+  detectorKey              String            @db.VarChar(64)
+  detectorVersion          String            @db.VarChar(64)
+  workKey                  String            @unique @db.VarChar(64)
+  sourcePlyIndexedAt       DateTime
+  sourceAnalysisRunId      Int?
+  sourceAnalysisRun        GameAnalysisRun?  @relation(fields: [sourceAnalysisRunId], references: [id], onDelete: SetNull)
+  sourceAnalysisSnapshotId String?            @db.VarChar(32)
+  status                   String            @default("QUEUED") @db.VarChar(24)
+  coverageStatus           String            @default("PENDING") @db.VarChar(24)
+  coverageJson             Json?
+  attempts                 Int               @default(0)
+  maxAttempts              Int               @default(3)
+  runAfter                 DateTime          @default(now())
+  workerId                 String?           @db.VarChar(128)
+  claimToken               String?           @db.VarChar(64)
+  claimedAt                DateTime?
+  heartbeatAt              DateTime?
+  cancelRequestedAt        DateTime?
+  error                    String?
+  startedAt                DateTime?
+  completedAt              DateTime?
+  isCurrent                Boolean           @default(false)
+  supersededAt             DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  events                   EvidenceEvent[]
+
+  @@index([status, runAfter])
+  @@index([importedGameId, detectorKey, isCurrent])
+  @@index([importedGameId, detectorKey, detectorVersion, sourcePlyIndexedAt], map: "EvidenceRun_source_projection_idx")
+  @@index([sourceAnalysisRunId])
+}
+
+model EvidenceEvent {
+  id                 Int          @id @default(autoincrement())
+  evidenceKey        String       @unique @db.VarChar(64)
+  runId              Int
+  run                EvidenceRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  findingKey         String       @db.VarChar(128)
+  evidenceType       String       @db.VarChar(96)
+  availability       String       @default("PRESENT") @db.VarChar(24)
+  sourcePlyStart     Int?
+  sourcePlyEnd       Int?
+  sourcePositionId   Int?
+  sourcePosition     Position?    @relation(fields: [sourcePositionId], references: [id], onDelete: SetNull)
+  measurementsJson   Json
+  detailsJson        Json
+  unavailableReason  String?      @db.VarChar(256)
+  createdAt          DateTime     @default(now())
+
+  @@unique([runId, findingKey])
+  @@index([runId, evidenceType])
+  @@index([sourcePositionId])
 }
 
 model ImportRun {

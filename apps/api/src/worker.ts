@@ -4,6 +4,8 @@ import { lichessConnectionService } from './modules/lichess/lichess-connection.s
 import { createLichessAccountImportService } from './modules/account-imports/account-import.service';
 import { createStockfishAnalysisService } from './modules/engine-analysis/engine-analysis.service';
 import { ImportedGamePlyIndexService } from './modules/imported-games/ply-index.service';
+import { createEvidenceService } from './modules/evidence/evidence.service';
+import { evidenceDetectors } from './modules/evidence/evidence.registry';
 
 export interface WorkerCycleExecutor {
   runOnce(): Promise<boolean>;
@@ -13,6 +15,7 @@ export interface WorkerCycleDependencies {
   importService: WorkerCycleExecutor;
   plyIndexService: WorkerCycleExecutor;
   analysisService: WorkerCycleExecutor;
+  evidenceService?: WorkerCycleExecutor;
 }
 
 export async function runWorkerCycle(
@@ -21,13 +24,17 @@ export async function runWorkerCycle(
   const importRan = await dependencies.importService.runOnce();
   const indexRan = await dependencies.plyIndexService.runOnce();
   const analysisRan = await dependencies.analysisService.runOnce();
-  return importRan || indexRan || analysisRan;
+  const evidenceRan = dependencies.evidenceService
+    ? await dependencies.evidenceService.runOnce()
+    : false;
+  return importRan || indexRan || analysisRan || evidenceRan;
 }
 
 export async function runWorkerUntilStopped(): Promise<void> {
   const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
   const analysisService = createStockfishAnalysisService();
-  console.info('Persistent worker started; Lichess import, ply indexing, and Stockfish analysis executors are registered.');
+  const evidenceService = createEvidenceService({ detectors: evidenceDetectors });
+  console.info('Persistent worker started; Lichess import, ply indexing, Stockfish analysis, and deterministic evidence executors are registered.');
 
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
@@ -42,6 +49,7 @@ export async function runWorkerUntilStopped(): Promise<void> {
       importService,
       plyIndexService: ImportedGamePlyIndexService,
       analysisService,
+      evidenceService,
     });
     if (!ran) {
       await new Promise((resolve) => setTimeout(resolve, 1000));

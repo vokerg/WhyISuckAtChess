@@ -772,6 +772,13 @@ DetectedEvidenceEvent<TKind>
 
 The diagnosis layer consumes stable detector/evidence query interfaces, not detector persistence tables directly.
 
+Phase 3 concretizes this boundary with the durable substrate in
+[`docs/deterministic-evidence.md`](deterministic-evidence.md). Evidence generation runs only in
+the persistent worker, one game plus one detector/version per claimed run. A successful new
+detector version or source projection replaces the current pointer without deleting historical
+runs/events; reads must still verify that the run's indexed/analysis provenance is current before
+presenting it as authoritative evidence.
+
 ### 6.7 Cross-game evidence query boundary
 
 Aggregation services need bounded query methods that return only required dimensions/measurements, e.g. conceptual operations such as:
