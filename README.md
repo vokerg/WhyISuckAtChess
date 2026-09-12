@@ -33,7 +33,7 @@ The API reserves module seams for auth, Lichess, account imports, jobs, imported
 Requirements: Node.js 22.12+, npm 10+, and PostgreSQL for the API/worker persistence path.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run db:validate
 npm run db:generate
@@ -42,6 +42,8 @@ npm run typecheck
 npm test
 npm run lint
 ```
+
+The root `package-lock.json` is committed and covers the complete npm workspace. Use `npm ci` for a clean checkout so local development resolves the same dependency graph as CI. When intentionally changing dependency declarations, use `npm install` (or the appropriate `npm install <package>` command), review the resulting `package-lock.json` change, and commit the manifest and lockfile together.
 
 `AUTH_MODE` must be set explicitly. The checked-in `.env.example` uses `AUTH_MODE=dev-single-user` for local development; production-like deployments must configure Clerk explicitly and may not use the development single-user mode.
 
