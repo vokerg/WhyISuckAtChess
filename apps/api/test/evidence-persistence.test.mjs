@@ -8,14 +8,17 @@ import {
 import {
   createEvidenceService,
 } from '../dist/modules/evidence/evidence.service.js';
+import {
+  materialEvidenceDetector,
+} from '../dist/modules/evidence/material-evidence.detector.js';
 
 const prisma = prismaModule.default ?? prismaModule;
 
-async function createPosition(label) {
+async function createPosition(label, normalizedFen = null) {
   return prisma.position.create({
     data: {
       positionKey: Buffer.from(randomUUID().replaceAll('-', ''), 'hex'),
-      normalizedFen: 'evidence-' + label + '-' + randomUUID(),
+      normalizedFen: normalizedFen ?? 'evidence-' + label + '-' + randomUUID(),
     },
   });
 }
@@ -354,6 +357,180 @@ test('evidence persistence is idempotent, provenance-fenced, version-superseding
     assert.equal(settled.status, 'SUCCEEDED');
     assert.equal(settled.coverageStatus, 'UNAVAILABLE');
     assert.equal(settled.isCurrent, true);
+  } finally {
+    if (userId !== null) {
+      await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
+    }
+    if (positionIds.length > 0) {
+      await prisma.stockfishPositionAnalysis.deleteMany({
+        where: { positionId: { in: positionIds } },
+      }).catch(() => {});
+      await prisma.position.deleteMany({
+        where: { id: { in: positionIds } },
+      }).catch(() => {});
+    }
+    await prisma.$disconnect();
+  }
+});
+
+
+test('material evidence worker publishes board facts before analysis and refreshes after complete analysis', async () => {
+  const suffix = randomUUID();
+  const positionIds = [];
+  let userId = null;
+
+  try {
+    const user = await prisma.appUser.create({
+      data: { authProvider: 'TEST', authSubject: 'material-refresh-' + suffix },
+    });
+    userId = user.id;
+
+    const indexedAt = new Date('2026-09-12T10:30:00.000Z');
+    const game = await prisma.importedGame.create({
+      data: {
+        appUserId: user.id,
+        provider: 'LICHESS',
+        providerGameId: 'material-refresh-' + suffix,
+        connectedLichessUserId: 'fixture-user',
+        connectedLichessUsername: 'FixtureUser',
+        variant: 'standard',
+        speedCategory: 'bullet',
+        userColor: 'WHITE',
+        resultForUser: 'WIN',
+        plyIndexStatus: 'INDEXED',
+        plyIndexPolicyVersion: 1,
+        plyIndexedAt: indexedAt,
+        timingCoverageStatus: 'COMPLETE',
+      },
+    });
+
+    const before = await createPosition(
+      'material-before',
+      '4k3/8/8/3q4/2B5/8/8/4K3 w - -',
+    );
+    const after = await createPosition(
+      'material-after',
+      '4k3/8/8/3B4/8/8/8/4K3 b - -',
+    );
+    positionIds.push(before.id, after.id);
+
+    await prisma.importedGamePly.create({
+      data: {
+        importedGameId: game.id,
+        plyNumber: 1,
+        beforePositionId: before.id,
+        afterPositionId: after.id,
+        moveUci: 'c4d5',
+        moverColor: 'WHITE',
+        isUserMove: true,
+      },
+    });
+
+    const service = createEvidenceService({
+      detectors: [materialEvidenceDetector],
+      repository: prismaEvidenceRepository,
+      workerId: 'material-refresh-' + suffix,
+    });
+
+    assert.equal(
+      await service.runOnce(),
+      true,
+      'board-only material evidence must run before Stockfish coverage exists',
+    );
+
+    let current = await prismaEvidenceRepository.listCurrentEvidenceForGame(game.id);
+    assert.equal(current.length, 1);
+    assert.equal(current[0].sourceAnalysisRunId, null);
+    assert.equal(current[0].coverageStatus, 'INCOMPLETE');
+    assert.equal(
+      current[0].events.some((event) => event.evidenceType === 'MATERIAL_STATE_CHANGE'),
+      true,
+    );
+    const initialGap = current[0].events.find(
+      (event) => event.evidenceType === 'MATERIAL_EVIDENCE_COVERAGE_GAP',
+    );
+    assert.ok(initialGap);
+    assert.equal(initialGap.availability, 'UNAVAILABLE');
+    assert.equal(
+      initialGap.unavailableReason,
+      'complete-engine-analysis-unavailable',
+    );
+
+    const analysisRun = await prisma.gameAnalysisRun.create({
+      data: {
+        importedGameId: game.id,
+        analysisVersion: 'material-refresh-v1',
+        settingsHash: 'material-refresh-settings',
+        settingsJson: { depth: 16, multiPv: 3 },
+        sourcePlyIndexedAt: indexedAt,
+        engineName: 'FixtureFish',
+        engineVersion: '1',
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        positionsTotal: 2,
+        positionsDone: 2,
+        pliesTotal: 1,
+        pliesDone: 1,
+        attempts: 1,
+        startedAt: new Date('2026-09-12T10:30:01.000Z'),
+        completedAt: new Date('2026-09-12T10:30:02.000Z'),
+      },
+    });
+    await prisma.stockfishPositionAnalysis.createMany({
+      data: [
+        positionAnalysis(before.id, analysisRun, -600, 'c4d5'),
+        positionAnalysis(after.id, analysisRun, 300, 'e8e7'),
+      ],
+    });
+    await prisma.importedGamePly.update({
+      where: {
+        importedGameId_plyNumber: {
+          importedGameId: game.id,
+          plyNumber: 1,
+        },
+      },
+      data: {
+        engineAnalysisRunId: analysisRun.id,
+        scoreLossCp: 0,
+        classificationCode: 0,
+      },
+    });
+
+    assert.equal(
+      await service.runOnce(),
+      true,
+      'complete Stockfish coverage must create a new immutable material evidence projection',
+    );
+
+    current = await prismaEvidenceRepository.listCurrentEvidenceForGame(game.id);
+    assert.equal(current.length, 1);
+    assert.equal(current[0].sourceAnalysisRunId, analysisRun.id);
+    assert.equal(current[0].coverageStatus, 'COMPLETE');
+    assert.equal(
+      current[0].events.some(
+        (event) => event.evidenceType === 'MATERIAL_EVIDENCE_COVERAGE_GAP',
+      ),
+      false,
+    );
+    assert.equal(
+      current[0].events.some((event) => event.evidenceType === 'MATERIAL_STATE_CHANGE'),
+      true,
+    );
+
+    const historical = await prisma.evidenceRun.findMany({
+      where: {
+        importedGameId: game.id,
+        detectorKey: materialEvidenceDetector.key,
+        detectorVersion: materialEvidenceDetector.version,
+      },
+      orderBy: { id: 'asc' },
+    });
+    assert.equal(historical.length, 2);
+    assert.equal(historical[0].sourceAnalysisRunId, null);
+    assert.equal(historical[0].isCurrent, false);
+    assert.ok(historical[0].supersededAt);
+    assert.equal(historical[1].sourceAnalysisRunId, analysisRun.id);
+    assert.equal(historical[1].isCurrent, true);
   } finally {
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
