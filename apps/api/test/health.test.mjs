@@ -6,7 +6,10 @@ import { buildApp } from '../dist/app.js';
 const noDatabase = { $disconnect: async () => undefined };
 
 test('GET /health returns the verified bootstrap contract', async () => {
-  const app = await buildApp({ prisma: noDatabase });
+  const app = await buildApp({
+    prisma: noDatabase,
+    authConfig: { mode: 'dev-single-user' },
+  });
   const response = await app.inject({ method: 'GET', url: '/health' });
 
   assert.equal(response.statusCode, 200);
