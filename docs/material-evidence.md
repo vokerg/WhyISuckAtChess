@@ -3,7 +3,7 @@
 **Status:** Phase 3 deterministic evidence policy  
 **Scope:** issue #28  
 **Detector:** `material-state@material-v1`  
-**Depends on:** `docs/deterministic-evidence.md`, current ply indexing, and complete current Stockfish analysis
+**Depends on:** `docs/deterministic-evidence.md`, current ply indexing, and current Stockfish analysis when engine-dependent mechanisms are evaluated
 
 ## Purpose
 
@@ -77,9 +77,13 @@ Independent mechanisms on the same ply remain representable when they involve di
 
 ## Coverage semantics
 
-The detector declares `requiresCompleteAnalysis=true`; the evidence substrate therefore schedules it only against a complete current Stockfish snapshot.
+Material evidence is intentionally board-first. The detector declares `requiresCompleteAnalysis=false` and `refreshOnCompleteAnalysis=true`.
 
-It still validates the supplied snapshot defensively. Missing board positions, illegal source moves, mismatched analysis-run provenance, missing position analysis, or missing user score-loss evidence produce `INCOMPLETE` coverage plus a bounded `MATERIAL_EVIDENCE_COVERAGE_GAP` event. Such gaps are never interpreted as "no material problem."
+That means an indexed game can produce factual `MATERIAL_STATE_CHANGE` events before Stockfish is complete. When complete current analysis is absent, the same run also publishes `INCOMPLETE` coverage plus a `MATERIAL_EVIDENCE_COVERAGE_GAP` event whose unavailable reason is `complete-engine-analysis-unavailable`; engine-dependent `HANGING_MATERIAL` and `MISSED_MATERIAL_WIN` findings are not guessed.
+
+Once a complete provenance-current Stockfish run exists and every ply points at it, the evidence scheduler creates a new immutable material-evidence run bound to that analysis snapshot. Successful publication supersedes the earlier board-only current run, so consumers do not retain a stale "analysis unavailable" gap after engine evidence becomes available.
+
+The detector also validates supplied snapshots defensively. Missing board positions, illegal source moves, mismatched analysis-run provenance, missing position analysis, or missing user score-loss evidence produce explicit incomplete coverage rather than a negative finding.
 
 Detector output is capped below the substrate's per-run event limit. Hitting the detector cap produces `PARTIAL` coverage instead of silently truncating a supposedly complete run.
 
