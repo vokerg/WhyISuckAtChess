@@ -232,6 +232,66 @@ test('evidence persistence is idempotent, provenance-fenced, version-superseding
       'stale current evidence must disappear immediately when the indexed source moves',
     );
 
+    const replacementAnalysisRun = await prisma.gameAnalysisRun.create({
+      data: {
+        importedGameId: game.id,
+        analysisVersion: analysisRun.analysisVersion,
+        settingsHash: analysisRun.settingsHash,
+        settingsJson: analysisRun.settingsJson,
+        sourcePlyIndexedAt: movedAt,
+        engineName: analysisRun.engineName,
+        engineVersion: analysisRun.engineVersion,
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        positionsTotal: 2,
+        positionsDone: 2,
+        pliesTotal: 1,
+        pliesDone: 1,
+        attempts: 1,
+        startedAt: new Date('2026-09-12T08:20:01.000Z'),
+        completedAt: new Date('2026-09-12T08:20:02.000Z'),
+      },
+    });
+    await prisma.importedGamePly.update({
+      where: {
+        importedGameId_plyNumber: {
+          importedGameId: game.id,
+          plyNumber: 1,
+        },
+      },
+      data: { engineAnalysisRunId: replacementAnalysisRun.id },
+    });
+
+    assert.equal(
+      await v2.runOnce(),
+      true,
+      'the same detector version must become eligible for a new immutable source projection',
+    );
+    current = await prismaEvidenceRepository.listCurrentEvidenceForGame(game.id);
+    assert.equal(current.length, 1);
+    assert.equal(current[0].detectorVersion, 'v2');
+    assert.equal(
+      current[0].sourcePlyIndexedAt.getTime(),
+      movedAt.getTime(),
+    );
+    assert.equal(current[0].sourceAnalysisRunId, replacementAnalysisRun.id);
+
+    const afterSourceReplacement = await prisma.evidenceRun.findMany({
+      where: {
+        importedGameId: game.id,
+        detectorKey: 'fixture.material',
+      },
+      orderBy: { id: 'asc' },
+      include: { events: true },
+    });
+    assert.equal(afterSourceReplacement.length, 3);
+    assert.equal(afterSourceReplacement[1].detectorVersion, 'v2');
+    assert.equal(afterSourceReplacement[1].isCurrent, false);
+    assert.equal(afterSourceReplacement[1].events.length, 1);
+    assert.equal(afterSourceReplacement[2].detectorVersion, 'v2');
+    assert.equal(afterSourceReplacement[2].isCurrent, true);
+    assert.equal(afterSourceReplacement[2].events.length, 1);
+
     const noAnalysisGame = await prisma.importedGame.create({
       data: {
         appUserId: user.id,
