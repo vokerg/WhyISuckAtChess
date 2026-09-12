@@ -10,7 +10,6 @@ import type {
   EvidenceRunClaim,
 } from './evidence.types';
 
-const ACTIVE_STATUSES = ['QUEUED', 'RUNNING', 'RETRY_WAIT'] as const;
 
 interface EligibleEvidenceSource {
   importedGameId: number;
@@ -663,6 +662,21 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   async completeRun(run, result) {
     try {
       return await prisma.$transaction(async (tx) => {
+        // Serialize evidence publication for a game and freeze its source ply rows
+        // while provenance is checked and the current pointer is switched.
+        await tx.$queryRaw(Prisma.sql`
+          SELECT "id"
+          FROM "ImportedGame"
+          WHERE "id" = ${run.importedGameId}
+          FOR UPDATE
+        `);
+        await tx.$queryRaw(Prisma.sql`
+          SELECT "plyNumber"
+          FROM "ImportedGamePly"
+          WHERE "importedGameId" = ${run.importedGameId}
+          ORDER BY "plyNumber"
+          FOR UPDATE
+        `);
         if (!await activeClaim(tx, run)) return false;
 
         await tx.evidenceEvent.deleteMany({ where: { runId: run.id } });
