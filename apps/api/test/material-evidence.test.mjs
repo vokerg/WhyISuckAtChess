@@ -196,6 +196,24 @@ test('does not call an engine-approved sacrifice simple hanging material', () =>
   );
 });
 
+
+test('returns unavailable coverage when complete analysis provenance is absent', () => {
+  const source = snapshot({
+    beforeFen: '3rk3/8/8/8/8/8/8/3QK3 w - -',
+    afterFen: '3rk3/8/8/8/3Q4/8/8/4K3 b - -',
+    moveUci: 'd1d4',
+    beforeBestMove: 'e1e2',
+    afterBestMove: 'd8d4',
+    scoreLossCp: 400,
+  });
+  source.provenance.analysis = null;
+
+  const result = detectMaterialEvidence(source);
+  assert.equal(result.coverage.status, 'UNAVAILABLE');
+  assert.equal(result.coverage.reason, 'complete-engine-analysis-unavailable');
+  assert.deepEqual(result.findings, []);
+});
+
 test('turns missing required score-loss evidence into incomplete coverage, not a negative', () => {
   const result = detectMaterialEvidence(snapshot({
     beforeFen: '3rk3/8/8/8/8/8/8/3QK3 w - -',
