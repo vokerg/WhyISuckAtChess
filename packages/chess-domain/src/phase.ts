@@ -160,7 +160,9 @@ function squareColor(square: Square): 0 | 1 {
 function endgameFamilyFromFacts(facts: BoardFacts): EndgameFamily {
   const minors = facts.bishopCount + facts.knightCount;
 
-  if (facts.majorMinorPieceCount === 0) return 'PAWN';
+  if (facts.majorMinorPieceCount === 0) {
+    return facts.pawnCount > 0 ? 'PAWN' : 'UNKNOWN';
+  }
 
   if (facts.queenCount === 0 && facts.rookCount === 0) {
     const bishopVsKnight = (
