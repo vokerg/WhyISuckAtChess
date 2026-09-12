@@ -81,7 +81,7 @@ To stay safely below the generic per-run finding limit even for very long games,
 
 A consumer can therefore map every boundary in the range to the same phase/family without requiring one persisted event per ply.
 
-If a required position is missing or invalid, the detector emits an `UNKNOWN` range plus `PHASE_EVIDENCE_COVERAGE_GAP` and marks the run `INCOMPLETE`. Missing board evidence is never treated as 'no phase finding'.
+If a required position is missing/invalid, or a valid board cannot be mapped meaningfully to a supported endgame family (for example bare kings), the affected range is marked `INCOMPLETE`, the detector emits `PHASE_EVIDENCE_COVERAGE_GAP`, and the run is `INCOMPLETE`. Missing or unsupported phase context is never treated as a negative finding.
 
 ## Versioning
 
