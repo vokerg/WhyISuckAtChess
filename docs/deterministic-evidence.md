@@ -36,7 +36,7 @@ Detector-specific payload types may become stricter as #28-#33 land. They remain
 
 Its `workKey` is deterministic over those immutable inputs. Re-running the same detector/version against the same source projection is therefore idempotent.
 
-A detector with `refreshOnCompleteAnalysis=true` may first publish against the indexed board projection with no analysis id, then become eligible once more when a complete current analysis snapshot appears. The analysis-backed run has a distinct work key and supersedes the earlier board-only current run only after successful publication.
+A detector with `refreshOnCompleteAnalysis=true` may first publish against the indexed board projection with no analysis id, then become eligible once more when a complete current analysis snapshot appears. The analysis-backed run has a distinct work key and supersedes the earlier board-only current run only after successful publication. If publication is staggered, that successful analysis-backed publication also fences any older board-only claim still in flight, so the older incomplete projection cannot become current again.
 
 `EvidenceEvent` stores:
 
