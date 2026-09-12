@@ -53,11 +53,7 @@ export function detectMaterialEvidence(
   if (!userColor) {
     return unavailableResult('user-color-unavailable');
   }
-  if (!snapshot.provenance.analysis) {
-    return unavailableResult('complete-engine-analysis-unavailable');
-  }
-
-  const analysisRunId = snapshot.provenance.analysis.runId;
+  const analysisRunId = snapshot.provenance.analysis?.runId ?? null;
   const positions = new Map(snapshot.positions.map((position) => [position.id, position]));
   const findings: EvidenceFindingDraft[] = [];
   const state = { truncated: false };
@@ -126,7 +122,8 @@ export function detectMaterialEvidence(
     userPlies += 1;
 
     if (
-      ply.engineAnalysisRunId !== analysisRunId
+      analysisRunId === null
+      || ply.engineAnalysisRunId !== analysisRunId
       || ply.scoreLossCp === null
       || !Number.isFinite(ply.scoreLossCp)
       || before.analysis === null
@@ -239,13 +236,25 @@ export function detectMaterialEvidence(
     ...analysisGapPlies,
   ])].sort((left, right) => left - right);
 
-  if (incompletePlies.length > 0) {
-    const firstPly = incompletePlies[0];
-    const sourcePly = snapshot.plies.find((ply) => ply.plyNumber === firstPly);
+  const completeAnalysisUnavailable = analysisRunId === null;
+  const hasCoverageGap = completeAnalysisUnavailable || incompletePlies.length > 0;
+  const coverageGapReason = boardGapPlies.length > 0
+    ? 'required-board-or-engine-evidence-missing'
+    : completeAnalysisUnavailable
+      ? 'complete-engine-analysis-unavailable'
+      : 'required-engine-evidence-missing';
+
+  if (hasCoverageGap) {
+    const firstPly = incompletePlies[0] ?? snapshot.plies[0]?.plyNumber;
+    const sourcePly = firstPly === undefined
+      ? undefined
+      : snapshot.plies.find((ply) => ply.plyNumber === firstPly);
     findings.push({
       key: 'material-coverage-gap',
       type: 'MATERIAL_EVIDENCE_COVERAGE_GAP',
-      availability: 'INCOMPLETE',
+      availability: completeAnalysisUnavailable && boardGapPlies.length === 0
+        ? 'UNAVAILABLE'
+        : 'INCOMPLETE',
       source: sourcePly
         ? {
             startPly: sourcePly.plyNumber,
@@ -259,13 +268,14 @@ export function detectMaterialEvidence(
         analysisGapCount: analysisGapPlies.length,
       },
       details: {
+        completeAnalysisAvailable: !completeAnalysisUnavailable,
         incompletePlies: incompletePlies.slice(0, 32),
       },
-      unavailableReason: 'required-board-or-engine-evidence-missing',
+      unavailableReason: coverageGapReason,
     });
   }
 
-  const coverageStatus = incompletePlies.length > 0
+  const coverageStatus = hasCoverageGap
     ? 'INCOMPLETE'
     : state.truncated
       ? 'PARTIAL'
@@ -274,8 +284,8 @@ export function detectMaterialEvidence(
   return {
     coverage: {
       status: coverageStatus,
-      reason: incompletePlies.length > 0
-        ? 'required-board-or-engine-evidence-missing'
+      reason: hasCoverageGap
+        ? coverageGapReason
         : state.truncated
           ? 'material-finding-limit-reached'
           : null,
@@ -296,6 +306,7 @@ export function detectMaterialEvidence(
 export const materialEvidenceDetector: EvidenceDetector = {
   key: MATERIAL_EVIDENCE_DETECTOR_KEY,
   version: MATERIAL_EVIDENCE_DETECTOR_VERSION,
-  requiresCompleteAnalysis: true,
+  requiresCompleteAnalysis: false,
+  refreshOnCompleteAnalysis: true,
   detect: detectMaterialEvidence,
 };
