@@ -198,6 +198,10 @@ export function detectMaterialEvidence(
       && bestReply.defenderSquares.length === 0
       && bestReply.capturedValue > 0
       && missedCaptureFrom !== bestReply.to
+      && !(
+        missedCaptureFrom === playedMove.from
+        && bestReply.to === playedMove.to
+      )
     ) {
       hangingFindings += 1;
       addFinding(findings, {
