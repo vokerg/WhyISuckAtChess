@@ -16,6 +16,6 @@ Adapted from CRT at `13a7e2791944ebd52113afe9f76413b10634ddff`, especially `auth
 
 ## Why-specific boundary
 
-`auth` knows nothing about Lichess provider semantics. It only resolves the authenticated application user. Production explicitly rejects `dev-single-user`; local/test execution defaults to it when `AUTH_MODE` is unset.
+`auth` knows nothing about Lichess provider semantics. It only resolves the authenticated application user. `AUTH_MODE` is always explicit: local development uses `AUTH_MODE=dev-single-user`, production-like deployments use `AUTH_MODE=clerk`, and a missing or unsupported mode fails startup. Production also rejects `dev-single-user`.
 
 The Lichess module consumes only `request.auth.userId`. No browser-supplied application-user ID is accepted by connection routes.
