@@ -97,10 +97,11 @@ function snapshot({
   };
 }
 
-test('registers the material detector as complete-analysis evidence', () => {
+test('registers the material detector as board-first analysis-refreshing evidence', () => {
   assert.equal(materialEvidenceDetector.key, MATERIAL_EVIDENCE_DETECTOR_KEY);
   assert.equal(materialEvidenceDetector.version, MATERIAL_EVIDENCE_DETECTOR_VERSION);
-  assert.equal(materialEvidenceDetector.requiresCompleteAnalysis, true);
+  assert.equal(materialEvidenceDetector.requiresCompleteAnalysis, false);
+  assert.equal(materialEvidenceDetector.refreshOnCompleteAnalysis, true);
   assert.equal(evidenceDetectors.includes(materialEvidenceDetector), true);
 });
 
@@ -197,21 +198,39 @@ test('does not call an engine-approved sacrifice simple hanging material', () =>
 });
 
 
-test('returns unavailable coverage when complete analysis provenance is absent', () => {
+test('preserves board material facts and exposes an explicit gap when analysis is absent', () => {
   const source = snapshot({
-    beforeFen: '3rk3/8/8/8/8/8/8/3QK3 w - -',
-    afterFen: '3rk3/8/8/8/3Q4/8/8/4K3 b - -',
-    moveUci: 'd1d4',
-    beforeBestMove: 'e1e2',
-    afterBestMove: 'd8d4',
-    scoreLossCp: 400,
+    beforeFen: '4k3/8/8/3q4/2B5/8/8/4K3 w - -',
+    afterFen: '4k3/8/8/3B4/8/8/8/4K3 b - -',
+    moveUci: 'c4d5',
+    beforeBestMove: 'c4d5',
+    afterBestMove: 'e8e7',
+    scoreLossCp: 0,
   });
   source.provenance.analysis = null;
+  for (const position of source.positions) position.analysis = null;
+  source.plies[0].engineAnalysisRunId = null;
+  source.plies[0].scoreLossCp = null;
+  source.plies[0].classificationCode = null;
 
   const result = detectMaterialEvidence(source);
-  assert.equal(result.coverage.status, 'UNAVAILABLE');
+  assert.equal(result.coverage.status, 'INCOMPLETE');
   assert.equal(result.coverage.reason, 'complete-engine-analysis-unavailable');
-  assert.deepEqual(result.findings, []);
+
+  const change = result.findings.find(
+    (finding) => finding.type === 'MATERIAL_STATE_CHANGE',
+  );
+  assert.ok(change);
+  assert.equal(change.measurements.materialDeltaForUser, 9);
+  assert.equal(change.measurements.scoreLossCp, null);
+
+  const gap = result.findings.find(
+    (finding) => finding.type === 'MATERIAL_EVIDENCE_COVERAGE_GAP',
+  );
+  assert.ok(gap);
+  assert.equal(gap.availability, 'UNAVAILABLE');
+  assert.equal(gap.measurements.analysisGapCount, 1);
+  assert.equal(gap.unavailableReason, 'complete-engine-analysis-unavailable');
 });
 
 test('turns missing required score-loss evidence into incomplete coverage, not a negative', () => {
