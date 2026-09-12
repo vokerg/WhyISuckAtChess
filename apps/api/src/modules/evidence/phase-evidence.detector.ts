@@ -80,9 +80,9 @@ function rangeFinding(range: PositionRange, index: number): EvidenceFindingDraft
     ...(
       range.start.phase === 'UNKNOWN'
       || range.start.endgameFamily === 'UNKNOWN'
-    )
-      ? { unavailableReason: 'phase-or-endgame-family-unavailable' }
-      : {},
+        ? { unavailableReason: 'phase-or-endgame-family-unavailable' }
+        : {}
+    ),
   };
 }
 
