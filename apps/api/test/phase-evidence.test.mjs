@@ -141,3 +141,24 @@ test('reports invalid board state as explicit incomplete coverage', () => {
   assert.ok(unknown);
   assert.equal(unknown.availability, 'INCOMPLETE');
 });
+
+test('marks a valid but unsupported endgame family as incomplete', () => {
+  const result = detectPhaseEvidence(snapshot([
+    '8/8/8/3k4/8/4K3/8/8 w - -',
+    '8/8/8/3k4/8/4K3/8/8 b - -',
+  ]));
+
+  assert.equal(result.coverage.status, 'INCOMPLETE');
+  assert.equal(result.coverage.reason, 'phase-or-endgame-family-unavailable');
+  const range = result.findings.find(
+    (finding) => finding.type === 'POSITION_PHASE_RANGE',
+  );
+  assert.ok(range);
+  assert.equal(range.details.phase, 'ENDGAME');
+  assert.equal(range.details.endgameFamily, 'UNKNOWN');
+  assert.equal(range.availability, 'INCOMPLETE');
+  assert.equal(
+    range.unavailableReason,
+    'phase-or-endgame-family-unavailable',
+  );
+});
