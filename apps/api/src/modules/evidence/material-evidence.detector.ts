@@ -5,6 +5,7 @@ import {
 } from '@why-i-suck-at-chess/chess-domain';
 import type {
   EvidenceDetector,
+  EvidenceDetectorResult,
   EvidenceFindingDraft,
   EvidenceInputSnapshot,
 } from './evidence.types';
@@ -47,7 +48,7 @@ function addFinding(
 
 export function detectMaterialEvidence(
   snapshot: EvidenceInputSnapshot,
-): ReturnType<EvidenceDetector['detect']> extends Promise<infer T> ? T : never {
+): EvidenceDetectorResult {
   const userColor = validatedUserColor(snapshot);
   if (!userColor) {
     return unavailableResult('user-color-unavailable');
