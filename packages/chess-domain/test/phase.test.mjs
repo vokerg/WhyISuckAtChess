@@ -63,6 +63,20 @@ test('classifies deterministic endgame material families', () => {
   );
 });
 
+test('classifies material simplification across the endgame threshold', () => {
+  const before = classifyPositionPhase(
+    'r1b1k1nr/8/8/8/8/8/8/R1BQK2R w - -',
+  );
+  const after = classifyPositionPhase(
+    'r3k2r/8/8/8/8/8/8/R3K2R w - -',
+  );
+
+  assert.equal(before.phase, 'MIDDLEGAME');
+  assert.equal(after.phase, 'ENDGAME');
+  assert.equal(after.endgameFamily, 'ROOK');
+  assert.equal(stabilizeGamePhase(before.phase, after.phase), 'ENDGAME');
+});
+
 test('keeps game phase monotonic across structural reversals such as promotion', () => {
   assert.equal(stabilizeGamePhase('OPENING', 'MIDDLEGAME'), 'MIDDLEGAME');
   assert.equal(stabilizeGamePhase('MIDDLEGAME', 'OPENING'), 'MIDDLEGAME');
