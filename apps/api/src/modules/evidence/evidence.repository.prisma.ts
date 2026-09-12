@@ -241,6 +241,7 @@ async function sourceIsCurrent(
   tx: Prisma.TransactionClient,
   run: {
     importedGameId: number;
+    detectorKey: string;
     sourcePlyIndexedAt: Date;
     sourceAnalysisRunId: number | null;
     sourceAnalysisSnapshotId: string | null;
@@ -264,7 +265,23 @@ async function sourceIsCurrent(
   }
 
   if (run.sourceAnalysisSnapshotId === null) {
-    return run.sourceAnalysisRunId === null;
+    if (run.sourceAnalysisRunId !== null) return false;
+
+    // Board-only runs are useful until an analysis-backed projection is successfully
+    // published. Once that happens, a late board-only worker must never make its
+    // older incomplete projection current again.
+    const analysisBackedCurrent = await tx.evidenceRun.findFirst({
+      where: {
+        importedGameId: run.importedGameId,
+        detectorKey: run.detectorKey,
+        sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        sourceAnalysisRunId: { not: null },
+        status: 'SUCCEEDED',
+        isCurrent: true,
+      },
+      select: { id: true },
+    });
+    return analysisBackedCurrent === null;
   }
   if (run.sourceAnalysisRunId === null) return false;
 
@@ -317,6 +334,7 @@ async function activeClaim(
     },
     select: {
       importedGameId: true,
+      detectorKey: true,
       sourcePlyIndexedAt: true,
       sourceAnalysisRunId: true,
       sourceAnalysisSnapshotId: true,
