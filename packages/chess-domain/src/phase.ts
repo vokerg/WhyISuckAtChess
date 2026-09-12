@@ -1,4 +1,4 @@
-import { Chess, type PieceSymbol, type Square } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 
 export const POSITION_PHASE_CLASSIFIER_VERSION = 'phase-v1';
 
