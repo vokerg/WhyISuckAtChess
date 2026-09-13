@@ -179,6 +179,24 @@ test('emits a newly allowed pin only when the engine best reply exploits it', ()
   );
 });
 
+test('does not relabel an existing fork when the user only adds an irrelevant target', () => {
+  const result = detectTacticalMotifEvidence(snapshot({
+    beforeFen: 'k7/3Q1R2/8/4n3/8/6P1/8/K7 w - -',
+    afterFen: 'k7/3Q1R2/8/4n3/6P1/8/8/K7 b - -',
+    moveUci: 'g3g4',
+    beforeBestMove: 'd7d8',
+    afterBestMove: 'e5d7',
+    scoreLossCp: 220,
+  }));
+
+  const falsePositive = result.findings.find((finding) => (
+    finding.type === 'ALLOWED_TACTICAL_MOTIF'
+    && finding.details?.motif === 'FORK'
+    && finding.details?.motifState === 'NEWLY_ALLOWED'
+  ));
+  assert.equal(falsePositive, undefined);
+});
+
 test('emits a missed skewer created by the engine best move', () => {
   const result = detectTacticalMotifEvidence(snapshot({
     beforeFen: '8/8/8/8/3k1q2/8/R7/7K w - -',
