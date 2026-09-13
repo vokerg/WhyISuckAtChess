@@ -148,6 +148,7 @@ export function detectPhaseEvidence(
   const classified: ClassifiedPosition[] = [];
   const unknownBoundaryPlies: number[] = [];
   let stablePhase: PositionPhase | null = null;
+  let phaseHistoryGap = false;
 
   for (const reference of references) {
     const position = positions.get(reference.positionId);
@@ -160,6 +161,7 @@ export function detectPhaseEvidence(
         endgameFamily: 'UNKNOWN',
         measurements: null,
       });
+      if (stablePhase !== 'ENDGAME') phaseHistoryGap = true;
       continue;
     }
 
@@ -173,11 +175,25 @@ export function detectPhaseEvidence(
         endgameFamily: 'UNKNOWN',
         measurements: structural.measurements,
       });
+      if (stablePhase !== 'ENDGAME') phaseHistoryGap = true;
+      continue;
+    }
+
+    if (phaseHistoryGap && structural.phase !== 'ENDGAME') {
+      unknownBoundaryPlies.push(reference.boundaryPly);
+      classified.push({
+        ...reference,
+        phase: 'UNKNOWN',
+        structuralPhase: structural.phase,
+        endgameFamily: 'UNKNOWN',
+        measurements: structural.measurements,
+      });
       continue;
     }
 
     const phase = stabilizeGamePhase(stablePhase, structural.phase);
     stablePhase = phase;
+    if (phase === 'ENDGAME') phaseHistoryGap = false;
     const endgameFamily = phase === 'ENDGAME'
       ? classifyEndgameFamily(position.normalizedFen)
       : 'NONE';
