@@ -46,6 +46,32 @@ function moveDirectlyUsesMotif(uci: string, motif: TacticalMotif): boolean {
     && motif.targets.some((target) => target.square === move.to);
 }
 
+function moveDirectlyUsesNewlyAllowedMotif(
+  uci: string,
+  motif: TacticalMotif,
+  beforeMotifs: TacticalMotif[],
+): boolean {
+  if (motif.type !== 'FORK') return moveDirectlyUsesMotif(uci, motif);
+
+  const previousFork = beforeMotifs.find((candidate) => (
+    candidate.type === 'FORK'
+    && candidate.attackerSquare === motif.attackerSquare
+    && candidate.attackerPiece === motif.attackerPiece
+  ));
+  if (!previousFork) return moveDirectlyUsesMotif(uci, motif);
+
+  const previousTargetSquares = new Set(
+    previousFork.targets.map((target) => target.square),
+  );
+  const move = parsedMove(uci);
+  return move !== null
+    && move.from === motif.attackerSquare
+    && motif.targets.some((target) => (
+      target.square === move.to
+      && !previousTargetSquares.has(target.square)
+    ));
+}
+
 function motifDetails(motif: TacticalMotif) {
   return {
     motif: motif.type,
@@ -301,7 +327,11 @@ export function detectTacticalMotifEvidence(
       );
 
       for (const motif of newlyAllowedMotifs) {
-        if (!moveDirectlyUsesMotif(bestReply, motif)) continue;
+        if (!moveDirectlyUsesNewlyAllowedMotif(
+          bestReply,
+          motif,
+          opponentBefore,
+        )) continue;
         if (addMotifFinding(findings, findingIdentities, state, {
           type: 'ALLOWED_TACTICAL_MOTIF',
           motifState: 'NEWLY_ALLOWED',
