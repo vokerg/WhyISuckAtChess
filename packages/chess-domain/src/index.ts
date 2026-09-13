@@ -1,3 +1,4 @@
+export * from './defensive-tactics';
 export * from './engine-evaluation';
 export * from './game-reconstruction';
 export * from './material';
