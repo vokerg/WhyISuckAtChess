@@ -164,7 +164,7 @@ test('emits a newly allowed pin only when the engine best reply exploits it', ()
     beforeFen: '4k3/8/8/8/1b6/2P5/3N4/4K3 w - -',
     afterFen: '4k3/8/8/8/1bP5/8/3N4/4K3 b - -',
     moveUci: 'c3c4',
-    beforeBestMove: 'c3c4',
+    beforeBestMove: 'd2f3',
     afterBestMove: 'b4d2',
     scoreLossCp: 220,
   }));
