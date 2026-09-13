@@ -1,5 +1,6 @@
 import { materialEvidenceDetector } from './material-evidence.detector';
 import { phaseEvidenceDetector } from './phase-evidence.detector';
+import { tacticalMotifEvidenceDetector } from './tactical-motif-evidence.detector';
 import type { EvidenceDetector } from './evidence.types';
 
 /**
@@ -9,4 +10,5 @@ import type { EvidenceDetector } from './evidence.types';
 export const evidenceDetectors: EvidenceDetector[] = [
   materialEvidenceDetector,
   phaseEvidenceDetector,
+  tacticalMotifEvidenceDetector,
 ];
