@@ -85,6 +85,7 @@ The fixtures intentionally cover geometry lookalikes:
 - a piece lined up with a non-king back target is not an absolute pin;
 - a lower-value front target shielding a higher-value rear target is not a skewer;
 - moving a blocker along the same ray is not a discovered attack;
-- geometry with insignificant engine score loss is not promoted into severe tactical evidence.
+- geometry with insignificant engine score loss is not promoted into severe tactical evidence;
+- an existing fork that merely gains another target is not treated as newly allowed when the engine reply still exploits an old target.
 
 One event may legitimately have different motif types, but equivalent representations of the same type/attacker/targets are deduplicated.
