@@ -162,3 +162,32 @@ test('marks a valid but unsupported endgame family as incomplete', () => {
     'phase-or-endgame-family-unavailable',
   );
 });
+
+
+test('keeps stabilized phase unknown after a board gap until certainty is restored', () => {
+  const result = detectPhaseEvidence(snapshot([
+    'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -',
+    'not-a-fen',
+    'r1b1k1Qr/8/8/8/8/8/8/R1B1K2R b - -',
+    '8/8/8/3k4/8/4K3/4P3/8 w - -',
+  ]));
+
+  assert.equal(result.coverage.status, 'INCOMPLETE');
+  const ranges = result.findings.filter(
+    (finding) => finding.type === 'POSITION_PHASE_RANGE',
+  );
+  assert.deepEqual(
+    ranges.map((finding) => [
+      finding.details.phase,
+      finding.details.structuralStartPhase,
+      finding.details.structuralEndPhase,
+    ]),
+    [
+      ['OPENING', 'OPENING', 'OPENING'],
+      ['UNKNOWN', 'UNKNOWN', 'MIDDLEGAME'],
+      ['ENDGAME', 'ENDGAME', 'ENDGAME'],
+    ],
+  );
+  assert.equal(ranges[1].availability, 'INCOMPLETE');
+  assert.equal(ranges[2].details.endgameFamily, 'PAWN');
+});
