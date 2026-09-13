@@ -45,7 +45,7 @@ Per-game evidence is monotonic: `OPENING -> MIDDLEGAME -> ENDGAME`. Once a game 
 
 This matters after promotions. A promotion can increase structural material enough that an isolated FEN would look middlegame-like, but the chronological game remains an endgame. The monotonic rule uses only the ordered reconstructed board sequence; it does not consult engine or provider metadata.
 
-Invalid/unparseable positions classify as `UNKNOWN` and produce incomplete coverage rather than being forced into a phase.
+Invalid/unparseable positions classify as `UNKNOWN` and produce incomplete coverage rather than being forced into a phase. If such a gap occurs before endgame has been established, later stabilized phase remains `UNKNOWN` until an observed structural endgame restores certainty; the detector must not assume that a hidden position did not cross a monotonic phase boundary and later regress structurally (for example after promotion). Once endgame was already established, a later gap cannot make the monotonic phase uncertain.
 
 ## Endgame families
 
