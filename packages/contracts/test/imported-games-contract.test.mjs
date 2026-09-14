@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   importedGameDetailResponseSchema,
+  importedGameEvidenceEventSchema,
   importedGameListQuerySchema,
   importedGameListResponseSchema,
   importedGameReplayResponseSchema,
@@ -61,13 +62,13 @@ const ply = {
   isUserMove: true,
   beforePosition: { id: 11, normalizedFen: 'startpos' },
   afterPosition: { id: 12, normalizedFen: 'fen-after' },
-    sourceClock: {
-      status: 'UNAVAILABLE',
-      sourceOrdinal: null,
-      afterCentiseconds: null,
-      semantics: null,
-      alignmentVersion: null,
-    },
+  sourceClock: {
+    status: 'UNAVAILABLE',
+    sourceOrdinal: null,
+    afterCentiseconds: null,
+    semantics: null,
+    alignmentVersion: null,
+  },
   timing: {
     status: 'UNAVAILABLE',
     beforeMoveCentiseconds: null,
@@ -97,6 +98,12 @@ const ply = {
     },
   },
   annotations: [],
+  evidenceEventKeys: [],
+};
+
+const emptyEvidence = {
+  compatibilityPolicy: 'KNOWN_TYPES_WITH_OPAQUE_FALLBACK',
+  runs: [],
 };
 
 test('imported-game contracts preserve exact controls and explicit unavailable evidence', () => {
@@ -116,6 +123,7 @@ test('imported-game contracts preserve exact controls and explicit unavailable e
       unit: 'CENTISECONDS',
       anomalies: ['CLOCKS_ABSENT'],
     },
+    evidence: emptyEvidence,
     plies: [ply],
   };
 
@@ -125,6 +133,57 @@ test('imported-game contracts preserve exact controls and explicit unavailable e
     items: [baseGame],
     pageInfo: { nextCursor: null, hasMore: false },
   }).items[0].timeControl.incrementSeconds, 0);
+});
+
+test('deterministic evidence contracts distinguish known payloads from opaque future types', () => {
+  const known = {
+    evidenceKey: 'evidence-known',
+    findingKey: 'hang-p1',
+    availability: 'PRESENT',
+    source: { startPly: 1, endPly: 1, positionId: 12 },
+    presentation: {
+      family: 'MATERIAL',
+      kind: 'FINDING',
+      label: 'Hanging material',
+    },
+    payload: {
+      kind: 'KNOWN',
+      evidenceType: 'HANGING_MATERIAL',
+      measurements: { scoreLossCp: 180 },
+      details: { moveUci: 'e2e4' },
+    },
+    unavailableReason: null,
+  };
+  assert.deepEqual(importedGameEvidenceEventSchema.parse(known), known);
+
+  const unknown = {
+    evidenceKey: 'evidence-future',
+    findingKey: 'future-p1',
+    availability: 'PRESENT',
+    source: { startPly: 1, endPly: null, positionId: 12 },
+    presentation: {
+      family: 'UNKNOWN',
+      kind: 'UNKNOWN',
+      label: 'Unsupported deterministic evidence',
+    },
+    payload: {
+      kind: 'UNKNOWN',
+      originalEvidenceType: 'FUTURE_DETECTOR_FACT',
+    },
+    unavailableReason: null,
+  };
+  assert.deepEqual(importedGameEvidenceEventSchema.parse(unknown), unknown);
+  assert.equal(
+    importedGameEvidenceEventSchema.safeParse({
+      ...unknown,
+      payload: {
+        ...unknown.payload,
+        measurements: { detectorInternal: true },
+      },
+    }).success,
+    false,
+    'unknown types remain opaque instead of leaking untyped detector payloads',
+  );
 });
 
 test('imported-game list query defaults and bounds pagination', () => {
