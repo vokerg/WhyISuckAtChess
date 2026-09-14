@@ -1,3 +1,4 @@
+import { conversionEvidenceDetector } from './conversion-evidence.detector';
 import { defensiveThreatEvidenceDetector } from './defensive-threat-evidence.detector';
 import { materialEvidenceDetector } from './material-evidence.detector';
 import { phaseEvidenceDetector } from './phase-evidence.detector';
@@ -13,4 +14,5 @@ export const evidenceDetectors: EvidenceDetector[] = [
   phaseEvidenceDetector,
   tacticalMotifEvidenceDetector,
   defensiveThreatEvidenceDetector,
+  conversionEvidenceDetector,
 ];
