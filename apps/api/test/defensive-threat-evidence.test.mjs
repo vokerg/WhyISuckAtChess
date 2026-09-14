@@ -293,6 +293,28 @@ test('detects a newly created overload only when the engine reply exploits an ov
   assert.equal(overload.details.exploitedTarget.square, 'f3');
 });
 
+test('does not reclassify an existing overload when the opponent move only changes its target set', () => {
+  const result = detectDefensiveThreatEvidence(sequenceSnapshot({
+    creatingBeforeFen: 'q3k3/8/8/1b6/3n4/1P3R2/P2N4/5RK1 b - -',
+    creatingMove: 'd4b3',
+    beforeResponseFen: 'q3k3/8/8/1b6/8/1n3R2/P2N4/5RK1 w - -',
+    defensiveMove: 'f3f2',
+    playedResponse: 'a2a3',
+    afterResponseFen: 'q3k3/8/8/1b6/8/Pn3R2/3N4/5RK1 b - -',
+    exploitingReply: 'a8f3',
+    scoreLossCp: 300,
+  }));
+
+  assert.equal(
+    result.findings.some((finding) => finding.type === 'OVERLOADED_DEFENDER_THREAT'),
+    false,
+  );
+  assert.equal(
+    result.findings.some((finding) => finding.type === 'THREAT_BLINDNESS'),
+    false,
+  );
+});
+
 test('emits missed forced mate and the more specific back-rank subtype from mate-score transition', () => {
   const snapshot = {
     game: baseGame(),
