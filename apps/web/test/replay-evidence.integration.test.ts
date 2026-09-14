@@ -1,3 +1,4 @@
+import '@angular/compiler';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HttpClient } from '@angular/common/http';
