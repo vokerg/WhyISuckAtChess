@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { HttpClient } from '@angular/common/http';
 import {
   Injector,
   RendererFactory2,
@@ -304,11 +305,12 @@ async function loadedStore(): Promise<GameReplayStore> {
   const injector = Injector.create({
     providers: [
       GameReplayStore,
+      ImportedGamesApiService,
       {
-        provide: ImportedGamesApiService,
+        provide: HttpClient,
         useValue: {
-          getReplay: (gameId: number) => {
-            assert.equal(gameId, 42);
+          get: (url: string) => {
+            assert.equal(url, '/api/imported-games/42/replay');
             return of(replay);
           },
         },
@@ -345,9 +347,6 @@ function renderEvidence(store: GameReplayStore): MemoryNode {
   componentRef.setInput('missingEventKeys', store.currentEvidenceMissingKeys());
   componentRef.setInput('annotations', store.currentPly()?.annotations ?? []);
   componentRef.changeDetectorRef.detectChanges();
-
-  componentRef.destroy();
-  environmentInjector.destroy();
   return root;
 }
 
