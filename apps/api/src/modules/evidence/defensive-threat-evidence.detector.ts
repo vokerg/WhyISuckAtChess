@@ -59,11 +59,10 @@ function moveUsesMotif(uci: string, motif: TacticalMotif): boolean {
     && motif.targets.some((target) => target.square === move.to);
 }
 
-function overloadIdentity(overload: OverloadedDefenderFact): string {
+function overloadDefenderIdentity(overload: OverloadedDefenderFact): string {
   return [
     overload.defenderSquare,
     overload.defenderPiece,
-    overload.targets.map((target) => target.square).sort().join(','),
   ].join('|');
 }
 
@@ -73,9 +72,13 @@ function newlyCreatedOverloads(
   userColor: UserColor,
 ): OverloadedDefenderFact[] {
   const before = detectOverloadedDefenders(beforeFen, userColor);
-  const beforeIdentities = new Set(before.map(overloadIdentity));
+  const previouslyOverloadedDefenders = new Set(
+    before.map(overloadDefenderIdentity),
+  );
   return detectOverloadedDefenders(afterFen, userColor)
-    .filter((entry) => !beforeIdentities.has(overloadIdentity(entry)));
+    .filter((entry) => (
+      !previouslyOverloadedDefenders.has(overloadDefenderIdentity(entry))
+    ));
 }
 
 function bestLineForMove(
