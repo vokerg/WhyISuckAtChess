@@ -36,6 +36,120 @@ export const importedGameEngineCoverageStatusSchema = z.enum([
   'INCOMPLETE',
 ]);
 
+export const importedGameEvidenceCoverageStatusSchema = z.enum([
+  'COMPLETE',
+  'PARTIAL',
+  'UNAVAILABLE',
+  'INCOMPLETE',
+]);
+export const importedGameEvidenceAvailabilitySchema = z.enum([
+  'PRESENT',
+  'UNAVAILABLE',
+  'INCOMPLETE',
+]);
+export const importedGameKnownEvidenceTypeSchema = z.enum([
+  'MATERIAL_STATE_CHANGE',
+  'MISSED_MATERIAL_WIN',
+  'HANGING_MATERIAL',
+  'MATERIAL_EVIDENCE_COVERAGE_GAP',
+  'POSITION_PHASE_RANGE',
+  'PHASE_EVIDENCE_COVERAGE_GAP',
+  'MISSED_TACTICAL_MOTIF',
+  'TACTICAL_MOTIF_COVERAGE_GAP',
+  'ALLOWED_TACTICAL_MOTIF',
+  'OPPONENT_TACTICAL_MOTIF',
+  'DEFENSIVE_THREAT_COVERAGE_GAP',
+  'DEFENDER_REMOVAL_THREAT',
+  'OVERLOADED_DEFENDER_THREAT',
+  'BACK_RANK_THREAT',
+  'THREAT_BLINDNESS',
+  'MISSED_BACK_RANK_MATE',
+  'MISSED_FORCED_MATE',
+  'FAILED_CONVERSION',
+  'EVALUATION_THROW',
+  'EVALUATION_SAVE',
+  'CONVERSION_EVIDENCE_COVERAGE_GAP',
+  'OPENING_EVIDENCE_COVERAGE_GAP',
+  'OPENING_MOVE_QUALITY_SAMPLE',
+  'OPENING_BAD_POSITION_ENTRY',
+]);
+export const importedGameEvidenceFamilySchema = z.enum([
+  'MATERIAL',
+  'PHASE',
+  'TACTICAL',
+  'DEFENSIVE',
+  'CONVERSION',
+  'OPENING',
+  'UNKNOWN',
+]);
+export const importedGameEvidencePresentationKindSchema = z.enum([
+  'FINDING',
+  'CONTEXT',
+  'SAMPLE',
+  'COVERAGE_GAP',
+  'UNKNOWN',
+]);
+const importedGameEvidenceJsonObjectSchema = z.record(z.string(), z.json());
+
+export const importedGameEvidenceSourceSchema = z.object({
+  startPly: z.number().int().positive().nullable(),
+  endPly: z.number().int().positive().nullable(),
+  positionId: z.number().int().positive().nullable(),
+}).strict();
+
+export const importedGameKnownEvidencePayloadSchema = z.object({
+  kind: z.literal('KNOWN'),
+  evidenceType: importedGameKnownEvidenceTypeSchema,
+  measurements: importedGameEvidenceJsonObjectSchema,
+  details: importedGameEvidenceJsonObjectSchema,
+}).strict();
+
+export const importedGameUnknownEvidencePayloadSchema = z.object({
+  kind: z.literal('UNKNOWN'),
+  originalEvidenceType: z.string().min(1),
+}).strict();
+
+export const importedGameEvidencePayloadSchema = z.discriminatedUnion('kind', [
+  importedGameKnownEvidencePayloadSchema,
+  importedGameUnknownEvidencePayloadSchema,
+]);
+
+export const importedGameEvidenceEventSchema = z.object({
+  evidenceKey: z.string().min(1),
+  findingKey: z.string().min(1),
+  availability: importedGameEvidenceAvailabilitySchema,
+  source: importedGameEvidenceSourceSchema,
+  presentation: z.object({
+    family: importedGameEvidenceFamilySchema,
+    kind: importedGameEvidencePresentationKindSchema,
+    label: z.string().min(1),
+  }).strict(),
+  payload: importedGameEvidencePayloadSchema,
+  unavailableReason: z.string().nullable(),
+}).strict();
+
+export const importedGameEvidenceRunSchema = z.object({
+  runId: z.number().int().positive(),
+  detectorKey: z.string().min(1),
+  detectorVersion: z.string().min(1),
+  coverage: z.object({
+    status: importedGameEvidenceCoverageStatusSchema,
+    reason: z.string().nullable(),
+    details: importedGameEvidenceJsonObjectSchema,
+  }).strict(),
+  provenance: z.object({
+    sourcePlyIndexedAt: z.iso.datetime({ offset: true }),
+    sourceAnalysisRunId: z.number().int().positive().nullable(),
+    sourceAnalysisSnapshotId: z.string().min(1).nullable(),
+  }).strict(),
+  events: z.array(importedGameEvidenceEventSchema),
+}).strict();
+
+export const importedGameEvidenceProjectionSchema = z.object({
+  compatibilityPolicy: z.literal('KNOWN_TYPES_WITH_OPAQUE_FALLBACK'),
+  runs: z.array(importedGameEvidenceRunSchema),
+}).strict();
+
 export const importedGameListQuerySchema = z.object({
   sort: z.enum(['endedAtDesc', 'endedAtAsc']).default('endedAtDesc'),
   limit: z.preprocess(
@@ -164,6 +278,7 @@ export const importedGamePlySchema = z.object({
   timing: importedGamePlyTimingSchema,
   engine: importedGamePlyEngineEvidenceSchema,
   annotations: z.array(importedGameEvidenceAnnotationSchema),
+  evidenceEventKeys: z.array(z.string().min(1)),
 }).strict();
 
 const importedGameCommonSchema = z.object({
@@ -208,6 +323,7 @@ export const importedGameReplayResponseSchema = importedGameCommonSchema.extend(
     unit: z.string(),
     anomalies: z.array(z.string()),
   }).strict(),
+  evidence: importedGameEvidenceProjectionSchema,
   plies: z.array(importedGamePlySchema),
 }).strict();
 
@@ -222,6 +338,16 @@ export type ImportedGamePlyIndexStatus = z.output<typeof importedGamePlyIndexSta
 export type ImportedGameTimingStatus = z.output<typeof importedGameTimingStatusSchema>;
 export type ImportedGameTimingSummary = z.output<typeof importedGameTimingSummarySchema>;
 export type ImportedGameEngineSummary = z.output<typeof importedGameEngineSummarySchema>;
+export type ImportedGameEvidenceCoverageStatus = z.output<typeof importedGameEvidenceCoverageStatusSchema>;
+export type ImportedGameEvidenceAvailability = z.output<typeof importedGameEvidenceAvailabilitySchema>;
+export type ImportedGameKnownEvidenceType = z.output<typeof importedGameKnownEvidenceTypeSchema>;
+export type ImportedGameEvidenceFamily = z.output<typeof importedGameEvidenceFamilySchema>;
+export type ImportedGameEvidencePresentationKind = z.output<typeof importedGameEvidencePresentationKindSchema>;
+export type ImportedGameKnownEvidencePayload = z.output<typeof importedGameKnownEvidencePayloadSchema>;
+export type ImportedGameEvidencePayload = z.output<typeof importedGameEvidencePayloadSchema>;
+export type ImportedGameEvidenceEvent = z.output<typeof importedGameEvidenceEventSchema>;
+export type ImportedGameEvidenceRun = z.output<typeof importedGameEvidenceRunSchema>;
+export type ImportedGameEvidenceProjection = z.output<typeof importedGameEvidenceProjectionSchema>;
 export type ImportedGameListItem = z.output<typeof importedGameListItemSchema>;
 export type ImportedGameListResponse = z.output<typeof importedGameListResponseSchema>;
 export type ImportedGameReplay = z.output<typeof importedGameReplayResponseSchema>;
