@@ -66,6 +66,16 @@ async function countAnalysedEvidenceGames(appUserId: number): Promise<number> {
     JOIN "GameAnalysisRun" AS analysis
       ON analysis."id" = run."sourceAnalysisRunId"
     WHERE game."appUserId" = ${appUserId}
+      AND game."provider" = 'LICHESS'
+      AND game."plyIndexStatus" = 'INDEXED'
+      AND game."plyIndexedAt" IS NOT NULL
+      AND game."speedCategory" IN ('bullet', 'blitz', 'rapid')
+      AND (game."variant" IS NULL OR game."variant" IN ('chess', 'standard'))
+      AND EXISTS (
+        SELECT 1
+        FROM "ImportedGamePly" AS ply
+        WHERE ply."importedGameId" = game."id"
+      )
       AND run."detectorKey" = ${OPENING_EVIDENCE_DETECTOR_KEY}
       AND run."detectorVersion" = ${OPENING_EVIDENCE_DETECTOR_VERSION}
       AND run."status" = 'SUCCEEDED'
@@ -105,6 +115,16 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
     JOIN "EvidenceEvent" AS event
       ON event."runId" = run."id"
     WHERE game."appUserId" = ${appUserId}
+      AND game."provider" = 'LICHESS'
+      AND game."plyIndexStatus" = 'INDEXED'
+      AND game."plyIndexedAt" IS NOT NULL
+      AND game."speedCategory" IN ('bullet', 'blitz', 'rapid')
+      AND (game."variant" IS NULL OR game."variant" IN ('chess', 'standard'))
+      AND EXISTS (
+        SELECT 1
+        FROM "ImportedGamePly" AS ply
+        WHERE ply."importedGameId" = game."id"
+      )
       AND run."detectorKey" = ${OPENING_EVIDENCE_DETECTOR_KEY}
       AND run."detectorVersion" = ${OPENING_EVIDENCE_DETECTOR_VERSION}
       AND run."status" = 'SUCCEEDED'
