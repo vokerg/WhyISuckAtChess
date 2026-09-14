@@ -1,6 +1,12 @@
 import type {
   ImportedGameDetail,
   ImportedGameEngineSummary,
+  ImportedGameEvidenceAvailability,
+  ImportedGameEvidenceCoverageStatus,
+  ImportedGameEvidenceEvent,
+  ImportedGameEvidenceProjection,
+  ImportedGameKnownEvidencePayload,
+  ImportedGameKnownEvidenceType,
   ImportedGameListItem,
   ImportedGameListQuery,
   ImportedGameListResponse,
@@ -9,6 +15,10 @@ import type {
   ImportedGameTimingSummary,
   ImportedGameUserColor,
 } from '@why-i-suck-at-chess/contracts';
+import {
+  prismaEvidenceRepository,
+  type CurrentEvidenceRun,
+} from '../evidence/evidence.repository.prisma';
 import {
   decodeImportedGameCursor,
   nextCursorForImportedGame,
@@ -20,6 +30,11 @@ import {
 } from './imported-games.repository.prisma';
 
 type GameProjectionRow = ImportedGameListRow | ImportedGameReplayRow | ImportedGameDetailRow;
+type EvidenceJsonObject = ImportedGameKnownEvidencePayload['measurements'];
+
+export interface CurrentEvidenceReader {
+  listCurrentEvidenceForGame(importedGameId: number): Promise<CurrentEvidenceRun[]>;
+}
 
 function toIso(value: Date | null | undefined): string | null {
   return value?.toISOString() ?? null;
@@ -71,8 +86,37 @@ function engineCoverageStatus(
   return 'UNAVAILABLE';
 }
 
+function evidenceCoverageStatus(value: string): ImportedGameEvidenceCoverageStatus {
+  if (
+    value === 'COMPLETE'
+    || value === 'PARTIAL'
+    || value === 'UNAVAILABLE'
+    || value === 'INCOMPLETE'
+  ) {
+    return value;
+  }
+  return 'INCOMPLETE';
+}
+
+function evidenceAvailability(value: string): ImportedGameEvidenceAvailability {
+  if (value === 'PRESENT' || value === 'UNAVAILABLE' || value === 'INCOMPLETE') {
+    return value;
+  }
+  return 'INCOMPLETE';
+}
+
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function jsonObject(value: unknown): EvidenceJsonObject {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+      ? value
+      : {}
+  ) as EvidenceJsonObject;
 }
 
 function latestEngineRun(row: GameProjectionRow) {
@@ -150,9 +194,230 @@ function toCommon(row: GameProjectionRow): ImportedGameListItem {
   };
 }
 
+const EVIDENCE_PRESENTATION: Record<
+  ImportedGameKnownEvidenceType,
+  ImportedGameEvidenceEvent['presentation']
+> = {
+  MATERIAL_STATE_CHANGE: {
+    family: 'MATERIAL',
+    kind: 'CONTEXT',
+    label: 'Material changed',
+  },
+  MISSED_MATERIAL_WIN: {
+    family: 'MATERIAL',
+    kind: 'FINDING',
+    label: 'Missed material win',
+  },
+  HANGING_MATERIAL: {
+    family: 'MATERIAL',
+    kind: 'FINDING',
+    label: 'Hanging material',
+  },
+  MATERIAL_EVIDENCE_COVERAGE_GAP: {
+    family: 'MATERIAL',
+    kind: 'COVERAGE_GAP',
+    label: 'Material evidence incomplete',
+  },
+  POSITION_PHASE_RANGE: {
+    family: 'PHASE',
+    kind: 'CONTEXT',
+    label: 'Position phase',
+  },
+  PHASE_EVIDENCE_COVERAGE_GAP: {
+    family: 'PHASE',
+    kind: 'COVERAGE_GAP',
+    label: 'Phase evidence incomplete',
+  },
+  MISSED_TACTICAL_MOTIF: {
+    family: 'TACTICAL',
+    kind: 'FINDING',
+    label: 'Missed tactical motif',
+  },
+  TACTICAL_MOTIF_COVERAGE_GAP: {
+    family: 'TACTICAL',
+    kind: 'COVERAGE_GAP',
+    label: 'Tactical evidence incomplete',
+  },
+  ALLOWED_TACTICAL_MOTIF: {
+    family: 'TACTICAL',
+    kind: 'FINDING',
+    label: 'Allowed tactical motif',
+  },
+  OPPONENT_TACTICAL_MOTIF: {
+    family: 'TACTICAL',
+    kind: 'FINDING',
+    label: 'Opponent tactical motif',
+  },
+  DEFENSIVE_THREAT_COVERAGE_GAP: {
+    family: 'DEFENSIVE',
+    kind: 'COVERAGE_GAP',
+    label: 'Defensive-threat evidence incomplete',
+  },
+  DEFENDER_REMOVAL_THREAT: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Removal-of-defender threat',
+  },
+  OVERLOADED_DEFENDER_THREAT: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Overloaded-defender threat',
+  },
+  BACK_RANK_THREAT: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Back-rank threat',
+  },
+  THREAT_BLINDNESS: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Missed defensive threat',
+  },
+  MISSED_BACK_RANK_MATE: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Missed back-rank mate',
+  },
+  MISSED_FORCED_MATE: {
+    family: 'DEFENSIVE',
+    kind: 'FINDING',
+    label: 'Missed forced mate',
+  },
+  FAILED_CONVERSION: {
+    family: 'CONVERSION',
+    kind: 'FINDING',
+    label: 'Failed conversion',
+  },
+  EVALUATION_THROW: {
+    family: 'CONVERSION',
+    kind: 'FINDING',
+    label: 'Evaluation throw',
+  },
+  EVALUATION_SAVE: {
+    family: 'CONVERSION',
+    kind: 'FINDING',
+    label: 'Evaluation save',
+  },
+  CONVERSION_EVIDENCE_COVERAGE_GAP: {
+    family: 'CONVERSION',
+    kind: 'COVERAGE_GAP',
+    label: 'Conversion evidence incomplete',
+  },
+  OPENING_EVIDENCE_COVERAGE_GAP: {
+    family: 'OPENING',
+    kind: 'COVERAGE_GAP',
+    label: 'Opening evidence incomplete',
+  },
+  OPENING_MOVE_QUALITY_SAMPLE: {
+    family: 'OPENING',
+    kind: 'SAMPLE',
+    label: 'Opening move-quality sample',
+  },
+  OPENING_BAD_POSITION_ENTRY: {
+    family: 'OPENING',
+    kind: 'FINDING',
+    label: 'Bad opening position entered',
+  },
+};
+
+function knownEvidenceType(value: string): ImportedGameKnownEvidenceType | null {
+  return Object.prototype.hasOwnProperty.call(EVIDENCE_PRESENTATION, value)
+    ? value as ImportedGameKnownEvidenceType
+    : null;
+}
+
+function toEvidenceEvent(
+  event: CurrentEvidenceRun['events'][number],
+): ImportedGameEvidenceEvent {
+  const type = knownEvidenceType(event.evidenceType);
+  if (!type) {
+    return {
+      evidenceKey: event.evidenceKey,
+      findingKey: event.findingKey,
+      availability: evidenceAvailability(event.availability),
+      source: {
+        startPly: event.sourcePlyStart,
+        endPly: event.sourcePlyEnd,
+        positionId: event.sourcePositionId,
+      },
+      presentation: {
+        family: 'UNKNOWN',
+        kind: 'UNKNOWN',
+        label: 'Unsupported deterministic evidence',
+      },
+      payload: {
+        kind: 'UNKNOWN',
+        originalEvidenceType: event.evidenceType,
+      },
+      unavailableReason: event.unavailableReason,
+    };
+  }
+
+  return {
+    evidenceKey: event.evidenceKey,
+    findingKey: event.findingKey,
+    availability: evidenceAvailability(event.availability),
+    source: {
+      startPly: event.sourcePlyStart,
+      endPly: event.sourcePlyEnd,
+      positionId: event.sourcePositionId,
+    },
+    presentation: EVIDENCE_PRESENTATION[type],
+    payload: {
+      kind: 'KNOWN',
+      evidenceType: type,
+      measurements: jsonObject(event.measurements),
+      details: jsonObject(event.details),
+    },
+    unavailableReason: event.unavailableReason,
+  };
+}
+
+function toEvidenceProjection(runs: CurrentEvidenceRun[]): ImportedGameEvidenceProjection {
+  return {
+    compatibilityPolicy: 'KNOWN_TYPES_WITH_OPAQUE_FALLBACK',
+    runs: runs.map((run) => {
+      const coverage = jsonObject(run.coverage);
+      return {
+        runId: run.id,
+        detectorKey: run.detectorKey,
+        detectorVersion: run.detectorVersion,
+        coverage: {
+          status: evidenceCoverageStatus(run.coverageStatus),
+          reason: typeof coverage.reason === 'string' ? coverage.reason : null,
+          details: jsonObject(coverage.details),
+        },
+        provenance: {
+          sourcePlyIndexedAt: run.sourcePlyIndexedAt.toISOString(),
+          sourceAnalysisRunId: run.sourceAnalysisRunId,
+          sourceAnalysisSnapshotId: run.sourceAnalysisSnapshotId,
+        },
+        events: run.events.map(toEvidenceEvent),
+      };
+    }),
+  };
+}
+
+function evidenceEventKeysForPly(
+  evidence: ImportedGameEvidenceProjection,
+  plyNumber: number,
+): string[] {
+  const keys = new Set<string>();
+  for (const run of evidence.runs) {
+    for (const event of run.events) {
+      const start = event.source.startPly;
+      if (start === null) continue;
+      const end = event.source.endPly ?? start;
+      if (start <= plyNumber && plyNumber <= end) keys.add(event.evidenceKey);
+    }
+  }
+  return [...keys];
+}
+
 function toPly(
   row: ImportedGameReplayRow['plies'][number],
   currentEngineRun: CurrentEngineRun | null,
+  evidenceEventKeys: string[],
 ): ImportedGamePly {
   const positionAnalysis = row.beforePosition.engineAnalyses[0] ?? null;
   const sourceClockAvailable = row.sourceClockOrdinal !== null
@@ -225,11 +490,16 @@ function toPly(
       },
     },
     annotations: [],
+    evidenceEventKeys,
   };
 }
 
-function toReplay(row: ImportedGameReplayRow | ImportedGameDetailRow): ImportedGameReplay {
+function toReplay(
+  row: ImportedGameReplayRow | ImportedGameDetailRow,
+  evidenceRuns: CurrentEvidenceRun[],
+): ImportedGameReplay {
   const currentEngineRun = latestEngineRun(row);
+  const evidence = toEvidenceProjection(evidenceRuns);
   return {
     ...toCommon(row),
     provenance: {
@@ -246,7 +516,12 @@ function toReplay(row: ImportedGameReplayRow | ImportedGameDetailRow): ImportedG
       unit: row.rawClockUnit,
       anomalies: stringArray(row.rawClockAnomalies),
     },
-    plies: row.plies.map((ply) => toPly(ply, currentEngineRun)),
+    evidence,
+    plies: row.plies.map((ply) => toPly(
+      ply,
+      currentEngineRun,
+      evidenceEventKeysForPly(evidence, ply.plyNumber),
+    )),
   };
 }
 
@@ -258,6 +533,7 @@ export interface ImportedGamesQueryService {
 
 export function createImportedGamesQueryService(
   repository: ImportedGamesRepository = prismaImportedGamesRepository,
+  evidenceReader: CurrentEvidenceReader = prismaEvidenceRepository,
 ): ImportedGamesQueryService {
   return {
     async list(appUserId, query) {
@@ -280,12 +556,16 @@ export function createImportedGamesQueryService(
 
     async getDetail(appUserId, gameId) {
       const row = await repository.findDetail(appUserId, gameId);
-      return row ? { ...toReplay(row), pgn: row.pgn } : null;
+      if (!row) return null;
+      const evidenceRuns = await evidenceReader.listCurrentEvidenceForGame(gameId);
+      return { ...toReplay(row, evidenceRuns), pgn: row.pgn };
     },
 
     async getReplay(appUserId, gameId) {
       const row = await repository.findReplay(appUserId, gameId);
-      return row ? toReplay(row) : null;
+      if (!row) return null;
+      const evidenceRuns = await evidenceReader.listCurrentEvidenceForGame(gameId);
+      return toReplay(row, evidenceRuns);
     },
   };
 }

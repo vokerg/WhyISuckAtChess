@@ -16,6 +16,10 @@ import { createImportedGamesQueryService } from '../dist/modules/imported-games/
 
 const prisma = prismaModule.default ?? prismaModule;
 
+const emptyEvidenceReader = {
+  async listCurrentEvidenceForGame() { return []; },
+};
+
 function listRow(id, endedAt = new Date('2026-09-11T10:00:00.000Z')) {
   return {
     id,
@@ -139,7 +143,7 @@ test('read service maps owned rows into bounded list and replay contracts', asyn
       return replayRow({ id: gameId });
     },
   };
-  const service = createImportedGamesQueryService(repository);
+  const service = createImportedGamesQueryService(repository, emptyEvidenceReader);
 
   const page = await service.list(42, importedGameListQuerySchema.parse({ limit: 1 }));
   importedGameListResponseSchema.parse(page);
@@ -157,6 +161,11 @@ test('read service maps owned rows into bounded list and replay contracts', asyn
   assert.equal(replay.clockSource.presence, 'ABSENT');
   assert.equal(replay.plies[0].sourceClock.status, 'UNAVAILABLE');
   assert.equal(replay.plies[0].timing.unavailableReason, 'CLOCKS_ABSENT');
+  assert.deepEqual(replay.evidence, {
+    compatibilityPolicy: 'KNOWN_TYPES_WITH_OPAQUE_FALLBACK',
+    runs: [],
+  });
+  assert.deepEqual(replay.plies[0].evidenceEventKeys, []);
   assert.deepEqual(replay.plies[0].beforePosition, { id: 11, normalizedFen: 'startpos' });
   assert.equal(replay.provenance.sourceUpdatedAt, '2026-09-11T10:00:00.000Z');
   assert.equal(replay.provenance.readModelUpdatedAt, '2026-09-11T10:01:00.000Z');
@@ -165,6 +174,74 @@ test('read service maps owned rows into bounded list and replay contracts', asyn
   const detail = await service.getDetail(42, 7);
   importedGameDetailResponseSchema.parse(detail);
   assert.equal(detail.pgn, '[Result "1-0"]');
+});
+
+test('read service projects current evidence and keeps future detector types opaque', async () => {
+  const repository = {
+    async findList() { return []; },
+    async findDetail() { return null; },
+    async findReplay() { return replayRow(); },
+  };
+  const evidenceReader = {
+    async listCurrentEvidenceForGame(gameId) {
+      assert.equal(gameId, 7);
+      return [{
+        id: 91,
+        detectorKey: 'material-state',
+        detectorVersion: 'material-v1',
+        coverageStatus: 'COMPLETE',
+        coverage: {
+          status: 'COMPLETE',
+          reason: null,
+          details: { engineBacked: true },
+        },
+        sourcePlyIndexedAt: new Date('2026-09-11T10:01:00.000Z'),
+        sourceAnalysisRunId: null,
+        sourceAnalysisSnapshotId: null,
+        events: [{
+          id: 501,
+          evidenceKey: 'known-event-key',
+          findingKey: 'hanging-p1',
+          evidenceType: 'HANGING_MATERIAL',
+          availability: 'PRESENT',
+          sourcePlyStart: 1,
+          sourcePlyEnd: 1,
+          sourcePositionId: 12,
+          measurements: { scoreLossCp: 180 },
+          details: { moveUci: 'e2e4' },
+          unavailableReason: null,
+        }, {
+          id: 502,
+          evidenceKey: 'future-event-key',
+          findingKey: 'future-p1',
+          evidenceType: 'FUTURE_DETECTOR_FACT',
+          availability: 'PRESENT',
+          sourcePlyStart: 1,
+          sourcePlyEnd: null,
+          sourcePositionId: 12,
+          measurements: { detectorInternal: true },
+          details: { shouldStayOpaque: true },
+          unavailableReason: null,
+        }],
+      }];
+    },
+  };
+  const service = createImportedGamesQueryService(repository, evidenceReader);
+
+  const replay = await service.getReplay(42, 7);
+  importedGameReplayResponseSchema.parse(replay);
+  assert.equal(replay.evidence.runs.length, 1);
+  assert.equal(replay.evidence.runs[0].events[0].payload.kind, 'KNOWN');
+  assert.equal(replay.evidence.runs[0].events[0].payload.evidenceType, 'HANGING_MATERIAL');
+  assert.deepEqual(replay.evidence.runs[0].events[0].payload.measurements, { scoreLossCp: 180 });
+  assert.deepEqual(replay.evidence.runs[0].events[1].payload, {
+    kind: 'UNKNOWN',
+    originalEvidenceType: 'FUTURE_DETECTOR_FACT',
+  });
+  assert.deepEqual(
+    replay.plies[0].evidenceEventKeys,
+    ['known-event-key', 'future-event-key'],
+  );
 });
 
 test('invalid pagination cursors fail before a repository query', async () => {
@@ -203,7 +280,7 @@ test('read model hides stale or incomplete game-specific engine evidence', async
       });
     },
   };
-  const service = createImportedGamesQueryService(repository);
+  const service = createImportedGamesQueryService(repository, emptyEvidenceReader);
 
   const replay = await service.getReplay(42, 7);
   importedGameReplayResponseSchema.parse(replay);
@@ -231,7 +308,7 @@ test('read model exposes game-specific engine evidence only for the latest compl
       });
     },
   };
-  const service = createImportedGamesQueryService(repository);
+  const service = createImportedGamesQueryService(repository, emptyEvidenceReader);
 
   const replay = await service.getReplay(42, 7);
   importedGameReplayResponseSchema.parse(replay);
@@ -272,7 +349,7 @@ test('read model never splices mismatched position-cache provenance into a compl
       });
     },
   };
-  const service = createImportedGamesQueryService(repository);
+  const service = createImportedGamesQueryService(repository, emptyEvidenceReader);
 
   const replay = await service.getReplay(42, 7);
   assert.equal(replay.plies[0].engine.status, 'AVAILABLE');
@@ -447,6 +524,131 @@ test('Prisma read model returns real indexed evidence only for its owner', async
   } finally {
     if (userId !== null) await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
     if (positionIds.length > 0) await prisma.position.deleteMany({ where: { id: { in: positionIds } } }).catch(() => {});
+    await prisma.$disconnect();
+  }
+});
+
+
+test('real read model drops stale current evidence when the source projection changes', async () => {
+  const suffix = randomUUID();
+  const positionIds = [];
+  let userId = null;
+
+  try {
+    const user = await prisma.appUser.create({
+      data: { authProvider: 'TEST', authSubject: `evidence-read-model-${suffix}` },
+    });
+    userId = user.id;
+
+    const before = await prisma.position.create({
+      data: {
+        positionKey: Buffer.from(randomUUID().replaceAll('-', ''), 'hex'),
+        normalizedFen: `evidence-fixture-before-${suffix}`,
+      },
+    });
+    const after = await prisma.position.create({
+      data: {
+        positionKey: Buffer.from(randomUUID().replaceAll('-', ''), 'hex'),
+        normalizedFen: `evidence-fixture-after-${suffix}`,
+      },
+    });
+    positionIds.push(before.id, after.id);
+
+    const indexedAt = new Date('2026-09-14T17:00:00.000Z');
+    const game = await prisma.importedGame.create({
+      data: {
+        appUserId: user.id,
+        provider: 'LICHESS',
+        providerGameId: `evidence-read-model-${suffix}`,
+        source: 'LICHESS_API',
+        connectedLichessUserId: 'fixture-user',
+        connectedLichessUsername: 'FixtureUser',
+        variant: 'standard',
+        speedCategory: 'blitz',
+        userColor: 'white',
+        plyIndexStatus: 'INDEXED',
+        plyIndexedAt: indexedAt,
+      },
+    });
+    await prisma.importedGamePly.create({
+      data: {
+        importedGameId: game.id,
+        plyNumber: 1,
+        beforePositionId: before.id,
+        afterPositionId: after.id,
+        moveUci: 'e2e4',
+        moverColor: 'white',
+        isUserMove: true,
+      },
+    });
+
+    const run = await prisma.evidenceRun.create({
+      data: {
+        importedGameId: game.id,
+        detectorKey: 'phase-context',
+        detectorVersion: 'phase-v1',
+        workKey: randomUUID(),
+        sourcePlyIndexedAt: indexedAt,
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        coverageJson: {
+          status: 'COMPLETE',
+          reason: null,
+          details: { classifiedPositions: 2 },
+        },
+        completedAt: new Date('2026-09-14T17:01:00.000Z'),
+        isCurrent: true,
+      },
+    });
+    const evidenceKey = randomUUID();
+    await prisma.evidenceEvent.create({
+      data: {
+        evidenceKey,
+        runId: run.id,
+        findingKey: 'phase-range-0',
+        evidenceType: 'POSITION_PHASE_RANGE',
+        availability: 'PRESENT',
+        sourcePlyStart: 1,
+        sourcePlyEnd: 1,
+        sourcePositionId: before.id,
+        measurementsJson: {
+          startBoundaryPly: 0,
+          endBoundaryPly: 1,
+          positionCount: 2,
+        },
+        detailsJson: {
+          phase: 'OPENING',
+          endgameFamily: 'NONE',
+        },
+      },
+    });
+
+    const service = createImportedGamesQueryService();
+    const replay = await service.getReplay(user.id, game.id);
+    importedGameReplayResponseSchema.parse(replay);
+    assert.equal(replay.evidence.runs.length, 1);
+    assert.equal(replay.evidence.runs[0].runId, run.id);
+    assert.deepEqual(replay.plies[0].evidenceEventKeys, [evidenceKey]);
+    assert.equal(await service.getReplay(user.id + 1, game.id), null);
+
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: new Date('2026-09-14T17:02:00.000Z') },
+    });
+
+    const staleReplay = await service.getReplay(user.id, game.id);
+    importedGameReplayResponseSchema.parse(staleReplay);
+    assert.deepEqual(
+      staleReplay.evidence.runs,
+      [],
+      'isCurrent alone is insufficient once the indexed source timestamp changes',
+    );
+    assert.deepEqual(staleReplay.plies[0].evidenceEventKeys, []);
+  } finally {
+    if (userId !== null) await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
+    if (positionIds.length > 0) {
+      await prisma.position.deleteMany({ where: { id: { in: positionIds } } }).catch(() => {});
+    }
     await prisma.$disconnect();
   }
 });
