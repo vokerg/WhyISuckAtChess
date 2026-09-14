@@ -77,6 +77,14 @@
             <p class="caveat">Starting position. No move-specific evidence selected.</p>
           }
         </section>
+
+        <app-replay-evidence-panel
+          [hasSelectedPly]="store.currentPly() !== null"
+          [events]="store.currentEvidence()"
+          [coverage]="store.evidenceCoverage()"
+          [missingEventKeys]="store.currentEvidenceMissingKeys()"
+          [annotations]="store.currentPly()?.annotations ?? []"
+        />
       </aside>
     </section>
 
@@ -91,11 +99,25 @@
             type="button"
             class="move-button"
             [class.selected]="store.currentPlyNumber() === ply.plyNumber"
+            [class.has-evidence]="ply.evidenceEventKeys.length > 0"
+            [attr.aria-label]="
+              formatMove(ply.plyNumber) +
+              ' ' +
+              ply.moveUci +
+              (ply.evidenceEventKeys.length
+                ? ' · ' + ply.evidenceEventKeys.length + ' deterministic evidence event' + (ply.evidenceEventKeys.length === 1 ? '' : 's')
+                : '')
+            "
             (click)="store.selectPly(ply.plyNumber)"
           >
             <span>{{ formatMove(ply.plyNumber) }}</span>
             <strong>{{ ply.moveUci }}</strong>
             <small>{{ ply.sourceClock.status === 'AVAILABLE' ? formatClock(ply.sourceClock.afterCentiseconds) : 'clock unavailable' }}</small>
+            @if (ply.evidenceEventKeys.length) {
+              <small class="evidence-marker">
+                ● {{ ply.evidenceEventKeys.length }} evidence event{{ ply.evidenceEventKeys.length === 1 ? '' : 's' }}
+              </small>
+            }
           </button>
         } @empty {
           <p class="caveat">No indexed plies are available for this game.</p>
