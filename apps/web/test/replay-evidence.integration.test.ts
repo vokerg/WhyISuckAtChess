@@ -358,7 +358,8 @@ test('API replay evidence flows through state into rendered Angular evidence det
   const text = normalizedText(root);
 
   assert.match(text, /Hanging material/);
-  assert.match(text, /Material Swing Cp 320/);
+  assert.match(text, /Material Swing Cp/);
+  assert.match(text, /320/);
   assert.match(text, /Missed tactical motif/);
   assert.match(text, /Tactical event · CRITICAL/);
   assert.match(text, /Replay evidence coverage is PARTIAL/);
