@@ -6,7 +6,6 @@ import {
   RendererFactory2,
   createComponent,
   createEnvironmentInjector,
-  provideZonelessChangeDetection,
   type EnvironmentInjector,
   type Renderer2,
 } from '@angular/core';
@@ -330,10 +329,7 @@ function renderEvidence(store: GameReplayStore): MemoryNode {
   const renderer = createMemoryRenderer(root);
   const parent = Injector.create({ providers: [] }) as unknown as EnvironmentInjector;
   const environmentInjector = createEnvironmentInjector(
-    [
-      provideZonelessChangeDetection(),
-      { provide: RendererFactory2, useValue: { createRenderer: () => renderer } },
-    ],
+    [{ provide: RendererFactory2, useValue: { createRenderer: () => renderer } }],
     parent,
   );
 
