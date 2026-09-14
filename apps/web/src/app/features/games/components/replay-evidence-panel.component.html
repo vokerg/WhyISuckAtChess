@@ -1,0 +1,103 @@
+<section class="evidence-card deterministic-evidence" aria-labelledby="deterministic-evidence-heading">
+  <div class="evidence-heading-row">
+    <h2 id="deterministic-evidence-heading">Deterministic evidence</h2>
+    <span class="coverage-pill" [class.coverage-complete]="coverage.status === 'COMPLETE'">
+      {{ coverageText() }}
+    </span>
+  </div>
+
+  @if (!hasSelectedPly) {
+    <p class="caveat">Select a move to inspect detector evidence tied to that ply.</p>
+  } @else {
+    @if (annotations.length) {
+      <div class="annotation-list" aria-label="Evidence annotations">
+        @for (annotation of annotations; track annotation.kind + ':' + annotation.label) {
+          <span class="annotation-chip" [attr.data-severity]="annotation.severity ?? 'INFO'">
+            {{ annotation.label }}@if (annotation.severity) { · {{ annotation.severity }} }
+          </span>
+        }
+      </div>
+    }
+
+    @if (events.length) {
+      <p class="status-line">
+        {{ events.length }} deterministic evidence event{{ events.length === 1 ? '' : 's' }} on this ply.
+        Open each event for measurements and provenance.
+      </p>
+
+      <div class="event-list">
+        @for (selection of events; track selection.runId + ':' + selection.event.evidenceKey; let first = $first) {
+          <details class="evidence-event" [attr.open]="first ? '' : null">
+            <summary>
+              <span class="family">{{ selection.event.presentation.family }}</span>
+              <strong>{{ selection.event.presentation.label }}</strong>
+              <span class="kind">{{ selection.event.presentation.kind }}</span>
+              @if (selection.event.availability !== 'PRESENT') {
+                <span class="availability">{{ selection.event.availability }}</span>
+              }
+            </summary>
+
+            @if (selection.event.availability !== 'PRESENT') {
+              <p class="coverage-warning">
+                Event availability is {{ selection.event.availability }}@if (selection.event.unavailableReason) {
+                  · {{ selection.event.unavailableReason }}
+                }.
+              </p>
+            }
+
+            @if (selection.event.payload.kind === 'KNOWN') {
+              @if (measurementEntries(selection).length) {
+                <dl class="measurement-list">
+                  @for (measurement of measurementEntries(selection); track measurement[0]) {
+                    <div>
+                      <dt>{{ formatMeasurementKey(measurement[0]) }}</dt>
+                      <dd>{{ formatMeasurement(measurement[1]) }}</dd>
+                    </div>
+                  }
+                </dl>
+              } @else {
+                <p class="caveat">This detector event does not expose additional measurements.</p>
+              }
+            } @else {
+              <p class="caveat">
+                Unknown evidence type {{ selection.event.payload.originalEvidenceType }} is preserved opaquely.
+              </p>
+            }
+
+            <p class="provenance">
+              {{ sourceText(selection) }} · {{ selection.detectorKey }} v{{ selection.detectorVersion }}
+              · run {{ selection.runId }}
+              @if (selection.provenance.sourceAnalysisRunId !== null) {
+                · analysis run {{ selection.provenance.sourceAnalysisRunId }}
+              }
+            </p>
+          </details>
+        }
+      </div>
+    } @else if (coverage.status === 'COMPLETE') {
+      <p class="no-finding">
+        No deterministic evidence event is recorded for this ply under complete detector coverage.
+      </p>
+    } @else {
+      <p class="coverage-warning">
+        No deterministic event is recorded for this ply, but evidence coverage is {{ coverage.status }}.
+        Missing evidence is not equivalent to a negative finding.
+        @if (coverage.reason) { {{ coverage.reason }} }
+      </p>
+    }
+
+    @if (events.length && coverage.status !== 'COMPLETE') {
+      <p class="coverage-warning">
+        Replay evidence coverage is {{ coverage.status }}.
+        @if (coverage.reason) { {{ coverage.reason }} }
+      </p>
+    }
+
+    @if (missingEventKeys.length) {
+      <p class="coverage-warning">
+        {{ missingEventKeys.length }} referenced evidence event{{ missingEventKeys.length === 1 ? '' : 's' }}
+        could not be resolved from the replay projection. Treat this ply as incomplete.
+      </p>
+    }
+  }
+</section>
