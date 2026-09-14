@@ -118,6 +118,10 @@ button.selected {
   background: #f4e2c7;
 }
 
+.move-button.has-evidence {
+  box-shadow: inset 3px 0 0 #b47631;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -224,6 +228,11 @@ dd {
 
 .move-button small {
   grid-column: 2;
+}
+
+.move-button .evidence-marker {
+  color: #8a4e18;
+  font-weight: 800;
 }
 
 .state-card {
