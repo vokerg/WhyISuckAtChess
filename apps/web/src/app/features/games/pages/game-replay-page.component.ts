@@ -8,12 +8,13 @@ import {
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
 import { ChessgroundBoardComponent } from '../../../shared/chess/board/chessground-board.component';
+import { ReplayEvidencePanelComponent } from '../components/replay-evidence-panel.component';
 import { GameReplayStore } from '../state/game-replay.store';
 
 @Component({
   selector: 'app-game-replay-page',
   standalone: true,
-  imports: [ChessgroundBoardComponent, RouterLink],
+  imports: [ChessgroundBoardComponent, ReplayEvidencePanelComponent, RouterLink],
   providers: [GameReplayStore],
   templateUrl: './game-replay-page.component.html',
   styleUrl: './game-replay-page.component.css',
