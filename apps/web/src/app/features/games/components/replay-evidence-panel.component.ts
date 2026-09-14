@@ -42,7 +42,7 @@ export class ReplayEvidencePanelComponent {
     if (value === null) return 'null';
     if (typeof value === 'string') return value;
     if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? String(value);
   }
 
   protected sourceText(selection: ReplayEvidenceSelection): string {
