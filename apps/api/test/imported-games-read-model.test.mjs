@@ -527,3 +527,128 @@ test('Prisma read model returns real indexed evidence only for its owner', async
     await prisma.$disconnect();
   }
 });
+
+
+test('real read model drops stale current evidence when the source projection changes', async () => {
+  const suffix = randomUUID();
+  const positionIds = [];
+  let userId = null;
+
+  try {
+    const user = await prisma.appUser.create({
+      data: { authProvider: 'TEST', authSubject: `evidence-read-model-${suffix}` },
+    });
+    userId = user.id;
+
+    const before = await prisma.position.create({
+      data: {
+        positionKey: Buffer.from(randomUUID().replaceAll('-', ''), 'hex'),
+        normalizedFen: `evidence-fixture-before-${suffix}`,
+      },
+    });
+    const after = await prisma.position.create({
+      data: {
+        positionKey: Buffer.from(randomUUID().replaceAll('-', ''), 'hex'),
+        normalizedFen: `evidence-fixture-after-${suffix}`,
+      },
+    });
+    positionIds.push(before.id, after.id);
+
+    const indexedAt = new Date('2026-09-14T17:00:00.000Z');
+    const game = await prisma.importedGame.create({
+      data: {
+        appUserId: user.id,
+        provider: 'LICHESS',
+        providerGameId: `evidence-read-model-${suffix}`,
+        source: 'LICHESS_API',
+        connectedLichessUserId: 'fixture-user',
+        connectedLichessUsername: 'FixtureUser',
+        variant: 'standard',
+        speedCategory: 'blitz',
+        userColor: 'white',
+        plyIndexStatus: 'INDEXED',
+        plyIndexedAt: indexedAt,
+      },
+    });
+    await prisma.importedGamePly.create({
+      data: {
+        importedGameId: game.id,
+        plyNumber: 1,
+        beforePositionId: before.id,
+        afterPositionId: after.id,
+        moveUci: 'e2e4',
+        moverColor: 'white',
+        isUserMove: true,
+      },
+    });
+
+    const run = await prisma.evidenceRun.create({
+      data: {
+        importedGameId: game.id,
+        detectorKey: 'phase-context',
+        detectorVersion: 'phase-v1',
+        workKey: randomUUID(),
+        sourcePlyIndexedAt: indexedAt,
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        coverageJson: {
+          status: 'COMPLETE',
+          reason: null,
+          details: { classifiedPositions: 2 },
+        },
+        completedAt: new Date('2026-09-14T17:01:00.000Z'),
+        isCurrent: true,
+      },
+    });
+    const evidenceKey = randomUUID();
+    await prisma.evidenceEvent.create({
+      data: {
+        evidenceKey,
+        runId: run.id,
+        findingKey: 'phase-range-0',
+        evidenceType: 'POSITION_PHASE_RANGE',
+        availability: 'PRESENT',
+        sourcePlyStart: 1,
+        sourcePlyEnd: 1,
+        sourcePositionId: before.id,
+        measurementsJson: {
+          startBoundaryPly: 0,
+          endBoundaryPly: 1,
+          positionCount: 2,
+        },
+        detailsJson: {
+          phase: 'OPENING',
+          endgameFamily: 'NONE',
+        },
+      },
+    });
+
+    const service = createImportedGamesQueryService();
+    const replay = await service.getReplay(user.id, game.id);
+    importedGameReplayResponseSchema.parse(replay);
+    assert.equal(replay.evidence.runs.length, 1);
+    assert.equal(replay.evidence.runs[0].runId, run.id);
+    assert.deepEqual(replay.plies[0].evidenceEventKeys, [evidenceKey]);
+    assert.equal(await service.getReplay(user.id + 1, game.id), null);
+
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: new Date('2026-09-14T17:02:00.000Z') },
+    });
+
+    const staleReplay = await service.getReplay(user.id, game.id);
+    importedGameReplayResponseSchema.parse(staleReplay);
+    assert.deepEqual(
+      staleReplay.evidence.runs,
+      [],
+      'isCurrent alone is insufficient once the indexed source timestamp changes',
+    );
+    assert.deepEqual(staleReplay.plies[0].evidenceEventKeys, []);
+  } finally {
+    if (userId !== null) await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
+    if (positionIds.length > 0) {
+      await prisma.position.deleteMany({ where: { id: { in: positionIds } } }).catch(() => {});
+    }
+    await prisma.$disconnect();
+  }
+});
