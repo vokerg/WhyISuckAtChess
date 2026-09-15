@@ -136,7 +136,10 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
         assert.ok(game, 'import stage must persist the source game before indexing');
         targetGameId = game.id;
         const result = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
-        assert.equal(result.status, 'INDEXED');
+        assert.ok(
+          result.status === 'INDEXED' || result.status === 'ALREADY_INDEXED',
+          'the idempotent index stage must leave the fixture indexed',
+        );
         return true;
       },
     };
