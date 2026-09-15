@@ -1,8 +1,31 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import type { ImportedGamePly, ImportedGameReplay } from '@why-i-suck-at-chess/contracts';
+import type {
+  ImportedGameEvidenceEvent,
+  ImportedGameEvidenceRun,
+  ImportedGamePly,
+  ImportedGameReplay,
+} from '@why-i-suck-at-chess/contracts';
 import { firstValueFrom } from 'rxjs';
 import { ImportedGamesApiService } from '../data-access/imported-games-api.service';
 import { ReplayStepper } from './replay-stepper';
+
+export type ReplayEvidenceCoverageState = ImportedGameEvidenceRun['coverage']['status'] | 'NO_RUNS';
+
+export interface ReplayEvidenceCoverageSummary {
+  status: ReplayEvidenceCoverageState;
+  reason: string | null;
+  completeRuns: number;
+  totalRuns: number;
+}
+
+export interface ReplayEvidenceSelection {
+  event: ImportedGameEvidenceEvent;
+  runId: number;
+  detectorKey: string;
+  detectorVersion: string;
+  coverage: ImportedGameEvidenceRun['coverage'];
+  provenance: ImportedGameEvidenceRun['provenance'];
+}
 
 @Injectable()
 export class GameReplayStore {
@@ -19,6 +42,35 @@ export class GameReplayStore {
   readonly currentPly = computed<ImportedGamePly | null>(() => {
     const plyNumber = this.currentPlyNumber();
     return plyNumber > 0 ? this.replay()?.plies[plyNumber - 1] ?? null : null;
+  });
+  readonly evidenceCoverage = computed<ReplayEvidenceCoverageSummary>(() =>
+    summarizeEvidenceCoverage(this.replay()?.evidence.runs ?? []),
+  );
+  readonly currentEvidence = computed<ReplayEvidenceSelection[]>(() => {
+    const game = this.replay();
+    const ply = this.currentPly();
+    if (!game || !ply || ply.evidenceEventKeys.length === 0) return [];
+
+    const requestedKeys = new Set(ply.evidenceEventKeys);
+    return game.evidence.runs.flatMap((run) =>
+      run.events
+        .filter((event) => requestedKeys.has(event.evidenceKey))
+        .map((event) => ({
+          event,
+          runId: run.runId,
+          detectorKey: run.detectorKey,
+          detectorVersion: run.detectorVersion,
+          coverage: run.coverage,
+          provenance: run.provenance,
+        })),
+    );
+  });
+  readonly currentEvidenceMissingKeys = computed(() => {
+    const ply = this.currentPly();
+    if (!ply) return [];
+
+    const matchedKeys = new Set(this.currentEvidence().map(({ event }) => event.evidenceKey));
+    return ply.evidenceEventKeys.filter((key) => !matchedKeys.has(key));
   });
   readonly currentFen = computed(() => {
     const game = this.replay();
@@ -126,6 +178,40 @@ export class GameReplayStore {
   private setCurrentPly(plyNumber: number): void {
     this.currentPlyNumber.set(plyNumber);
   }
+}
+
+function summarizeEvidenceCoverage(runs: ImportedGameEvidenceRun[]): ReplayEvidenceCoverageSummary {
+  if (runs.length === 0) {
+    return {
+      status: 'NO_RUNS',
+      reason: 'No deterministic evidence runs are available for this replay.',
+      completeRuns: 0,
+      totalRuns: 0,
+    };
+  }
+
+  const precedence: ImportedGameEvidenceRun['coverage']['status'][] = [
+    'UNAVAILABLE',
+    'INCOMPLETE',
+    'PARTIAL',
+    'COMPLETE',
+  ];
+  const status = precedence.find((candidate) =>
+    runs.some((run) => run.coverage.status === candidate),
+  ) ?? 'COMPLETE';
+  const reasons = [...new Set(
+    runs
+      .filter((run) => run.coverage.status !== 'COMPLETE')
+      .map((run) => run.coverage.reason)
+      .filter((reason): reason is string => Boolean(reason)),
+  )];
+
+  return {
+    status,
+    reason: reasons.length > 0 ? reasons.join(' · ') : null,
+    completeRuns: runs.filter((run) => run.coverage.status === 'COMPLETE').length,
+    totalRuns: runs.length,
+  };
 }
 
 function readError(error: unknown, fallback: string): string {
