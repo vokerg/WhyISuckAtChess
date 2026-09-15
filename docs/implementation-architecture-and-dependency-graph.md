@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture  
+**Status:** Phase 1 canonical implementation architecture, updated through Phase 3 acceptance  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -27,6 +27,8 @@ This document does **not** restate those specifications. It defines the concrete
 7. the Phase 1 closure decision.
 
 Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol names may evolve during implementation. The ownership, source-versus-derived distinctions, version/provenance requirements, and dependency direction below are architectural constraints.
+
+> **Phase 3 acceptance update (2026-09-15):** the per-game evidence slice now implements the worker-owned detector registry, versioned/provenance-fenced evidence persistence, current-evidence replay/detail projection, and Angular replay inspection described by these boundaries. See `docs/phase-3-acceptance.md` for the integration matrix and residual risks.
 
 ---
 
@@ -183,12 +185,12 @@ The exact file tree is not sacred. Module ownership and dependency direction are
 | `positions` | normalized position key/identity and collision verification | game-specific clocks or diagnosis context |
 | `analysis` | Stockfish abstraction/cache, position analysis, game-analysis runs, per-ply score-loss/classification | provider fetching, session aggregation, UI state |
 | `jobs` | generic persistent per-game task/run mechanics and executor context | chess policy inside executors |
-| `evidence` | typed deterministic per-game event/facet query interfaces and later detector orchestration | finding ranking, provider DTOs |
+| `evidence` | worker-owned deterministic detector registry/execution; versioned evidence runs/events; coverage/provenance fencing; current-evidence query boundary | cross-game finding ranking, provider DTOs, UI state |
 | `sessions` | versioned chronological sessionization and cross-game context | per-ply engine/timing derivation |
 | `diagnosis` | bounded aggregation, findings, relationships, evidence strength/coverage, later ranking/synthesis | Lichess DTOs, Prisma types outside owned repositories, board/UI logic, AI authority |
 | `packages/chess-domain` | pure position/evaluation/classification/geometry rules | Prisma, Fastify, Angular, provider/network code |
 | `packages/contracts` | verified serializable wire schemas/types | database models or provider secrets |
-| `apps/web` | Angular feature state, API clients, replay/board presentation, finding investigation | deterministic evidence generation |
+| `apps/web` | Angular feature state, API clients, replay/board presentation, deterministic-evidence inspection | deterministic evidence generation or diagnosis policy |
 
 ### 3.3 Dependency direction
 
