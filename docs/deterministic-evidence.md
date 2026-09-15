@@ -1,7 +1,7 @@
 # Deterministic evidence substrate
 
-**Status:** Phase 3 implementation contract  
-**Scope:** issue #27  
+**Status:** Phase 3 accepted implementation contract  
+**Scope:** issues #27-#36  
 **References:** `docs/diagnostic-taxonomy.md`, `docs/implementation-architecture-and-dependency-graph.md`, and CRT tactical-detection/job-worker patterns
 
 ## Purpose
@@ -22,7 +22,7 @@ A detector implements the `EvidenceDetector` interface under `apps/api/src/modul
 
 Each finding has a stable detector-local key, evidence type, optional source ply range/position, structured measurements/details, and an explicit availability state. Missing evidence is represented as `UNAVAILABLE` or `INCOMPLETE`; it must not be silently converted into a negative finding.
 
-Detector-specific payload types may become stricter as #28-#33 land. They remain behind the generic execution/persistence shape instead of adding separate run frameworks.
+The Phase 3 registry now contains material, phase, tactical-motif, defensive-threat, conversion, and opening detectors. Detector-specific policy remains behind the generic execution/persistence shape instead of adding separate run frameworks.
 
 ## Durable identity and provenance
 
@@ -66,7 +66,7 @@ The API process never runs detectors. The persistent worker executes evidence af
 
 One claimed evidence run is one **game x detector/version** unit. A detector result is capped at 256 findings per run. Detectors must query/compute only from the provided bounded snapshot. Cross-game aggregation belongs to later diagnosis work and must use separate bounded query interfaces.
 
-The registry in `evidence.registry.ts` is intentionally explicit. #28-#33 register concrete detector families there as they land.
+The registry in `evidence.registry.ts` is intentionally explicit and currently registers the six accepted Phase 3 detector families: material, phase, tactical motif, defensive threat, conversion, and opening evidence.
 
 ## Claims, retries, and stale work
 
@@ -83,10 +83,17 @@ Run coverage uses these substrate states:
 - `UNAVAILABLE`: required source modality was absent, and that absence itself is the authoritative detector outcome.
 - `INCOMPLETE`: execution/provenance failed or became stale before a trustworthy detector outcome was completed.
 
-A detector may additionally persist unavailable/incomplete events when a source-local absence must be inspectable at a specific ply/position. Later APIs should expose these states rather than flattening them into “no finding”.
+A detector may additionally persist unavailable/incomplete events when a source-local absence must be inspectable at a specific ply/position. The imported-game replay/detail contracts expose these states, and the replay UI distinguishes incomplete/unavailable coverage from a complete no-finding result.
 
 ## Ownership and future seam
 
 Persistence and worker orchestration live in `apps/api/src/modules/evidence`. Framework-neutral chess geometry/policy should live in `packages/chess-domain` where practical. Detector code must not import AI providers, provider DTOs, or transport/UI state.
 
 The future replacement seam is the typed detector input/output plus evidence repository/query interfaces. No generalized workflow framework is introduced here.
+
+
+## Phase 3 acceptance
+
+Issue #36 validates the substrate and all registered detectors as one product slice. The DB-backed acceptance path now exercises a representative standard **bullet** game from authenticated Lichess import through ply indexing/timing, Stockfish analysis, all registered evidence detectors, current-evidence persistence, typed replay projection, per-ply event links, and stale-source invalidation. The Angular replay integration test separately verifies contract parsing, store projection, coverage semantics, and rendered evidence details.
+
+The detailed acceptance matrix and residual risks are recorded in [phase-3-acceptance.md](phase-3-acceptance.md).
