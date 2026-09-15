@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { importedGameReplayResponseSchema } from '@why-i-suck-at-chess/contracts';
 import prismaModule from '../dist/prisma.js';
@@ -259,14 +259,15 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
           assert.ok(sourceAnalysis, detector.key + ' requires current complete analysis');
         }
 
-        const workKey = [
-          'pipeline-acceptance',
-          suffix,
-          detector.key,
-          detector.version,
-          game.plyIndexedAt.toISOString(),
-          sourceAnalysis?.snapshotId ?? '-',
-        ].join(':');
+        const workKey = createHash('sha256')
+          .update([
+            targetGameId,
+            detector.key,
+            detector.version,
+            game.plyIndexedAt.toISOString(),
+            sourceAnalysis?.snapshotId ?? '-',
+          ].join('|'))
+          .digest('hex');
         const existing = await prisma.evidenceRun.findUnique({
           where: { workKey },
           select: { id: true },
