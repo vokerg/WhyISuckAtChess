@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through Phase 3 acceptance  
+**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session context  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -29,6 +29,8 @@ This document does **not** restate those specifications. It defines the concrete
 Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol names may evolve during implementation. The ownership, source-versus-derived distinctions, version/provenance requirements, and dependency direction below are architectural constraints.
 
 > **Phase 3 acceptance update (2026-09-15):** the per-game evidence slice now implements the worker-owned detector registry, versioned/provenance-fenced evidence persistence, current-evidence replay/detail projection, and Angular replay inspection described by these boundaries. See `docs/phase-3-acceptance.md` for the integration matrix and residual risks.
+>
+> **Phase 4 session-context update (2026-09-16):** issue #50 introduces the reusable `sessions` boundary with a bounded `session-v1` partition over owned imported-game chronology/result facts. It provides session ordinal, elapsed time, inter-game gap, prior-loss-streak context, and explicit chronology coverage without yet creating diagnosis findings. See `docs/sessionization.md`.
 
 ---
 
@@ -511,7 +513,7 @@ GameSessionMembership
   priorLossStreak / other deterministic context where policy defines it
 ```
 
-The exact gap threshold and session semantics are later calibration/policy details. Changing semantics bumps the sessionization policy version.
+The initial implemented policy is `session-v1`: games remain in one session when the next `startedAt` is no more than 30 minutes after the previous `endedAt`; changing that calibration-sensitive threshold or its boundary semantics requires a policy-version bump. The service is bounded to 5,000 candidates, reports missing/invalid chronology as coverage loss, and exposes deterministic ordinal/elapsed/gap/prior-loss-streak context. Persistent session-run tables remain optional until scale or reproducibility requires them; consumers use the typed session boundary rather than reimplementing partition rules.
 
 Session workflows consume completed imported-game chronology and source/derived game evidence. They do not own per-ply reconstruction or engine execution.
 
