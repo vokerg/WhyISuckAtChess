@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session context  
+**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session aggregation  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -31,6 +31,8 @@ Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol nam
 > **Phase 3 acceptance update (2026-09-15):** the per-game evidence slice now implements the worker-owned detector registry, versioned/provenance-fenced evidence persistence, current-evidence replay/detail projection, and Angular replay inspection described by these boundaries. See `docs/phase-3-acceptance.md` for the integration matrix and residual risks.
 >
 > **Phase 4 session-context update (2026-09-16):** issue #50 introduces the reusable `sessions` boundary with a bounded `session-v1` partition over owned imported-game chronology/result facts. It provides session ordinal, elapsed time, inter-game gap, prior-loss-streak context, and explicit chronology coverage without yet creating diagnosis findings. See `docs/sessionization.md`.
+>
+> **Phase 4 aggregation update (2026-09-16):** issue #52 adds `session-deterioration-v1`, the first diagnosis-side cross-game aggregate. It composes `session-v1` with current complete engine move-quality evidence, compares ordinals 1–3 with ordinal 4+, preserves per-arm coverage and weaker-arm evidence strength, and deliberately stops before diagnosis persistence/ranking or tilt/fatigue interpretation. See `docs/session-deterioration.md`.
 
 ---
 
@@ -796,6 +798,8 @@ querySessionContext(scope, sessionizationVersion)
 ```
 
 These are examples of ownership, not a prescribed API. The key is SQL/bounded-query aggregation and typed outputs rather than loading an account's complete object graph into Node and improvising joins.
+
+The first concrete implementation is `session-deterioration-v1`: the diagnosis service consumes `querySessionContext` semantics from the `sessions` module, then asks a Prisma repository for SQL-aggregated current-complete user move quality over only those owned session-covered game ids. Pure aggregation computes early-versus-late CPL/error-rate deltas and taxonomy evidence strength. This boundary does not persist a `DiagnosticFinding` or infer fatigue/tilt.
 
 ### 6.8 Diagnosis boundary
 
