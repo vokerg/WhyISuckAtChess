@@ -255,6 +255,7 @@ export function buildSessionDeteriorationAggregate(
   const analysedGames = qualityRows.filter((row) => analysed(row)).length;
   const caveats = [
     'This is a within-player association, not evidence that session length causes worse play.',
+    'Only sessions reaching game 4 can contribute to the late arm, so short-session versus long-session composition can confound the raw comparison.',
     'The v1 comparison does not yet match exact time control, opponent strength, opening mix, or time of day.',
   ];
   if (sessionization.coverage.status !== 'COMPLETE') {
