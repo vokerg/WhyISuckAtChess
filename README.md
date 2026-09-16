@@ -15,6 +15,7 @@ A lightweight, evidence-driven chess diagnosis product built to answer one quest
 - [Implementation architecture and dependency graph](docs/implementation-architecture-and-dependency-graph.md) — module/data/worker boundaries and dependency-safe implementation sequence, updated through the Phase 3 evidence slice.
 - [Phase 3 evidence acceptance](docs/phase-3-acceptance.md) — integration/acceptance matrix, validated invariants, and residual risks for the completed per-game evidence engine.
 - [Sessionization and cross-game context](docs/sessionization.md) — initial Phase 4 deterministic session partition, chronology coverage, and bounded cross-game context policy.
+- [Late-session deterioration aggregate](docs/session-deterioration.md) — first Phase 4 cross-game move-quality comparison for `SESSION-001`, with explicit coverage and evidence-strength semantics.
 
 The existing [`vokerg/chess_repertoir_trainer`](https://github.com/vokerg/chess_repertoir_trainer) project is the primary reference implementation. This repository adapts its modular workspace/process patterns but intentionally omits mobile, repertoire, course, and training product breadth.
 
@@ -28,7 +29,7 @@ packages/contracts       verified wire schemas/types
 scripts                   architecture and repository guardrails
 ```
 
-The API keeps explicit module seams for auth, Lichess, account imports, jobs, imported games, timing, positions, analysis, evidence, sessions, and diagnosis. Phase 3 now has a persistent deterministic-evidence registry with material, phase, tactical-motif, defensive-threat, conversion, and opening detectors. Phase 4 has started with a bounded, versioned sessionization/context service over owned source chronology and result facts. Owned imported-game list/detail/replay endpoints expose only current provenance-safe evidence, and the Angular replay surface renders evidence markers, coverage, measurements, and provenance without re-deriving chess facts in the UI.
+The API keeps explicit module seams for auth, Lichess, account imports, jobs, imported games, timing, positions, analysis, evidence, sessions, and diagnosis. Phase 3 now has a persistent deterministic-evidence registry with material, phase, tactical-motif, defensive-threat, conversion, and opening detectors. Phase 4 now has a bounded, versioned sessionization/context service plus the first diagnosis-side aggregate comparing early-session and later-session move quality from provenance-safe engine evidence. Owned imported-game list/detail/replay endpoints expose only current provenance-safe evidence, and the Angular replay surface renders evidence markers, coverage, measurements, and provenance without re-deriving chess facts in the UI.
 
 ## Developer setup
 
@@ -62,7 +63,7 @@ npm run dev          # API + Angular web shell
 npm run dev:worker   # persistent Lichess import -> ply indexing -> Stockfish worker
 ```
 
-The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the Lichess connection/import endpoints. The persistent worker carries supported standard bullet/blitz/rapid games through indexing, timing derivation, Stockfish analysis, and the registered deterministic evidence detectors. The web app contains an investigation-first imported-game library and replay surface with inspectable deterministic evidence. The backend now has reusable session context for later longitudinal aggregators, but deterioration statistics, cross-game diagnosis synthesis, and ranking remain later work; AI remains outside the authoritative evidence path.
+The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the Lichess connection/import endpoints. The persistent worker carries supported standard bullet/blitz/rapid games through indexing, timing derivation, Stockfish analysis, and the registered deterministic evidence detectors. The web app contains an investigation-first imported-game library and replay surface with inspectable deterministic evidence. The backend now has reusable session context and an internal `SESSION-001` late-session move-quality aggregate. Diagnosis persistence/synthesis, confounder matching, ranking, API/UI exposure, and psychological interpretation remain later work; AI remains outside the authoritative evidence path.
 
 ## Guardrails
 
