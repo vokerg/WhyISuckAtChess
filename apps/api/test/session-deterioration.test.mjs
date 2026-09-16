@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import prismaModule from '../dist/prisma.js';
-import { MoveClassificationCode } from '../../packages/chess-domain/dist/move-classification.js';
+import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import {
   buildSessionDeteriorationAggregate,
   comparativeEvidenceStrength,
