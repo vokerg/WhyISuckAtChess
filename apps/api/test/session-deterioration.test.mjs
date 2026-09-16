@@ -6,6 +6,7 @@ import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import {
   buildSessionDeteriorationAggregate,
   comparativeEvidenceStrength,
+  getSessionDeterioration,
   SESSION_DETERIORATION_POLICY_VERSION,
 } from '../dist/modules/diagnosis/session-deterioration.service.js';
 import { prismaSessionDeteriorationRepository } from '../dist/modules/diagnosis/session-deterioration.repository.prisma.js';
@@ -106,6 +107,63 @@ test('missing chronology stays visible and uncovered games never enter the compa
   assert.equal(result.coverage.sessionUncoveredGames, 1);
   assert.equal(result.comparison.early.eligibleGames, 1);
   assert.equal(result.comparison.late.eligibleGames, 0);
+  assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
+});
+
+test('service composes sessionization and requests quality only for covered owned games', async () => {
+  const candidates = [
+    sourceGame(11, '2026-09-01T10:00:00Z'),
+    sourceGame(12, '2026-09-01T10:10:00Z'),
+    sourceGame(13, '2026-09-01T10:20:00Z'),
+    sourceGame(14, '2026-09-01T10:30:00Z'),
+  ];
+  let loadedQuality = null;
+
+  const result = await getSessionDeterioration(
+    42,
+    {
+      from: new Date('2026-09-01T00:00:00Z'),
+      to: new Date('2026-09-02T00:00:00Z'),
+    },
+    {
+      countCandidates: async (appUserId) => {
+        assert.equal(appUserId, 42);
+        return candidates.length;
+      },
+      loadCandidates: async (appUserId) => {
+        assert.equal(appUserId, 42);
+        return candidates;
+      },
+    },
+    {
+      loadGameQuality: async (appUserId, importedGameIds) => {
+        loadedQuality = { appUserId, importedGameIds: [...importedGameIds] };
+        return importedGameIds.map((id, index) => quality(id, index === 3 ? 70 : 20));
+      },
+    },
+  );
+
+  assert.deepEqual(loadedQuality, {
+    appUserId: 42,
+    importedGameIds: [11, 12, 13, 14],
+  });
+  assert.equal(result.comparison.early.eligibleGames, 3);
+  assert.equal(result.comparison.late.eligibleGames, 1);
+  assert.equal(result.comparison.averageScoreLossDeltaCp, 50);
+});
+
+test('quality candidate drift fails closed instead of mixing session and analysis snapshots', () => {
+  const sessionization = sessionizeGames([
+    sourceGame(21, '2026-09-01T10:00:00Z'),
+    sourceGame(22, '2026-09-01T10:10:00Z'),
+  ]);
+  const result = buildSessionDeteriorationAggregate(
+    sessionization,
+    [quality(21, 20)],
+  );
+
+  assert.equal(result.coverage.status, 'UNAVAILABLE');
+  assert.equal(result.coverage.reason, 'session-game-set-changed-during-quality-read');
   assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
 });
 
