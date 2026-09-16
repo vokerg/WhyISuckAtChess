@@ -45,6 +45,6 @@ The Prisma query receives only owned, session-covered game ids and aggregates mo
 
 ## Interpretation boundary
 
-Positive CPL or error-rate deltas mean the measured move-quality metric is worse in the late arm. They do not by themselves prove fatigue or tilt. The v1 aggregate also does not yet match or adjust exact time control, opponent strength, opening mix, or local time; those composition differences remain caveats for later diagnosis-building work.
+Positive CPL or error-rate deltas mean the measured move-quality metric is worse in the late arm. They do not by themselves prove fatigue or tilt. Only sessions that reach game 4 can contribute to the late arm, so raw early-versus-late differences may also reflect differences between short and long sessions. The v1 aggregate likewise does not yet match or adjust exact time control, opponent strength, opening mix, or local time; those composition differences remain caveats for later diagnosis-building work.
 
 A later `DiagnosticFindingDraft` builder may consume this aggregate together with mechanism-specific evidence and confounder checks. It must not reimplement sessionization or silently upgrade this association into a causal claim.
