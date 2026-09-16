@@ -144,6 +144,8 @@ export function sessionizeGames(games: readonly SessionSourceGame[]): Sessioniza
     }
   }
 
+  uncoveredGames.sort((left, right) => left.importedGameId - right.importedGameId);
+
   if (valid.length === 0) {
     return {
       ...unavailable('session-chronology-unavailable', games.length),
