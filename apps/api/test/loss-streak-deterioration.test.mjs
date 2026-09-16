@@ -88,6 +88,8 @@ test('loss-streak aggregate compares prior-loss-streak >=2 with ordinal/control 
   assert.equal(result.coverage.status, 'COMPLETE');
   assert.equal(result.coverage.baselineCandidateGames, 5);
   assert.equal(result.coverage.streakCandidateGames, 5);
+  assert.equal(result.coverage.excludedPreStreakOrdinalGames, 20);
+  assert.equal(result.coverage.excludedSingleLossGames, 5);
   assert.equal(result.coverage.matchedBaselineGames, 5);
   assert.equal(result.coverage.matchedStreakGames, 5);
   assert.equal(result.coverage.matchedStrata, 1);
