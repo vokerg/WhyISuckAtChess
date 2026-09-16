@@ -42,6 +42,8 @@ export const prismaSessionDeteriorationRepository: SessionDeteriorationRepositor
        AND ply."isUserMove" = TRUE
       LEFT JOIN "GameAnalysisRun" AS analysis
         ON analysis."id" = ply."engineAnalysisRunId"
+       AND analysis."importedGameId" = game."id"
+       AND game."plyIndexStatus" = 'INDEXED'
        AND analysis."status" = 'SUCCEEDED'
        AND analysis."coverageStatus" = 'COMPLETE'
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
