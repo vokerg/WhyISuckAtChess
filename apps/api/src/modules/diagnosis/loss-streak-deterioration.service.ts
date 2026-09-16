@@ -292,8 +292,14 @@ export function buildLossStreakDeteriorationAggregate(
   const afterLossStreak = armSummary(matchedStreak, qualityByGame);
   const matchedGames = matchedBaseline.length + matchedStreak.length;
   const analysedMatchedGames = baseline.analysedGames + afterLossStreak.analysedGames;
-  const unmatchedBaselineGames = baselineCandidates.length - matchedBaseline.length;
-  const unmatchedStreakGames = streakCandidates.length - matchedStreak.length;
+  const unmatchedBaselineGames = baselineCandidates.filter((context) => {
+    const key = stratumKey(context, qualityByGame);
+    return key !== null && !matchedKeys.has(key);
+  }).length;
+  const unmatchedStreakGames = streakCandidates.filter((context) => {
+    const key = stratumKey(context, qualityByGame);
+    return key !== null && !matchedKeys.has(key);
+  }).length;
 
   const comparisonAvailable = matchedBaseline.length > 0 && matchedStreak.length > 0;
   const complete = comparisonAvailable
