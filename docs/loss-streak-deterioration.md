@@ -40,7 +40,7 @@ Coverage also exposes:
 - matched stratum count;
 - analysed matched games and overall matched analysis coverage.
 
-The exclusion counters describe independent coverage dimensions and may overlap (for example, the second game of a session can be both too early for a two-loss streak comparison and a one-prior-loss game).
+The pre-streak-ordinal and one-prior-loss exclusion counters describe independent dimensions and may overlap (for example, the second game of a session can be both). Missing-time-control candidates are counted separately from unmatched candidates; `unmatchedBaselineGames` and `unmatchedStreakGames` mean candidates with a valid ordinal/control stratum that has no opposite-arm representation.
 
 Missing chronology, exact-control identity, an opposite-arm stratum, or current complete engine analysis is never imputed as normal evidence.
 
