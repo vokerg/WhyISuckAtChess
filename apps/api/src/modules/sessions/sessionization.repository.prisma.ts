@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
   SESSIONIZATION_MAX_CANDIDATE_GAMES,
