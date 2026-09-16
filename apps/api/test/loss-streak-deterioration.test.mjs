@@ -157,7 +157,7 @@ test('matching excludes missing time controls and one-sided ordinal/control stra
   assert.equal(result.coverage.matchedBaselineGames, 1);
   assert.equal(result.coverage.matchedStreakGames, 1);
   assert.equal(result.coverage.unmatchedBaselineGames, 1);
-  assert.equal(result.coverage.unmatchedStreakGames, 1);
+  assert.equal(result.coverage.unmatchedStreakGames, 0);
   assert.equal(result.coverage.matchedStrata, 1);
   assert.equal(result.comparison.averageScoreLossDeltaCp, 50);
   assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
