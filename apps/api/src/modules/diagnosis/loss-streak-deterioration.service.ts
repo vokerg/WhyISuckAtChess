@@ -245,22 +245,24 @@ export function buildLossStreakDeteriorationAggregate(
     return unavailable(sessionization, 'session-game-set-changed-during-quality-read');
   }
 
-  const baselineCandidates: ContextRow[] = [];
-  const streakCandidates: ContextRow[] = [];
-  let excludedPreStreakOrdinalGames = 0;
-  let excludedSingleLossGames = 0;
-
-  for (const context of contexts) {
-    if (context.ordinal < LOSS_STREAK_DETERIORATION_MIN_MATCH_ORDINAL) {
-      excludedPreStreakOrdinalGames += 1;
-    } else if (context.priorLossStreak === LOSS_STREAK_DETERIORATION_BASELINE_PRIOR_LOSSES) {
-      baselineCandidates.push(context);
-    } else if (context.priorLossStreak >= LOSS_STREAK_DETERIORATION_MIN_PRIOR_LOSSES) {
-      streakCandidates.push(context);
-    } else {
-      excludedSingleLossGames += 1;
-    }
-  }
+  const excludedPreStreakOrdinalGames = contexts
+    .filter((context) => context.ordinal < LOSS_STREAK_DETERIORATION_MIN_MATCH_ORDINAL)
+    .length;
+  const excludedSingleLossGames = contexts
+    .filter((context) => context.priorLossStreak === 1)
+    .length;
+  const baselineCandidates = contexts.filter(
+    (context) => (
+      context.ordinal >= LOSS_STREAK_DETERIORATION_MIN_MATCH_ORDINAL
+      && context.priorLossStreak === LOSS_STREAK_DETERIORATION_BASELINE_PRIOR_LOSSES
+    ),
+  );
+  const streakCandidates = contexts.filter(
+    (context) => (
+      context.ordinal >= LOSS_STREAK_DETERIORATION_MIN_MATCH_ORDINAL
+      && context.priorLossStreak >= LOSS_STREAK_DETERIORATION_MIN_PRIOR_LOSSES
+    ),
+  );
 
   const baselineKeys = new Set(
     baselineCandidates
