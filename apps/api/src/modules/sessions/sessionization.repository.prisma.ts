@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
   SESSIONIZATION_MAX_CANDIDATE_GAMES,
@@ -11,9 +10,10 @@ function buildWhere(
   appUserId: number,
   scope: SessionizationScope,
 ): Prisma.ImportedGameWhereInput {
-  const startedAt: Prisma.DateTimeNullableFilter<'ImportedGame'> = {};
-  if (scope.from) startedAt.gte = scope.from;
-  if (scope.to) startedAt.lt = scope.to;
+  const startedAt = {
+    ...(scope.from ? { gte: scope.from } : {}),
+    ...(scope.to ? { lt: scope.to } : {}),
+  };
 
   return {
     appUserId,
