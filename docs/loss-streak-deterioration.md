@@ -40,6 +40,8 @@ Coverage also exposes:
 - matched stratum count;
 - analysed matched games and overall matched analysis coverage.
 
+The exclusion counters describe independent coverage dimensions and may overlap (for example, the second game of a session can be both too early for a two-loss streak comparison and a one-prior-loss game).
+
 Missing chronology, exact-control identity, an opposite-arm stratum, or current complete engine analysis is never imputed as normal evidence.
 
 ## Matching boundary
