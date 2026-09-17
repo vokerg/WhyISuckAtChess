@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session aggregation  
+**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session aggregates  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -33,6 +33,8 @@ Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol nam
 > **Phase 4 session-context update (2026-09-16):** issue #50 introduces the reusable `sessions` boundary with a bounded `session-v1` partition over owned imported-game chronology/result facts. It provides session ordinal, elapsed time, inter-game gap, prior-loss-streak context, and explicit chronology coverage without yet creating diagnosis findings. See `docs/sessionization.md`.
 >
 > **Phase 4 aggregation update (2026-09-16):** issue #52 adds `session-deterioration-v1`, the first diagnosis-side cross-game aggregate. It composes `session-v1` with current complete engine move-quality evidence, compares ordinals 1–3 with ordinal 4+, preserves per-arm coverage and weaker-arm evidence strength, and deliberately stops before diagnosis persistence/ranking or tilt/fatigue interpretation. See `docs/session-deterioration.md`.
+>
+> **Phase 4 streak update (2026-09-16):** issue #54 adds `loss-streak-deterioration-v1` for `SESSION-002`. It reuses the same bounded current-analysis quality read, matches games after at least two prior losses against non-streak games in the same session ordinal/exact-control strata, and keeps unmatched composition and unresolved opponent/opening/time-of-day confounders explicit. See `docs/loss-streak-deterioration.md`.
 
 ---
 
@@ -800,6 +802,8 @@ querySessionContext(scope, sessionizationVersion)
 These are examples of ownership, not a prescribed API. The key is SQL/bounded-query aggregation and typed outputs rather than loading an account's complete object graph into Node and improvising joins.
 
 The first concrete implementation is `session-deterioration-v1`: the diagnosis service consumes `querySessionContext` semantics from the `sessions` module, then asks a Prisma repository for SQL-aggregated current-complete user move quality over only those owned session-covered game ids. Pure aggregation computes early-versus-late CPL/error-rate deltas and taxonomy evidence strength. This boundary does not persist a `DiagnosticFinding` or infer fatigue/tilt.
+
+`loss-streak-deterioration-v1` reuses that bounded quality boundary and `session-v1.priorLossStreak`, adding exact-time-control identity to the read model so the pure aggregation can match streak/non-streak candidates by ordinal and exact control. Missing controls, one-sided strata, chronology gaps, and incomplete engine analysis remain explicit coverage loss rather than being silently imputed.
 
 ### 6.8 Diagnosis boundary
 

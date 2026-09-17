@@ -2,17 +2,18 @@ import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import type {
-  SessionDeteriorationRepository,
+  SessionGameQualityRepository,
   SessionGameQuality,
 } from './session-deterioration.service';
 
-export const prismaSessionDeteriorationRepository: SessionDeteriorationRepository = {
+export const prismaSessionDeteriorationRepository: SessionGameQualityRepository = {
   async loadGameQuality(appUserId, importedGameIds) {
     if (importedGameIds.length === 0) return [];
 
     return prisma.$queryRaw<SessionGameQuality[]>(Prisma.sql`
       SELECT
         game."id" AS "importedGameId",
+        game."exactTimeControlKey" AS "exactTimeControlKey",
         COUNT(*) FILTER (
           WHERE analysis."id" IS NOT NULL
             AND ply."scoreLossCp" IS NOT NULL
@@ -49,7 +50,7 @@ export const prismaSessionDeteriorationRepository: SessionDeteriorationRepositor
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
       WHERE game."appUserId" = ${appUserId}
         AND game."id" IN (${Prisma.join([...importedGameIds])})
-      GROUP BY game."id"
+      GROUP BY game."id", game."exactTimeControlKey"
       ORDER BY game."id" ASC
     `);
   },

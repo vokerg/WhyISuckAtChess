@@ -192,6 +192,7 @@ test('Prisma quality aggregation enforces ownership and excludes stale analysis 
         endedAt: new Date('2026-09-16T06:05:00Z'),
         userColor: 'WHITE',
         resultForUser: 'LOSS',
+        exactTimeControlKey: '3+0',
         plyIndexStatus: 'INDEXED',
         plyIndexedAt: indexedAt,
       },
@@ -269,10 +270,12 @@ test('Prisma quality aggregation enforces ownership and excludes stale analysis 
     );
 
     assert.deepEqual(rows.map((row) => row.importedGameId), [current.id, stale.id]);
+    assert.equal(rows[0].exactTimeControlKey, '3+0');
     assert.equal(rows[0].analysedUserMoves, 1);
     assert.equal(rows[0].averageScoreLossCp, 220);
     assert.equal(rows[0].majorErrorMoves, 1);
     assert.equal(rows[0].blunderMoves, 1);
+    assert.equal(rows[1].exactTimeControlKey, '3+0');
     assert.equal(rows[1].analysedUserMoves, 0);
     assert.equal(rows[1].averageScoreLossCp, null);
     assert.equal(rows[1].majorErrorMoves, 0);

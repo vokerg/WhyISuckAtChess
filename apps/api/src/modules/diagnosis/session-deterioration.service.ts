@@ -16,15 +16,18 @@ export type DiagnosticEvidenceStrength = 'INSUFFICIENT' | 'LOW' | 'MEDIUM' | 'HI
 
 export interface SessionGameQuality {
   importedGameId: number;
+  exactTimeControlKey: string | null;
   analysedUserMoves: number;
   averageScoreLossCp: number | null;
   majorErrorMoves: number;
   blunderMoves: number;
 }
 
-export interface SessionDeteriorationRepository {
+export interface SessionGameQualityRepository {
   loadGameQuality(appUserId: number, importedGameIds: readonly number[]): Promise<SessionGameQuality[]>;
 }
+
+export type SessionDeteriorationRepository = SessionGameQualityRepository;
 
 export interface SessionDeteriorationArm {
   eligibleGames: number;
@@ -286,7 +289,7 @@ export async function getSessionDeterioration(
   appUserId: number,
   scope: SessionizationScope,
   sessionRepository: SessionizationRepository,
-  repository: SessionDeteriorationRepository,
+  repository: SessionGameQualityRepository,
 ): Promise<SessionDeteriorationResult> {
   const sessionization = await getSessionContext(appUserId, scope, sessionRepository);
   if (sessionization.coverage.status === 'UNAVAILABLE') {
