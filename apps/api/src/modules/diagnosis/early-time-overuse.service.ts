@@ -3,6 +3,7 @@ import {
   TIME_BEHAVIOR_POLICY_VERSION,
   TIME_EARLY_OVERUSE_MEDIAN_MULTIPLIER,
   TIME_EARLY_OVERUSE_MIN_PEER_GAMES,
+  TIME_PRESSURE_THRESHOLD_CENTISECONDS,
   classifyRemainingClock,
   comparativeTimingBehaviorEvidenceStrength,
   roundTimingBehaviorMetric,
@@ -411,7 +412,7 @@ function unavailable(candidateGames: number, reason: string): EarlyTimeOveruseRe
       earlyPhase: 'OPENING',
       overuseMedianMultiplier: TIME_EARLY_OVERUSE_MEDIAN_MULTIPLIER,
       minimumPeerGames: TIME_EARLY_OVERUSE_MIN_PEER_GAMES,
-      pressureClockMaximumCentisecondsInclusive: 3_000,
+      pressureClockMaximumCentisecondsInclusive: TIME_PRESSURE_THRESHOLD_CENTISECONDS,
       qualityMatchingDimensions: ['EXACT_TIME_CONTROL', 'PHASE'],
     },
     coverage: {
@@ -897,7 +898,7 @@ export function buildEarlyTimeOveruseAggregate(
       earlyPhase: 'OPENING',
       overuseMedianMultiplier: TIME_EARLY_OVERUSE_MEDIAN_MULTIPLIER,
       minimumPeerGames: TIME_EARLY_OVERUSE_MIN_PEER_GAMES,
-      pressureClockMaximumCentisecondsInclusive: 3_000,
+      pressureClockMaximumCentisecondsInclusive: TIME_PRESSURE_THRESHOLD_CENTISECONDS.
       qualityMatchingDimensions: ['EXACT_TIME_CONTROL', 'PHASE'],
     },
     coverage: {
