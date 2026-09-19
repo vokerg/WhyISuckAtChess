@@ -70,7 +70,7 @@ function responsePair({
   phase = 'MIDDLEGAME',
   scoreLossCp = 20,
   classificationCode = null,
-  analysisRun = analysis(Math.floor(Math.random() * 100000) + 1),
+  analysisRun = analysis(5),
   opponentTimingDerivationStatus = 'AVAILABLE',
   userTimingDerivationStatus = 'AVAILABLE',
 } = {}) {
