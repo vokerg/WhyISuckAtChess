@@ -267,6 +267,8 @@ Metrics: result, pressure exposure, and current-engine quality where each modali
 Exact controls remain visible; positive, neutral, and negative effects are all valid outputs.  
 Attach rating-composition warning separately.
 
+Issue #62 implements this contract as `increment-effect-v1`, documented in `docs/increment-effect.md`. It compares increment and no-increment arms only within identical initial-time strata, keeps represented exact controls visible, reuses `TIME-001` pressure semantics, fences quality to current complete engine evidence, and attaches `RATING-002` per matched stratum without changing raw deltas.
+
 ### `TIME-007 OPPONENT_MOVE_SPEED_EFFECT`
 
 Exposure: immediately preceding eligible opponent move `<= 1.0 s`; sequence context is at least two consecutive fast opponent decisions.  
