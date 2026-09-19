@@ -869,6 +869,7 @@ export function buildEarlyTimeOveruseAggregate(
       || (
         qualityEvaluableGames === laterPressureGames
         && matchedAnalysedPressureMoves === knownPressureMoves
+        && analysedNormalQualityBaselineMoves === normalQualityBaselineMoves
       );
     const complete = earlyCoveredGames === timingEligibleGames
       && peerBaselineGames === earlyCoveredGames
