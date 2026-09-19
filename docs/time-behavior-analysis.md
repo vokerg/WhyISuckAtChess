@@ -244,6 +244,8 @@ Candidate arm: user moves `<= 1.0 s` with ample clock.
 Baseline arm: user moves `> 1.0 s` with ample clock, matched by exact control + phase.  
 Positive mechanism evidence additionally requires worse current-engine quality in the fast arm; fast moves with equal/better quality remain exposure only, not a positive mechanism finding.
 
+Issue #63 implements this contract as `played-too-fast-v1`, documented in `docs/played-too-fast.md`. The aggregate keeps ample-clock exposure, exact-control/phase matching, current-engine provenance, distinct-game recurrence, and non-positive fast-good outcomes explicit.
+
 ### `TIME-004 EARLY_TIME_OVERUSE`
 
 Early window: trustworthy `OPENING` phase.  
