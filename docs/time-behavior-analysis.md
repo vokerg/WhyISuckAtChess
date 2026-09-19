@@ -253,6 +253,8 @@ Overuse: per-game eligible opening time at least 1.5x the median among same-exac
 Required later chain: later pressure, then later quality degradation against matched normal-clock evidence.  
 All three chain stages must be present in-order for complete mechanism evidence.
 
+Issue #64 implements this contract as `early-time-overuse-v1`, documented in `docs/early-time-overuse.md`. The aggregate keeps same-control peer medians, ordered same-game pressure/quality links, broken-link counts, current-engine provenance, and downstream timing/quality coverage explicit.
+
 ### `TIME-005 EXACT_TIME_CONTROL_UNDERPERFORMANCE`
 
 Target: one exact control.  
