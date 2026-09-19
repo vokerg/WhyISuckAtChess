@@ -236,6 +236,8 @@ Quality: current complete engine score-loss/error metrics only.
 Strength: weaker distinct-game arm plus per-arm required-evidence coverage.  
 Result is correlational.
 
+Issue #60 implements this contract as `time-pressure-quality-collapse-v1`, documented in `docs/time-pressure-quality-collapse.md`. The implementation retains exact-control/phase strata, fences quality to current complete engine analysis, and reuses `RATING-002` only when its disjoint-game-arm precondition holds.
+
 ### `TIME-003 PLAYED_TOO_FAST`
 
 Candidate arm: user moves `<= 1.0 s` with ample clock.  
