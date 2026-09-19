@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through initial Phase 4 session aggregates  
+**Status:** Phase 1 canonical implementation architecture, updated through the Phase 4B timing-behavior policy  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -15,6 +15,7 @@ The existing Phase 1 documents answer different questions:
 - `docs/crt-delta-map.md` says what to reuse from Chess Repertoire Trainer (CRT), what to change, what to omit, and where future seams belong.
 - `docs/diagnostic-taxonomy.md` defines the deterministic finding vocabulary, evidence/coverage requirements, source-reference invariants, and relationship semantics.
 - `docs/lichess-ingestion-and-timing.md` defines the authoritative Lichess identity/import/timing contract, including lossless raw clock preservation, safe alignment, timing derivation semantics, and bullet eligibility.
+- `docs/time-behavior-analysis.md` defines the shared Phase 4B pressure, pace, baseline, rating-composition, coverage, evidence-strength, and rounding policy consumed by later timing aggregates.
 
 This document does **not** restate those specifications. It defines the concrete implementation architecture that must preserve them:
 
@@ -35,6 +36,8 @@ Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol nam
 > **Phase 4 aggregation update (2026-09-16):** issue #52 adds `session-deterioration-v1`, the first diagnosis-side cross-game aggregate. It composes `session-v1` with current complete engine move-quality evidence, compares ordinals 1–3 with ordinal 4+, preserves per-arm coverage and weaker-arm evidence strength, and deliberately stops before diagnosis persistence/ranking or tilt/fatigue interpretation. See `docs/session-deterioration.md`.
 >
 > **Phase 4 streak update (2026-09-16):** issue #54 adds `loss-streak-deterioration-v1` for `SESSION-002`. It reuses the same bounded current-analysis quality read, matches games after at least two prior losses against non-streak games in the same session ordinal/exact-control strata, and keeps unmatched composition and unresolved opponent/opening/time-of-day confounders explicit. See `docs/loss-streak-deterioration.md`.
+>
+> **Phase 4B timing-policy update (2026-09-19):** issue #57 adds `time-behavior-v1` as the shared deterministic contract for pressure/ample/fast timing states, exact-control/phase matching, rating-composition warnings, and 50% plus 5/15/40 evidence gates. It remains a timing-module policy consumed by later diagnosis aggregates; no `TIME-*` finding is implemented by the policy itself. See `docs/time-behavior-analysis.md`.
 
 ---
 
@@ -187,7 +190,7 @@ The exact file tree is not sacred. Module ownership and dependency direction are
 | `lichess` | OAuth/PKCE lifecycle, encrypted token persistence, connected identity/credential adapter | imported-game persistence, timing derivation, diagnosis |
 | `account-imports` | durable import runs/windows/checkpoints, Lichess fetch/normalize executor, bounded provider commits | ply reconstruction, Stockfish, session aggregation |
 | `imported-games` | imported-game source record ownership, game queries, ply indexing orchestration/read boundaries | provider token storage, diagnosis policy |
-| `timing` | raw-clock alignment policy and versioned nullable timing derivation over persisted source facts | OAuth/fetching, engine evaluation, psychological interpretation |
+| `timing` | raw-clock alignment policy, versioned nullable timing derivation, and shared versioned time-behavior analysis constants/helpers over persisted source facts | OAuth/fetching, engine evaluation, cross-game diagnosis aggregation, psychological interpretation |
 | `positions` | normalized position key/identity and collision verification | game-specific clocks or diagnosis context |
 | `analysis` | Stockfish abstraction/cache, position analysis, game-analysis runs, per-ply score-loss/classification | provider fetching, session aggregation, UI state |
 | `jobs` | generic persistent per-game task/run mechanics and executor context | chess policy inside executors |
