@@ -160,6 +160,8 @@ test('TIME-004 requires the complete ordered chain before reporting an associati
   assert.equal(result.controls[0].peerMedianCentiseconds, 400);
   assert.equal(result.controls[0].overuseThresholdCentiseconds, 600);
   assert.equal(result.coverage.normalQualityBaselineGames, 5);
+  assert.equal(result.coverage.normalQualityBaselineAnalysisCoveragePercent, 100);
+  assert.equal(result.analysisProvenance.analysedRuns, 10);
 });
 
 test('TIME-004 keeps every broken chain link distinct', () => {
@@ -287,6 +289,34 @@ test('later pressure without complete later timing remains observed but lowers c
   assert.equal(result.coverage.laterPressureCoveragePercent, 0);
   assert.equal(result.coverage.status, 'PARTIAL');
   assert.equal(result.coverage.reason, 'later-pressure-coverage-incomplete');
+});
+
+test('sparse normal-clock comparator analysis cannot be hidden by analysed rows', () => {
+  const sparsePeers = Array.from({ length: 5 }, (_, gameIndex) => game(900 + gameIndex, {
+    userMoves: [
+      move(3, { moveTimeCentiseconds: 100 }),
+      move(5, { moveTimeCentiseconds: 100 }),
+      ...Array.from({ length: 20 }, (_, moveIndex) => move(7 + moveIndex * 2, {
+        phase: 'MIDDLEGAME',
+        clockBeforeMoveCentiseconds: 8_000,
+        moveTimeCentiseconds: 150,
+        scoreLossCp: 10,
+        analysisRun: moveIndex === 0 ? analysis(90_000 + gameIndex) : null,
+      })),
+    ],
+  }));
+  const overuse = Array.from(
+    { length: 5 },
+    (_, index) => overusePressureGame(1_000 + index),
+  );
+
+  const result = buildEarlyTimeOveruseAggregate([...sparsePeers, ...overuse]);
+
+  assert.equal(result.coverage.normalQualityBaselineMoves, 100);
+  assert.equal(result.coverage.analysedNormalQualityBaselineMoves, 5);
+  assert.equal(result.coverage.normalQualityBaselineAnalysisCoveragePercent, 5);
+  assert.equal(result.chain.evidenceStrength, 'INSUFFICIENT');
+  assert.equal(result.chain.mechanismStatus, 'INSUFFICIENT');
 });
 
 test('service bounds reads, rejects snapshot drift, and validates scope', async () => {
