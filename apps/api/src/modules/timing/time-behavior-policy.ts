@@ -127,8 +127,10 @@ export function comparativeTimingBehaviorEvidenceStrength(
 ): TimingBehaviorEvidenceStrength {
   const leftStrength = timingBehaviorEvidenceStrength(left);
   const rightStrength = timingBehaviorEvidenceStrength(right);
-  const order: TimingBehaviorEvidenceStrength[] = ['INSUFFICIENT', 'LOW', 'MEDIUM', 'HIGH'];
-  return order[Math.min(order.indexOf(leftStrength), order.indexOf(rightStrength))];
+  if (leftStrength === 'INSUFFICIENT' || rightStrength === 'INSUFFICIENT') return 'INSUFFICIENT';
+  if (leftStrength === 'LOW' || rightStrength === 'LOW') return 'LOW';
+  if (leftStrength === 'MEDIUM' || rightStrength === 'MEDIUM') return 'MEDIUM';
+  return 'HIGH';
 }
 
 export function isMaterialRatingCompositionDifference(input: {
