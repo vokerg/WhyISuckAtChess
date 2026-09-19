@@ -339,11 +339,12 @@ function summarizeStratumArm(moves: readonly ClassifiedMove[]): TimePressureQual
 
 function summarizeArm(
   moves: readonly ClassifiedMove[],
+  comparisonAnalysedMoves: readonly ClassifiedMove[],
   globalTimingCoveragePercent: number | null,
   globalContextCoveragePercent: number | null,
   globalMatchingCoveragePercent: number | null,
 ): TimePressureQualityArm {
-  const analysedMoves = moves.filter(analysed);
+  const analysedMoves = [...comparisonAnalysedMoves];
   const analysisCoveragePercent = timingBehaviorPercentage(analysedMoves.length, moves.length);
   const scoreLosses = analysedMoves.map((move) => move.scoreLossCp as number);
   const majorErrors = analysedMoves.filter(majorError).length;
@@ -504,19 +505,36 @@ function buildAggregateDetail(
     contextMoves.length,
   );
 
+  // Engine-backed quality must remain matched by the same exact-control + phase
+  // stratum. If one arm lacks current analysis in a stratum, analyzed moves from
+  // the other arm cannot be compared against analysis from a different stratum.
+  const analysisMatchedBuckets = matchedBuckets.filter(
+    (bucket) => bucket.baseline.some(analysed) && bucket.pressure.some(analysed),
+  );
+  const analysedBaselineMoves = analysisMatchedBuckets
+    .flatMap((bucket) => bucket.baseline)
+    .filter(analysed);
+  const analysedPressureMoves = analysisMatchedBuckets
+    .flatMap((bucket) => bucket.pressure)
+    .filter(analysed);
+
   const baseline = summarizeArm(
     baselineMoves,
+    analysedBaselineMoves,
     timingCoveragePercent,
     contextCoveragePercent,
     matchingCoveragePercent,
   );
   const pressure = summarizeArm(
     pressureMoves,
+    analysedPressureMoves,
     timingCoveragePercent,
     contextCoveragePercent,
     matchingCoveragePercent,
   );
   const analysedMatchedUserDecisions = baseline.analysedMoves + pressure.analysedMoves;
+  const rawAnalysedMatchedUserDecisions = [...baselineMoves, ...pressureMoves]
+    .filter(analysed).length;
   const analysisCoveragePercent = timingBehaviorPercentage(
     analysedMatchedUserDecisions,
     matchedUserDecisions,
@@ -533,7 +551,11 @@ function buildAggregateDetail(
   } else if (matchedBuckets.length === 0) {
     status = 'UNAVAILABLE';
     reason = 'no-matched-pressure-baseline-strata';
-  } else if (baseline.analysedMoves === 0 || pressure.analysedMoves === 0) {
+  } else if (
+    analysisMatchedBuckets.length === 0
+    || baseline.analysedMoves === 0
+    || pressure.analysedMoves === 0
+  ) {
     status = 'UNAVAILABLE';
     reason = 'engine-analysis-unavailable-in-comparison-arm';
   } else {
@@ -553,7 +575,7 @@ function buildAggregateDetail(
             : 'engine-analysis-incomplete';
   }
 
-  const analysedMoves = [...baselineMoves, ...pressureMoves].filter(analysed);
+  const analysedMoves = [...analysedBaselineMoves, ...analysedPressureMoves];
   const strata = matchedBuckets.map<TimePressureQualityStratum>((bucket) => ({
     exactTimeControlKey: bucket.exactTimeControlKey,
     phase: bucket.phase,
@@ -589,6 +611,9 @@ function buildAggregateDetail(
   }
   if (analysisCoveragePercent !== 100) {
     caveats.push('Some matched moves lack current complete engine quality and remain explicit analysis-coverage loss.');
+  }
+  if (rawAnalysedMatchedUserDecisions > analysedMatchedUserDecisions) {
+    caveats.push('Current engine evidence that is one-sided within an exact-control/phase stratum is excluded from aggregate quality metrics rather than compared across different strata.');
   }
 
   const result: TimePressureQualityResult = {
@@ -648,10 +673,10 @@ function buildAggregateDetail(
   return {
     result,
     analysedBaselineGameIds: [...new Set(
-      baselineMoves.filter(analysed).map((move) => move.importedGameId),
+      analysedBaselineMoves.map((move) => move.importedGameId),
     )].sort((left, right) => left - right),
     analysedPressureGameIds: [...new Set(
-      pressureMoves.filter(analysed).map((move) => move.importedGameId),
+      analysedPressureMoves.map((move) => move.importedGameId),
     )].sort((left, right) => left - right),
   };
 }
