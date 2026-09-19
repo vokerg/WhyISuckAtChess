@@ -424,7 +424,7 @@ test('Prisma repository is ownership/range bounded and fences stale engine snaps
         isCurrent: true,
         events: {
           create: {
-            evidenceKey: 'time-pressure-quality-phase-event-' + suffix,
+            evidenceKey: 'tpq-phase-event-' + suffix,
             findingKey: 'phase-range-0',
             evidenceType: 'POSITION_PHASE_RANGE',
             availability: 'PRESENT',
