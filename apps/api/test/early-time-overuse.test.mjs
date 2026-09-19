@@ -284,7 +284,9 @@ test('later pressure without complete later timing remains observed but lowers c
   assert.equal(row?.laterPressure.observedEntryPly, 7);
   assert.equal(row?.laterPressure.timingComplete, false);
   assert.equal(result.coverage.exclusions.laterTimingIncompleteGames, 1);
-  assert.equal(result.coverage.status, 'COMPLETE');
+  assert.equal(result.coverage.laterPressureCoveragePercent, 0);
+  assert.equal(result.coverage.status, 'PARTIAL');
+  assert.equal(result.coverage.reason, 'later-pressure-coverage-incomplete');
 });
 
 test('service bounds reads, rejects snapshot drift, and validates scope', async () => {
