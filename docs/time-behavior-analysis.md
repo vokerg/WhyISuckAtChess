@@ -280,6 +280,8 @@ Baseline: user responses not preceded by fast opponent play, matched by exact co
 Metrics: eligible user response time and current-engine quality. Opponent and user timing must be aligned by actual ply/color; missing timing on either side excludes the affected event.  
 Attach rating-composition and opening/phase composition caveats; remain correlational.
 
+Issue #65 implements this contract as `opponent-move-speed-effect-v1`, documented in `docs/opponent-move-speed-effect.md`. The aggregate joins by exact preceding ply, keeps response-time and engine-quality evidence strengths separate, exposes fast-opponent sequence and phase composition context, and attaches `RATING-002` only when the matched game-ID arms are disjoint.
+
 ## 8. Versioning and future calibration
 
 The following changes require a `TIME_BEHAVIOR_POLICY_VERSION` bump:
