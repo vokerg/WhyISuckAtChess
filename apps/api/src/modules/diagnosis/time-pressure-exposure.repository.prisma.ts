@@ -101,7 +101,7 @@ export const prismaTimePressureExposureRepository: TimePressureExposureRepositor
         { startedAt: { sort: 'asc', nulls: 'last' } },
         { id: 'asc' },
       ],
-      take: TIME_PRESSURE_EXPOSURE_MAX_CANDIDATE_GAMES,
+      take: TIME_PRESSURE_EXPOSURE_MAX_CANDIDATE_GAMES + 1,
       select: {
         id: true,
         variant: true,
