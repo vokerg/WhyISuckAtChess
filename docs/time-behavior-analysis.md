@@ -123,6 +123,8 @@ V1 does not produce a single pooled cross-initial-time effect by mixing, for exa
 
 `TIME-001` is exposure evidence, not a quality comparison. It reports pressure-entry and pressure-frequency metrics by exact control/increment context. It does not require an engine baseline and must not imply that pressure caused worse play.
 
+Issue #59 implements this contract as `time-pressure-exposure-v1`, documented in `docs/time-pressure-exposure.md`. Game-level recurrence uses only games whose derivable user decisions are completely covered by current reliable timing; partial games remain explicit coverage loss rather than implicit no-pressure evidence.
+
 ### 3.5 `TIME-004` chain baseline
 
 A complete `TIME-004` mechanism requires the ordered chain in the same game:
