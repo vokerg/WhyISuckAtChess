@@ -258,6 +258,8 @@ Comparator: same exact initial seconds, different increment; no broad-speed fall
 Metrics: result score with result coverage; quality/error metrics with separate current-engine coverage.  
 Attach `RATING-002` composition metrics/warning without altering raw deltas.
 
+Issue #61 implements this contract as `exact-time-control-underperformance-v1`, documented in `docs/exact-time-control-underperformance.md`. The leaf aggregate keeps result and engine-quality evidence separate, selects only a same-initial different-increment comparator that passes the shared result gate, and attaches `RATING-002` without adjusting the raw deltas.
+
 ### `TIME-006 INCREMENT_EFFECT`
 
 Comparison: increment > 0 versus increment = 0 within the same exact initial seconds.  
