@@ -107,6 +107,8 @@ The matching key is:
 
 Only strata containing at least one pressure move and at least one baseline move are retained. One-sided strata are reported as unmatched comparison context and excluded rather than pooled with another control or phase.
 
+Aggregate quality metrics add a second safety boundary: a timing-matched stratum contributes engine-backed comparison metrics only when both arms contain current complete analyzed moves. If current analysis is one-sided within a stratum, those analyzed moves remain visible in the stratum but are excluded from the aggregate arm metrics and provenance rather than being compared with engine evidence from a different exact-control/phase stratum.
+
 The output retains every matched exact-control/phase stratum with per-arm move counts, analyzed moves, supporting games, average score loss, mistake-or-blunder rate, and blunder rate.
 
 V1 does not equalize stratum frequencies. It also does not match opening family, session context, color, calendar period, or opponent strength. Those remain composition caveats.
