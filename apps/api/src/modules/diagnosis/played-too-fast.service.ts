@@ -460,6 +460,10 @@ export function buildPlayedTooFastAggregate(
   let unsupportedGames = 0;
   let timingEligibleUserDecisions = 0;
   let timingCoveredUserDecisions = 0;
+  let timedFastUserDecisions = 0;
+  let timedBaselineUserDecisions = 0;
+  let ampleStatusCoveredFastUserDecisions = 0;
+  let ampleStatusCoveredBaselineUserDecisions = 0;
   let ampleClockUserDecisions = 0;
   let ampleFastUserDecisions = 0;
   let ampleBaselineUserDecisions = 0;
@@ -483,23 +487,27 @@ export function buildPlayedTooFastAggregate(
       if (!trustworthyTimingMove(game, move)) continue;
       timingCoveredUserDecisions += 1;
 
+      const speed = classifyMoveSpeed(move.moveTimeCentiseconds);
+      if (!speed) continue;
+      if (speed === 'FAST') timedFastUserDecisions += 1;
+      else timedBaselineUserDecisions += 1;
+
       const initialCentiseconds = initialTimeCentiseconds(game);
       const ample = isAmpleClock(move.clockBeforeMoveCentiseconds, initialCentiseconds);
       if (ample === null) {
         unknownAmpleClockUserDecisions += 1;
         continue;
       }
+      if (speed === 'FAST') ampleStatusCoveredFastUserDecisions += 1;
+      else ampleStatusCoveredBaselineUserDecisions += 1;
+
       if (!ample) {
         nonAmpleClockUserDecisions += 1;
-        if (classifyMoveSpeed(move.moveTimeCentiseconds) === 'FAST') {
-          fastWithoutAmpleClockMoves += 1;
-        }
+        if (speed === 'FAST') fastWithoutAmpleClockMoves += 1;
         continue;
       }
       ampleClockUserDecisions += 1;
 
-      const speed = classifyMoveSpeed(move.moveTimeCentiseconds);
-      if (!speed) continue;
       if (speed === 'FAST') ampleFastUserDecisions += 1;
       else ampleBaselineUserDecisions += 1;
 
@@ -529,6 +537,14 @@ export function buildPlayedTooFastAggregate(
   const ampleClassificationCoveragePercent = timingBehaviorPercentage(
     ampleClockUserDecisions + nonAmpleClockUserDecisions,
     timingCoveredUserDecisions,
+  );
+  const baselineAmpleClassificationCoveragePercent = timingBehaviorPercentage(
+    ampleStatusCoveredBaselineUserDecisions,
+    timedBaselineUserDecisions,
+  );
+  const fastAmpleClassificationCoveragePercent = timingBehaviorPercentage(
+    ampleStatusCoveredFastUserDecisions,
+    timedFastUserDecisions,
   );
   const contextCoveragePercent = timingBehaviorPercentage(
     contextMoves.length,
@@ -597,13 +613,13 @@ export function buildPlayedTooFastAggregate(
 
   const baselineRequiredCoverage = [
     timingCoveragePercent,
-    ampleClassificationCoveragePercent,
+    baselineAmpleClassificationCoveragePercent,
     baselineContextCoveragePercent,
     baselineMatchingCoveragePercent,
   ];
   const fastRequiredCoverage = [
     timingCoveragePercent,
-    ampleClassificationCoveragePercent,
+    fastAmpleClassificationCoveragePercent,
     fastContextCoveragePercent,
     fastMatchingCoveragePercent,
   ];
@@ -697,7 +713,7 @@ export function buildPlayedTooFastAggregate(
     'Fast decisions without ample clock are excluded from the candidate arm rather than interpreted as played-too-fast behavior.',
     'Only current complete engine analysis from the same ply-index snapshot contributes move-quality metrics; stale, superseded, incomplete, or missing analysis is coverage loss.',
     'The result is a within-player association and does not establish premove intent, impulsiveness, panic, or another psychological cause.',
-    'Evidence strength applies context and matching coverage per comparison arm, so a well-covered baseline cannot mask sparse fast-arm coverage.',
+    'Evidence strength applies ample-clock classification, context, and matching coverage per comparison arm, so a well-covered baseline cannot mask sparse fast-arm coverage.',
     'V1 matching does not equalize stratum frequencies, opening family, session context, color, date, or opponent strength.',
   ];
   if (timingCoveragePercent !== 100) {
