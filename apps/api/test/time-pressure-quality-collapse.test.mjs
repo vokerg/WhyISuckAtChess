@@ -204,6 +204,48 @@ test('timing, phase, exact-control, and current-analysis gaps remain coverage lo
   assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
 });
 
+test('engine gaps cannot make the quality comparison cross exact-control/phase strata', () => {
+  const result = buildTimePressureQualityCollapseAggregate([
+    game(20, {
+      userMoves: [move(3, 5_000, {
+        phase: 'OPENING',
+        scoreLossCp: 10,
+        analysisRun: analysis(20),
+      })],
+    }),
+    game(21, {
+      userMoves: [move(3, 2_500, {
+        phase: 'OPENING',
+        scoreLossCp: 90,
+        analysisRun: null,
+      })],
+    }),
+    game(22, {
+      userMoves: [move(3, 5_000, {
+        phase: 'MIDDLEGAME',
+        scoreLossCp: 10,
+        analysisRun: null,
+      })],
+    }),
+    game(23, {
+      userMoves: [move(3, 2_500, {
+        phase: 'MIDDLEGAME',
+        scoreLossCp: 90,
+        analysisRun: analysis(23),
+      })],
+    }),
+  ]);
+
+  assert.equal(result.coverage.matchedStrata, 2);
+  assert.equal(result.coverage.status, 'UNAVAILABLE');
+  assert.equal(result.coverage.reason, 'engine-analysis-unavailable-in-comparison-arm');
+  assert.equal(result.coverage.analysisCoveragePercent, 0);
+  assert.equal(result.comparison.baseline.analysedMoves, 0);
+  assert.equal(result.comparison.pressure.analysedMoves, 0);
+  assert.equal(result.comparison.averageScoreLossDeltaCp, null);
+  assert.equal(result.analysisProvenance.analysedRuns, 0);
+});
+
 test('negative and neutral pressure deltas are representable without forcing a positive mechanism', () => {
   const betterUnderPressure = buildTimePressureQualityCollapseAggregate([
     game(30, {
