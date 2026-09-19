@@ -145,6 +145,9 @@ export interface EarlyTimeOveruseResult {
     knownPressureMoves: number;
     matchedAnalysedPressureMoves: number;
     qualityMoveCoveragePercent: number | null;
+    normalQualityBaselineMoves: number;
+    analysedNormalQualityBaselineMoves: number;
+    normalQualityBaselineAnalysisCoveragePercent: number | null;
     normalQualityBaselineGames: number;
     maxCandidateGames: number;
     exclusions: {
@@ -197,10 +200,16 @@ interface QualityBaselineMove {
   analysis: EarlyTimeOveruseAnalysisRun;
 }
 
+interface QualityBaselineStratum {
+  eligibleMoves: number;
+  analysedMoves: QualityBaselineMove[];
+}
+
 interface QualityPair {
   move: EarlyTimeOveruseSourceMove;
   benchmarkScoreLossCp: number;
-  baselineMoves: readonly QualityBaselineMove[];
+  baselineKey: string;
+  baseline: QualityBaselineStratum;
 }
 
 function validateScope(scope: EarlyTimeOveruseScope): void {
@@ -343,8 +352,8 @@ function earlyMeasurement(game: EarlyTimeOveruseSourceGame): EarlyMeasurement {
 
 function buildNormalQualityBaselines(
   games: readonly EarlyTimeOveruseSourceGame[],
-): Map<string, QualityBaselineMove[]> {
-  const baselines = new Map<string, QualityBaselineMove[]>();
+): Map<string, QualityBaselineStratum> {
+  const baselines = new Map<string, QualityBaselineStratum>();
 
   for (const game of games) {
     if (!isTimingEligibleGame(game) || !game.exactTimeControlKey) continue;
@@ -352,19 +361,21 @@ function buildNormalQualityBaselines(
       if (
         !trustworthyTimingMove(game, move)
         || !move.phase
-        || !analysed(move)
         || classifyRemainingClock(move.clockBeforeMoveCentiseconds) !== 'NORMAL'
       ) {
         continue;
       }
       const key = qualityStratumKey(game.exactTimeControlKey, move.phase);
-      const rows = baselines.get(key) ?? [];
-      rows.push({
-        importedGameId: game.importedGameId,
-        scoreLossCp: move.scoreLossCp,
-        analysis: move.analysis,
-      });
-      baselines.set(key, rows);
+      const stratum = baselines.get(key) ?? { eligibleMoves: 0, analysedMoves: [] };
+      stratum.eligibleMoves += 1;
+      if (analysed(move)) {
+        stratum.analysedMoves.push({
+          importedGameId: game.importedGameId,
+          scoreLossCp: move.scoreLossCp,
+          analysis: move.analysis,
+        });
+      }
+      baselines.set(key, stratum);
     }
   }
 
@@ -372,13 +383,10 @@ function buildNormalQualityBaselines(
 }
 
 function provenanceFor(
-  moves: readonly (EarlyTimeOveruseSourceMove & {
-    scoreLossCp: number;
-    analysis: EarlyTimeOveruseAnalysisRun;
-  })[],
+  runsInput: readonly EarlyTimeOveruseAnalysisRun[],
 ): EarlyTimeOveruseResult['analysisProvenance'] {
   const runById = new Map<number, EarlyTimeOveruseAnalysisRun>();
-  for (const move of moves) runById.set(move.analysis.runId, move.analysis);
+  for (const run of runsInput) runById.set(run.runId, run);
   const runs = [...runById.values()].sort((left, right) => left.runId - right.runId);
   const engines = new Map<string, { name: string | null; version: string | null }>();
   for (const run of runs) {
@@ -435,6 +443,9 @@ function unavailable(candidateGames: number, reason: string): EarlyTimeOveruseRe
       knownPressureMoves: 0,
       matchedAnalysedPressureMoves: 0,
       qualityMoveCoveragePercent: null,
+      normalQualityBaselineMoves: 0,
+      analysedNormalQualityBaselineMoves: 0,
+      normalQualityBaselineAnalysisCoveragePercent: null,
       normalQualityBaselineGames: 0,
       maxCandidateGames: EARLY_TIME_OVERUSE_MAX_CANDIDATE_GAMES,
       exclusions: {
@@ -578,11 +589,9 @@ export function buildEarlyTimeOveruseAggregate(
   );
   const normalBaselines = buildNormalQualityBaselines(games);
   const gameEvidence: EarlyTimeOveruseGameEvidence[] = [];
-  const analysedPressureMoves: Array<EarlyTimeOveruseSourceMove & {
-    scoreLossCp: number;
-    analysis: EarlyTimeOveruseAnalysisRun;
-  }> = [];
+  const contributingAnalysisRuns: EarlyTimeOveruseAnalysisRun[] = [];
   const usedBaselineGameIds = new Set<number>();
+  const usedBaselineStratumKeys = new Set<string>();
 
   let earlyOveruseGames = 0;
   let laterPressureEvaluableGames = 0;
@@ -719,13 +728,12 @@ export function buildEarlyTimeOveruseAggregate(
 
     for (const move of pressureFromEntry) {
       if (!game.exactTimeControlKey || !move.phase || !analysed(move)) continue;
-      const baseline = normalBaselines.get(
-        qualityStratumKey(game.exactTimeControlKey, move.phase),
-      ) ?? [];
-      if (baseline.length === 0) continue;
-      const benchmark = average(baseline.map((row) => row.scoreLossCp));
+      const baselineKey = qualityStratumKey(game.exactTimeControlKey, move.phase);
+      const baseline = normalBaselines.get(baselineKey) ?? null;
+      if (!baseline || baseline.analysedMoves.length === 0) continue;
+      const benchmark = average(baseline.analysedMoves.map((row) => row.scoreLossCp));
       if (benchmark === null) continue;
-      pairs.push({ move, benchmarkScoreLossCp: benchmark, baselineMoves: baseline });
+      pairs.push({ move, benchmarkScoreLossCp: benchmark, baselineKey, baseline });
     }
 
     matchedAnalysedPressureMoves += pairs.length;
@@ -771,8 +779,9 @@ export function buildEarlyTimeOveruseAggregate(
     };
 
     for (const pair of pairs) {
-      if (analysed(pair.move)) analysedPressureMoves.push(pair.move);
-      for (const baseline of pair.baselineMoves) {
+      if (analysed(pair.move)) contributingAnalysisRuns.push(pair.move.analysis);
+      usedBaselineStratumKeys.add(pair.baselineKey);
+      for (const baseline of pair.baseline.analysedMoves) {
         usedBaselineGameIds.add(baseline.importedGameId);
       }
     }
@@ -801,12 +810,26 @@ export function buildEarlyTimeOveruseAggregate(
     matchedAnalysedPressureMoves,
     knownPressureMoves,
   );
+  let normalQualityBaselineMoves = 0;
+  let analysedNormalQualityBaselineMoves = 0;
+  for (const key of usedBaselineStratumKeys) {
+    const baseline = normalBaselines.get(key);
+    if (!baseline) continue;
+    normalQualityBaselineMoves += baseline.eligibleMoves;
+    analysedNormalQualityBaselineMoves += baseline.analysedMoves.length;
+    for (const row of baseline.analysedMoves) contributingAnalysisRuns.push(row.analysis);
+  }
+  const normalQualityBaselineAnalysisCoveragePercent = timingBehaviorPercentage(
+    analysedNormalQualityBaselineMoves,
+    normalQualityBaselineMoves,
+  );
   const requiredCoverage = minimumCoverage([
     earlyCoveragePercent,
     peerBaselineCoveragePercent,
     laterPressureCoveragePercent,
     qualityGameCoveragePercent,
     qualityMoveCoveragePercent,
+    normalQualityBaselineAnalysisCoveragePercent,
   ]);
 
   const evidenceStrength = comparativeTimingBehaviorEvidenceStrength(
@@ -924,6 +947,9 @@ export function buildEarlyTimeOveruseAggregate(
       knownPressureMoves,
       matchedAnalysedPressureMoves,
       qualityMoveCoveragePercent,
+      normalQualityBaselineMoves,
+      analysedNormalQualityBaselineMoves,
+      normalQualityBaselineAnalysisCoveragePercent,
       normalQualityBaselineGames: usedBaselineGameIds.size,
       maxCandidateGames: EARLY_TIME_OVERUSE_MAX_CANDIDATE_GAMES,
       exclusions: {
@@ -958,7 +984,7 @@ export function buildEarlyTimeOveruseAggregate(
     },
     controls,
     games: gameEvidence,
-    analysisProvenance: provenanceFor(analysedPressureMoves),
+    analysisProvenance: provenanceFor(contributingAnalysisRuns),
     caveats,
   };
 }
