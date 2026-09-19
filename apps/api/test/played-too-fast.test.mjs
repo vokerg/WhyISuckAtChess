@@ -315,6 +315,49 @@ test('exact-control and phase matching never pools one-sided fast and baseline m
   assert.equal(result.strata[0].phase, 'OPENING');
 });
 
+test('fast-arm matching coverage gates evidence independently of the baseline arm', () => {
+  const matchedBaseline = Array.from({ length: 100 }, (_, index) => game(1_000 + index, {
+    exactTimeControlKey: '180+0',
+    userMoves: [move(3, {
+      phase: 'OPENING',
+      moveTimeCentiseconds: 250,
+      scoreLossCp: 10,
+      analysisRun: analysis(10_000 + index),
+    })],
+  }));
+  const matchedFast = Array.from({ length: 5 }, (_, index) => game(2_000 + index, {
+    exactTimeControlKey: '180+0',
+    userMoves: [move(3, {
+      phase: 'OPENING',
+      moveTimeCentiseconds: 50,
+      scoreLossCp: 80,
+      analysisRun: analysis(20_000 + index),
+    })],
+  }));
+  const unmatchedFast = Array.from({ length: 95 }, (_, index) => game(3_000 + index, {
+    exactTimeControlKey: '180+2',
+    userMoves: [move(3, {
+      phase: 'OPENING',
+      moveTimeCentiseconds: 50,
+      scoreLossCp: 80,
+      analysisRun: analysis(30_000 + index),
+    })],
+  }));
+
+  const result = buildPlayedTooFastAggregate([
+    ...matchedBaseline,
+    ...matchedFast,
+    ...unmatchedFast,
+  ]);
+
+  assert.equal(result.coverage.matchingCoveragePercent, 52.5);
+  assert.equal(result.comparison.baseline.requiredEvidenceCoveragePercent, 100);
+  assert.equal(result.comparison.fastAmple.requiredEvidenceCoveragePercent, 5);
+  assert.equal(result.comparison.averageScoreLossDeltaCp, 70);
+  assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
+  assert.equal(result.comparison.mechanismStatus, 'INSUFFICIENT');
+});
+
 test('service bounds reads, rejects snapshot drift, and validates scope', async () => {
   let loaded = false;
   const tooLarge = await getPlayedTooFast(
