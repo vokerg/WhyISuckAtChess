@@ -9,3 +9,5 @@ Issue #54 adds `loss-streak-deterioration-v1` for `SESSION-002`: it reuses `sess
 Issue #58 adds `rating-context-composition-v1` for `RATING-002`: it accepts two bounded disjoint owned game-ID arms, summarizes user-relative rating-difference bands using `time-behavior-v1`, and emits a nullable composition warning without adjusting another aggregate's measured effect. See `docs/rating-context-composition.md`.
 
 Issue #59 adds `time-pressure-exposure-v1` for `TIME-001`: it performs a bounded owned-game timing read, counts only games with complete trustworthy user-decision timing for recurrence, preserves exact-control/increment strata, and reports first pressure entry with current phase context where available. It is exposure evidence only; `TIME-002` owns move-quality deterioration. See `docs/time-pressure-exposure.md`.
+
+Issue #60 adds `time-pressure-quality-collapse-v1` for `TIME-002`: it compares current complete engine move quality in shared pressure/normal exact-control + phase strata, keeps timing/context/analysis loss explicit, and attaches `RATING-002` only when the analyzed game arms are disjoint. See `docs/time-pressure-quality-collapse.md`.
