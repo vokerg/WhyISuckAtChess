@@ -87,6 +87,8 @@ For `TIME-002`, `TIME-003`, and `TIME-007`, the minimum mandatory matching key i
 1. exact time-control key; and
 2. stabilized phase.
 
+Phase is the trustworthy stabilized phase of the move's before-position boundary. If that boundary has unknown/uncovered phase, the move is excluded from matched quality comparison.
+
 A comparison never silently pools 3+0 with 3+2 or opening with middlegame. Other composition dimensions (rating difference, opening family, session context, color, date) remain inspectable confounders but are not mandatory matching dimensions in v1 unless a leaf issue explicitly narrows the comparison further.
 
 Only current complete provenance-safe engine evidence contributes to move-quality metrics. Stale/superseded/incomplete analysis is engine-coverage loss, not negative evidence.
