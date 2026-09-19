@@ -925,7 +925,7 @@ export function buildEarlyTimeOveruseAggregate(
       earlyPhase: 'OPENING',
       overuseMedianMultiplier: TIME_EARLY_OVERUSE_MEDIAN_MULTIPLIER,
       minimumPeerGames: TIME_EARLY_OVERUSE_MIN_PEER_GAMES,
-      pressureClockMaximumCentisecondsInclusive: TIME_PRESSURE_THRESHOLD_CENTISECONDS.
+      pressureClockMaximumCentisecondsInclusive: TIME_PRESSURE_THRESHOLD_CENTISECONDS,
       qualityMatchingDimensions: ['EXACT_TIME_CONTROL', 'PHASE'],
     },
     coverage: {
