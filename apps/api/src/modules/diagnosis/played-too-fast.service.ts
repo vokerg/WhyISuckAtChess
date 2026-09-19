@@ -461,6 +461,8 @@ export function buildPlayedTooFastAggregate(
   let timingEligibleUserDecisions = 0;
   let timingCoveredUserDecisions = 0;
   let ampleClockUserDecisions = 0;
+  let ampleFastUserDecisions = 0;
+  let ampleBaselineUserDecisions = 0;
   let nonAmpleClockUserDecisions = 0;
   let unknownAmpleClockUserDecisions = 0;
   let fastWithoutAmpleClockMoves = 0;
@@ -496,6 +498,11 @@ export function buildPlayedTooFastAggregate(
       }
       ampleClockUserDecisions += 1;
 
+      const speed = classifyMoveSpeed(move.moveTimeCentiseconds);
+      if (!speed) continue;
+      if (speed === 'FAST') ampleFastUserDecisions += 1;
+      else ampleBaselineUserDecisions += 1;
+
       if (!game.exactTimeControlKey) {
         missingExactControlMoves += 1;
         continue;
@@ -505,8 +512,6 @@ export function buildPlayedTooFastAggregate(
         continue;
       }
 
-      const speed = classifyMoveSpeed(move.moveTimeCentiseconds);
-      if (!speed) continue;
       contextMoves.push({
         ...move,
         importedGameId: game.importedGameId,
@@ -528,6 +533,16 @@ export function buildPlayedTooFastAggregate(
   const contextCoveragePercent = timingBehaviorPercentage(
     contextMoves.length,
     ampleClockUserDecisions,
+  );
+  const contextBaselineMoves = contextMoves.filter((move) => move.arm === 'BASELINE');
+  const contextFastMoves = contextMoves.filter((move) => move.arm === 'FAST_AMPLE');
+  const baselineContextCoveragePercent = timingBehaviorPercentage(
+    contextBaselineMoves.length,
+    ampleBaselineUserDecisions,
+  );
+  const fastContextCoveragePercent = timingBehaviorPercentage(
+    contextFastMoves.length,
+    ampleFastUserDecisions,
   );
 
   const buckets = new Map<string, StratumBucket>();
@@ -561,6 +576,14 @@ export function buildPlayedTooFastAggregate(
     matchedUserDecisions,
     contextMoves.length,
   );
+  const baselineMatchingCoveragePercent = timingBehaviorPercentage(
+    baselineMoves.length,
+    contextBaselineMoves.length,
+  );
+  const fastMatchingCoveragePercent = timingBehaviorPercentage(
+    fastMoves.length,
+    contextFastMoves.length,
+  );
 
   const analysisMatchedBuckets = matchedBuckets.filter(
     (bucket) => bucket.baseline.some(analysed) && bucket.fastAmple.some(analysed),
@@ -572,14 +595,28 @@ export function buildPlayedTooFastAggregate(
     .flatMap((bucket) => bucket.fastAmple)
     .filter(analysed);
 
-  const requiredCoverage = [
+  const baselineRequiredCoverage = [
     timingCoveragePercent,
     ampleClassificationCoveragePercent,
-    contextCoveragePercent,
-    matchingCoveragePercent,
+    baselineContextCoveragePercent,
+    baselineMatchingCoveragePercent,
   ];
-  const baseline = summarizeArm(baselineMoves, analysedBaselineMoves, requiredCoverage);
-  const fastAmple = summarizeArm(fastMoves, analysedFastMoves, requiredCoverage);
+  const fastRequiredCoverage = [
+    timingCoveragePercent,
+    ampleClassificationCoveragePercent,
+    fastContextCoveragePercent,
+    fastMatchingCoveragePercent,
+  ];
+  const baseline = summarizeArm(
+    baselineMoves,
+    analysedBaselineMoves,
+    baselineRequiredCoverage,
+  );
+  const fastAmple = summarizeArm(
+    fastMoves,
+    analysedFastMoves,
+    fastRequiredCoverage,
+  );
   const analysedMatchedUserDecisions = baseline.analysedMoves + fastAmple.analysedMoves;
   const rawAnalysedMatchedUserDecisions = [...baselineMoves, ...fastMoves]
     .filter(analysed).length;
@@ -660,7 +697,8 @@ export function buildPlayedTooFastAggregate(
     'Fast decisions without ample clock are excluded from the candidate arm rather than interpreted as played-too-fast behavior.',
     'Only current complete engine analysis from the same ply-index snapshot contributes move-quality metrics; stale, superseded, incomplete, or missing analysis is coverage loss.',
     'The result is a within-player association and does not establish premove intent, impulsiveness, panic, or another psychological cause.',
-    'V1 matching does not equalize opening family, session context, color, date, or opponent strength.',
+    'Evidence strength applies context and matching coverage per comparison arm, so a well-covered baseline cannot mask sparse fast-arm coverage.',
+    'V1 matching does not equalize stratum frequencies, opening family, session context, color, date, or opponent strength.',
   ];
   if (timingCoveragePercent !== 100) {
     caveats.push('Some derivable user decisions lack current trustworthy timing and are excluded rather than treated as normal-pace evidence.');
