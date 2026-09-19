@@ -303,7 +303,8 @@ function delta(right: number | null, left: number | null): number | null {
 
 function minimumCoverage(values: readonly (number | null)[]): number | null {
   if (values.some((value) => value === null)) return null;
-  return Math.min(...values as number[]);
+  const covered = values.filter((value): value is number => value !== null);
+  return Math.min(...covered);
 }
 
 function stratumKey(exactTimeControlKey: string, phase: TimePressureQualityPhase): string {
