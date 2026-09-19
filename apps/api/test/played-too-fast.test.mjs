@@ -358,6 +358,44 @@ test('fast-arm matching coverage gates evidence independently of the baseline ar
   assert.equal(result.comparison.mechanismStatus, 'INSUFFICIENT');
 });
 
+test('fast-arm ample-clock coverage gates evidence independently of the baseline arm', () => {
+  const baseline = Array.from({ length: 100 }, (_, index) => game(4_000 + index, {
+    userMoves: [move(3, {
+      moveTimeCentiseconds: 250,
+      scoreLossCp: 10,
+      analysisRun: analysis(40_000 + index),
+    })],
+  }));
+  const classifiedFast = Array.from({ length: 5 }, (_, index) => game(5_000 + index, {
+    userMoves: [move(3, {
+      moveTimeCentiseconds: 50,
+      scoreLossCp: 80,
+      analysisRun: analysis(50_000 + index),
+    })],
+  }));
+  const unknownAmpleFast = Array.from({ length: 95 }, (_, index) => game(6_000 + index, {
+    timeControlInitial: null,
+    userMoves: [move(3, {
+      moveTimeCentiseconds: 50,
+      scoreLossCp: 80,
+      analysisRun: analysis(60_000 + index),
+    })],
+  }));
+
+  const result = buildPlayedTooFastAggregate([
+    ...baseline,
+    ...classifiedFast,
+    ...unknownAmpleFast,
+  ]);
+
+  assert.equal(result.coverage.ampleClassificationCoveragePercent, 52.5);
+  assert.equal(result.comparison.baseline.requiredEvidenceCoveragePercent, 100);
+  assert.equal(result.comparison.fastAmple.requiredEvidenceCoveragePercent, 5);
+  assert.equal(result.comparison.averageScoreLossDeltaCp, 70);
+  assert.equal(result.comparison.evidenceStrength, 'INSUFFICIENT');
+  assert.equal(result.comparison.mechanismStatus, 'INSUFFICIENT');
+});
+
 test('service bounds reads, rejects snapshot drift, and validates scope', async () => {
   let loaded = false;
   const tooLarge = await getPlayedTooFast(
