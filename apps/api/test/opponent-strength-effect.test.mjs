@@ -134,12 +134,18 @@ test('adjacent comparisons are exact-control matched and preserve positive, neut
       resultForUser: 'LOSS',
       averageScoreLossCp: 70,
     }),
+    ...gamesInBand(501, 5, 1300, {
+      exactTimeControlKey: '180+0',
+      resultForUser: 'WIN',
+      averageScoreLossCp: 10,
+    }),
   ];
 
   const result = buildOpponentStrengthEffectAggregate(rows);
   const strongerNoIncrement = comparison(result, '180+0', 'STRONGER');
   const strongerIncrement = comparison(result, '180+2', 'STRONGER');
   const weaker = comparison(result, '180+0', 'WEAKER');
+  const muchWeaker = comparison(result, '180+0', 'MUCH_WEAKER');
 
   assert.equal(strongerNoIncrement.baselineBand, 'EVEN');
   assert.equal(strongerNoIncrement.status, 'AVAILABLE');
@@ -154,6 +160,10 @@ test('adjacent comparisons are exact-control matched and preserve positive, neut
   assert.equal(weaker.baselineBand, 'EVEN');
   assert.equal(weaker.deltas.scorePercentagePoints, -100);
   assert.equal(weaker.deltas.averageScoreLossCp, 50);
+
+  assert.equal(muchWeaker.baselineBand, 'WEAKER');
+  assert.equal(muchWeaker.deltas.scorePercentagePoints, 100);
+  assert.equal(muchWeaker.deltas.averageScoreLossCp, -60);
 
   assert.equal(
     result.comparisons.some(
