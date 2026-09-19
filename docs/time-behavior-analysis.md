@@ -166,6 +166,8 @@ After the ordinary sample/coverage gates are met, v1 marks composition as materi
 
 The warning is a confounder disclosure. It does not modify the measured timing/result effect and is not a causal adjustment.
 
+Issue #58 implements this contract as the reusable `rating-context-composition-v1` aggregate documented in `docs/rating-context-composition.md`. Consumers attach its result beside their own effect metrics; they do not feed the warning back into those metrics.
+
 ## 5. Sample, recurrence, coverage, and evidence strength
 
 ### 5.1 Coverage gate
