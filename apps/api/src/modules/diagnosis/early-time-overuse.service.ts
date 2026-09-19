@@ -790,7 +790,7 @@ export function buildEarlyTimeOveruseAggregate(
   }
 
   const laterPressureCoveragePercent = timingBehaviorPercentage(
-    laterPressureEvaluableGames,
+    Math.max(0, earlyOveruseGames - laterTimingIncompleteGames),
     earlyOveruseGames,
   );
   const qualityGameCoveragePercent = timingBehaviorPercentage(
@@ -838,7 +838,10 @@ export function buildEarlyTimeOveruseAggregate(
     reason = 'same-control-peer-baseline-unavailable';
   } else {
     const pressureComplete = earlyOveruseGames === 0
-      || laterPressureEvaluableGames === earlyOveruseGames;
+      || (
+        laterPressureEvaluableGames === earlyOveruseGames
+        && laterTimingIncompleteGames === 0
+      );
     const qualityComplete = laterPressureGames === 0
       || (
         qualityEvaluableGames === laterPressureGames
