@@ -170,6 +170,8 @@ The warning is a confounder disclosure. It does not modify the measured timing/r
 
 Issue #58 implements this contract as the reusable `rating-context-composition-v1` aggregate documented in `docs/rating-context-composition.md`. Consumers attach its result beside their own effect metrics; they do not feed the warning back into those metrics.
 
+Issue #66 implements `RATING-001` as `opponent-strength-effect-v1`, documented in `docs/opponent-strength-effect.md`. Descriptive band summaries retain exact-control composition, while effect deltas compare each non-even band only with the adjacent band toward `EVEN` inside the same exact-control stratum. Sparse arms remain `INSUFFICIENT`, and result versus current-engine quality evidence are graded separately.
+
 ## 5. Sample, recurrence, coverage, and evidence strength
 
 ### 5.1 Coverage gate
@@ -281,6 +283,16 @@ Metrics: eligible user response time and current-engine quality. Opponent and us
 Attach rating-composition and opening/phase composition caveats; remain correlational.
 
 Issue #65 implements this contract as `opponent-move-speed-effect-v1`, documented in `docs/opponent-move-speed-effect.md`. The aggregate joins by exact preceding ply, keeps response-time and engine-quality evidence strengths separate, exposes fast-opponent sequence and phase composition context, and attaches `RATING-002` only when the matched game-ID arms are disjoint.
+
+### `RATING-001 OPPONENT_STRENGTH_EFFECT`
+
+Dimension: shared `opponent - user` rating-difference bands.  
+Descriptive metrics: result score and current complete engine move quality/error metrics, with exact-control composition visible for every band.  
+Matched baseline: inside one exact time control, each non-even band uses the adjacent band toward `EVEN` (`MUCH_WEAKER -> WEAKER -> EVEN <- STRONGER <- MUCH_STRONGER`).  
+Strength: result and quality comparisons use separate weaker-arm coverage/sample grades; sparse arms remain `INSUFFICIENT`.  
+No comparison may borrow a baseline from another exact control, skip across bands to manufacture a comparator, or imply causality/psychology.
+
+Issue #66 implements this contract as `opponent-strength-effect-v1`, documented in `docs/opponent-strength-effect.md`.
 
 ## 8. Versioning and future calibration
 
