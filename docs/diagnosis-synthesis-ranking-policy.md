@@ -84,11 +84,12 @@ A **canonical finding** is the persisted/materialized current representation of 
 Stable finding identity is semantic, not row/recalculation identity. The identity key is derived deterministically from:
 
 1. owned player scope;
-2. diagnosis ID;
-3. finding level;
-4. normalized finding dimensions/scope that materially define the claim, including the registered root-theme key for synthesized candidates.
+2. taxonomy version;
+3. diagnosis ID;
+4. finding level;
+5. normalized finding dimensions/scope that materially define the claim, including the registered root-theme key for synthesized candidates.
 
-The identity deliberately excludes producer ownership, calculated timestamps, and policy versions. Producer ownership/version belongs to the materialized revision and #83 must fail closed if two producers claim the same diagnosis projection. New calculation/detector/taxonomy/synthesis versions create a new revision of the same stable semantic finding where the semantics are unchanged. A semantic diagnosis/dimension change creates a different identity.
+The identity deliberately excludes producer ownership, calculated timestamps, detector/aggregate versions, and synthesis/consolidation/ranking policy versions. Producer ownership/version belongs to the materialized revision and #83 must fail closed if two producers claim the same diagnosis projection. New calculation, detector/aggregate, or synthesis-policy versions create a new revision of the same stable identity when the taxonomy semantics and dimensions are unchanged. A taxonomy-version change creates a new stable semantic identity and supersedes the prior taxonomy-version identity rather than silently reusing it; a diagnosis/dimension semantic change therefore cannot collide with an older taxonomy contract.
 
 Persistence in #82 must make **current versus superseded** explicit. Recalculation replaces the current revision for the same stable identity/scope; it must not accumulate several rows that all masquerade as current.
 
@@ -253,7 +254,16 @@ Adding/removing a root theme or changing prerequisites requires a synthesis-poli
 
 Ranking consumes only **current top-level consolidated findings and supported root candidates**. It never ranks stale revisions or raw duplicate children as independent top-level reasons.
 
-Every producer retains its original metric/unit and may additionally provide deterministic normalized component values in [0,1]. Family-specific normalization belongs to the owning producer/ranking adapter and must be versioned/inspectable; normalization never replaces raw evidence.
+Every producer retains its original metric/unit and may additionally provide deterministic normalized component values in [0,1]. Normalization never replaces raw evidence.
+
+Phase 5 v1 permits exactly two normalization methods, exposed by `packages/chess-domain`:
+
+- `IDENTITY_0_1`: the source value is already an explicitly defined deterministic [0,1] score; values outside [0,1] fail closed.
+- `LINEAR_CLAMP`: a versioned lower anchor maps to 0 and upper anchor maps to 1, values outside the anchor range clamp to the nearest endpoint, and `DESCENDING` reverses the oriented score when lower raw values represent stronger ranking signal.
+
+For `LINEAR_CLAMP`, ascending normalization is `clamp((value - lowerAnchor) / (upperAnchor - lowerAnchor), 0, 1)`; descending normalization is `1 - ascending`. Anchors must be finite and strictly increasing.
+
+Every normalized component must carry a stable normalization key whose method, anchors/direction (or explicit bounded-score definition), source metric/unit, and owning diagnosis family are registered and inspectable. The ranking implementation must reject an unregistered key or a required component without a valid normalization spec. Runtime scope-relative min/max scaling, z-scores, percentiles learned from the current user's candidate set, and normalization against other currently ranked findings are forbidden because unrelated findings would otherwise change a score. Any normalization method, anchor, orientation, or registered mapping change requires a ranking-policy version bump.
 
 V1 component weights sum to 1:
 
