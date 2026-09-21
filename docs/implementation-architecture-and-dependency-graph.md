@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through the Phase 4B timing-behavior policy  
+**Status:** Phase 1 canonical implementation architecture, updated through the Phase 5 diagnosis-policy foundation  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -38,6 +38,8 @@ Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol nam
 > **Phase 4 streak update (2026-09-16):** issue #54 adds `loss-streak-deterioration-v1` for `SESSION-002`. It reuses the same bounded current-analysis quality read, matches games after at least two prior losses against non-streak games in the same session ordinal/exact-control strata, and keeps unmatched composition and unresolved opponent/opening/time-of-day confounders explicit. See `docs/loss-streak-deterioration.md`.
 >
 > **Phase 4B timing-policy update (2026-09-19):** issue #57 adds `time-behavior-v1` as the shared deterministic contract for pressure/ample/fast timing states, exact-control/phase matching, rating-composition warnings, and 50% plus 5/15/40 evidence gates. It remains a timing-module policy consumed by later diagnosis aggregates; no `TIME-*` finding is implemented by the policy itself. See `docs/time-behavior-analysis.md`.
+>
+> **Phase 5 diagnosis-policy update (2026-09-21):** issue #81 adds the framework-neutral `diagnosis-synthesis-v1`, `diagnosis-consolidation-v1`, `diagnosis-ranking-v1`, and `diagnosis-event-identity-v1` contract. It freezes finding lifecycle/version semantics, stable evidence-event identity, relationship direction, material overlap, consolidation, registered root themes, deterministic ranking inputs/tie-breaking, representative evidence, staleness, and boundedness before the persistence/graph/ranking leaves implement them. See `docs/diagnosis-synthesis-ranking-policy.md` and `packages/chess-domain/src/diagnosis-policy.ts`.
 
 ---
 
@@ -196,8 +198,8 @@ The exact file tree is not sacred. Module ownership and dependency direction are
 | `jobs` | generic persistent per-game task/run mechanics and executor context | chess policy inside executors |
 | `evidence` | worker-owned deterministic detector registry/execution; versioned evidence runs/events; coverage/provenance fencing; current-evidence query boundary | cross-game finding ranking, provider DTOs, UI state |
 | `sessions` | versioned chronological sessionization and cross-game context | per-ply engine/timing derivation |
-| `diagnosis` | bounded aggregation, findings, relationships, evidence strength/coverage, later ranking/synthesis | Lichess DTOs, Prisma types outside owned repositories, board/UI logic, AI authority |
-| `packages/chess-domain` | pure position/evaluation/classification/geometry rules | Prisma, Fastify, Angular, provider/network code |
+| `diagnosis` | bounded aggregation, findings, relationships, evidence strength/coverage, ranking/synthesis services consuming the shared chess-domain diagnosis policy | Lichess DTOs, Prisma types outside owned repositories, board/UI logic, AI authority |
+| `packages/chess-domain` | pure position/evaluation/classification/geometry rules plus framework-neutral diagnosis policy constants/types/helpers | Prisma, Fastify, Angular, provider/network code |
 | `packages/contracts` | verified serializable wire schemas/types | database models or provider secrets |
 | `apps/web` | Angular feature state, API clients, replay/board presentation, deterministic-evidence inspection | deterministic evidence generation or diagnosis policy |
 
@@ -227,6 +229,22 @@ persisted source facts
   -> diagnosis findings/relationships
   -> consumer read models
 ```
+
+Phase 5 diagnosis dependency flow is now explicitly:
+
+```text
+current evidence/session aggregate query boundaries
+  -> candidate finding producers
+  -> canonical current finding persistence
+  -> stable evidence-event overlap
+  -> typed relationship graph
+  -> consolidation
+  -> registered root-candidate synthesis
+  -> deterministic ranking
+  -> later Phase 6 read models/explanation
+```
+
+Every Phase 5 stage consumes the framework-neutral policy in `packages/chess-domain/src/diagnosis-policy.ts`; persistence and service implementations remain in the backend diagnosis boundary.
 
 Forbidden shortcuts:
 
