@@ -230,6 +230,22 @@ persisted source facts
   -> consumer read models
 ```
 
+Phase 5 diagnosis dependency flow is now explicitly:
+
+```text
+current evidence/session aggregate query boundaries
+  -> candidate finding producers
+  -> canonical current finding persistence
+  -> stable evidence-event overlap
+  -> typed relationship graph
+  -> consolidation
+  -> registered root-candidate synthesis
+  -> deterministic ranking
+  -> later Phase 6 read models/explanation
+```
+
+Every Phase 5 stage consumes the framework-neutral policy in `packages/chess-domain/src/diagnosis-policy.ts`; persistence and service implementations remain in the backend diagnosis boundary.
+
 Forbidden shortcuts:
 
 ```text
