@@ -76,6 +76,27 @@ export const DIAGNOSIS_RANKING_WEIGHTS = Object.freeze({
 
 export type DiagnosisRankingDimension = keyof typeof DIAGNOSIS_RANKING_WEIGHTS;
 
+export const DIAGNOSIS_RANKING_NORMALIZATION_METHODS = [
+  'IDENTITY_0_1',
+  'LINEAR_CLAMP',
+] as const;
+
+export type DiagnosisRankingNormalizationMethod =
+  typeof DIAGNOSIS_RANKING_NORMALIZATION_METHODS[number];
+
+export type DiagnosisRankingNormalizationSpec =
+  | Readonly<{
+      key: string;
+      method: 'IDENTITY_0_1';
+    }>
+  | Readonly<{
+      key: string;
+      method: 'LINEAR_CLAMP';
+      lowerAnchor: number;
+      upperAnchor: number;
+      direction: 'ASCENDING' | 'DESCENDING';
+    }>;
+
 export const DIAGNOSIS_EVIDENCE_RANKING_MULTIPLIER = Object.freeze({
   INSUFFICIENT: 0,
   LOW: 0.55,
@@ -166,6 +187,7 @@ export const DIAGNOSIS_POLICY_REGISTRY = Object.freeze({
   overlap: DIAGNOSIS_OVERLAP_POLICY,
   boundedness: DIAGNOSIS_BOUNDEDNESS_POLICY,
   rankingWeights: DIAGNOSIS_RANKING_WEIGHTS,
+  rankingNormalizationMethods: DIAGNOSIS_RANKING_NORMALIZATION_METHODS,
   evidenceRankingMultiplier: DIAGNOSIS_EVIDENCE_RANKING_MULTIPLIER,
   unresolvedMaterialOverlapMultiplier: DIAGNOSIS_UNRESOLVED_MATERIAL_OVERLAP_MULTIPLIER,
   rootCauseThemes: DIAGNOSIS_ROOT_CAUSE_THEME_REGISTRY,
@@ -175,6 +197,36 @@ export function diagnosisEvidenceRankingMultiplier(
   strength: DiagnosisEvidenceStrength,
 ): number {
   return DIAGNOSIS_EVIDENCE_RANKING_MULTIPLIER[strength];
+}
+
+export function normalizeDiagnosisRankingComponent(
+  value: number,
+  spec: DiagnosisRankingNormalizationSpec,
+): number {
+  if (!Number.isFinite(value)) {
+    throw new Error('Diagnosis ranking normalization value must be finite');
+  }
+
+  if (spec.method === 'IDENTITY_0_1') {
+    if (value < 0 || value > 1) {
+      throw new Error('Diagnosis IDENTITY_0_1 value must be in [0, 1]');
+    }
+    return value;
+  }
+
+  if (
+    !Number.isFinite(spec.lowerAnchor)
+    || !Number.isFinite(spec.upperAnchor)
+    || spec.upperAnchor <= spec.lowerAnchor
+  ) {
+    throw new Error('Diagnosis LINEAR_CLAMP anchors must be finite and increasing');
+  }
+
+  const ascending = Math.min(
+    1,
+    Math.max(0, (value - spec.lowerAnchor) / (spec.upperAnchor - spec.lowerAnchor)),
+  );
+  return spec.direction === 'ASCENDING' ? ascending : 1 - ascending;
 }
 
 export function diagnosisSmallerArmOverlapRate(
