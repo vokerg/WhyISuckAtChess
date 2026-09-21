@@ -33,6 +33,10 @@ test('Phase 5 diagnosis policy registry keeps stable versioned semantics', () =>
       'LATE_SESSION_TACTICAL_DETERIORATION',
     ],
   );
+  assert.deepEqual(
+    DIAGNOSIS_POLICY_REGISTRY.rootCauseThemes[1].conditionOrObservationDiagnosisIds,
+    ['SESSION-001', 'SESSION-002'],
+  );
   assert.equal(DIAGNOSIS_POLICY_REGISTRY.overlap.materialSmallerArmRate, 0.6);
   assert.equal(DIAGNOSIS_POLICY_REGISTRY.evidence.minimumRequiredEvidenceCoverage, 0.5);
 });
