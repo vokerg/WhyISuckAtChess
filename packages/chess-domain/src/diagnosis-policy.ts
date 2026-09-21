@@ -146,7 +146,6 @@ export const DIAGNOSIS_ROOT_CAUSE_THEME_REGISTRY = Object.freeze([
     conditionOrObservationDiagnosisIds: Object.freeze([
       'SESSION-001',
       'SESSION-002',
-      'SESSION-003',
     ]),
     minimumDistinctGames: 5,
     minimumDistinctSessions: 3,
