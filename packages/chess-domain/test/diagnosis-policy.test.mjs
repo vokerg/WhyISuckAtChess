@@ -8,6 +8,7 @@ import {
   diagnosisEvidenceRankingMultiplier,
   diagnosisSmallerArmOverlapRate,
   isMaterialDiagnosisEventOverlap,
+  normalizeDiagnosisRankingComponent,
 } from '../dist/index.js';
 
 test('Phase 5 diagnosis policy registry keeps stable versioned semantics', () => {
@@ -54,6 +55,45 @@ test('ranking weights and evidence multipliers are deterministic and fail closed
   });
   assert.equal(diagnosisEvidenceRankingMultiplier('INSUFFICIENT'), 0);
   assert.equal(diagnosisEvidenceRankingMultiplier('HIGH'), 1);
+});
+
+test('ranking normalization is explicit, bounded, and fail-closed', () => {
+  assert.equal(normalizeDiagnosisRankingComponent(0.7, {
+    key: 'already-bounded-v1',
+    method: 'IDENTITY_0_1',
+  }), 0.7);
+  assert.equal(normalizeDiagnosisRankingComponent(15, {
+    key: 'example-linear-v1',
+    method: 'LINEAR_CLAMP',
+    lowerAnchor: 10,
+    upperAnchor: 20,
+    direction: 'ASCENDING',
+  }), 0.5);
+  assert.equal(normalizeDiagnosisRankingComponent(25, {
+    key: 'example-linear-v1',
+    method: 'LINEAR_CLAMP',
+    lowerAnchor: 10,
+    upperAnchor: 20,
+    direction: 'ASCENDING',
+  }), 1);
+  assert.equal(normalizeDiagnosisRankingComponent(12, {
+    key: 'example-descending-v1',
+    method: 'LINEAR_CLAMP',
+    lowerAnchor: 10,
+    upperAnchor: 20,
+    direction: 'DESCENDING',
+  }), 0.8);
+  assert.throws(() => normalizeDiagnosisRankingComponent(1.1, {
+    key: 'invalid-bounded-v1',
+    method: 'IDENTITY_0_1',
+  }));
+  assert.throws(() => normalizeDiagnosisRankingComponent(5, {
+    key: 'invalid-linear-v1',
+    method: 'LINEAR_CLAMP',
+    lowerAnchor: 10,
+    upperAnchor: 10,
+    direction: 'ASCENDING',
+  }));
 });
 
 test('material event overlap requires repeated shared evidence across games', () => {
