@@ -86,7 +86,8 @@ Stable finding identity is semantic, not row/recalculation identity. The identit
 1. owned player scope;
 2. diagnosis ID;
 3. finding level;
-4. normalized finding dimensions/scope that materially define the claim;
+4. normalized finding dimensions/scope that materially define the claim, including the registered root-theme key for synthesized candidates.
+
 The identity deliberately excludes producer ownership, calculated timestamps, and policy versions. Producer ownership/version belongs to the materialized revision and #83 must fail closed if two producers claim the same diagnosis projection. New calculation/detector/taxonomy/synthesis versions create a new revision of the same stable semantic finding where the semantics are unchanged. A semantic diagnosis/dimension change creates a different identity.
 
 Persistence in #82 must make **current versus superseded** explicit. Recalculation replaces the current revision for the same stable identity/scope; it must not accumulate several rows that all masquerade as current.
