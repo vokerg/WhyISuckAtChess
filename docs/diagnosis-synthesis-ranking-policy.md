@@ -87,9 +87,7 @@ Stable finding identity is semantic, not row/recalculation identity. The identit
 2. diagnosis ID;
 3. finding level;
 4. normalized finding dimensions/scope that materially define the claim;
-5. producer ownership key.
-
-It deliberately excludes calculated timestamps and policy versions. New calculation/detector/taxonomy/synthesis versions create a new revision of the same stable semantic finding where the semantics are unchanged. A semantic diagnosis/dimension change creates a different identity.
+The identity deliberately excludes producer ownership, calculated timestamps, and policy versions. Producer ownership/version belongs to the materialized revision and #83 must fail closed if two producers claim the same diagnosis projection. New calculation/detector/taxonomy/synthesis versions create a new revision of the same stable semantic finding where the semantics are unchanged. A semantic diagnosis/dimension change creates a different identity.
 
 Persistence in #82 must make **current versus superseded** explicit. Recalculation replaces the current revision for the same stable identity/scope; it must not accumulate several rows that all masquerade as current.
 
@@ -246,7 +244,7 @@ Mechanism must be drawn from tactical mechanism IDs `TACT-001` through `TACT-005
 
 ### `LATE_SESSION_TACTICAL_DETERIORATION`
 
-Mechanism must be one of `TACT-001` through `TACT-005`. Material session context must be `SESSION-001`, `SESSION-002`, or `SESSION-003`. At least 5 distinct games across at least 3 distinct sessions are required.
+Mechanism must be one of `TACT-001` through `TACT-005`. Material non-root session context must be `SESSION-001` or `SESSION-002`. `SESSION-003` may be retained as additional supporting synthesis evidence after #79 lands, but because it is itself a root-candidate diagnosis it cannot by itself satisfy the required observation/contributing-condition slot. At least 5 distinct games across at least 3 distinct sessions are required.
 
 Adding/removing a root theme or changing prerequisites requires a synthesis-policy version bump.
 
