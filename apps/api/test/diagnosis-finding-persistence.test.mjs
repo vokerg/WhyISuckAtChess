@@ -108,6 +108,17 @@ test('canonical finding persistence replaces current scope without deleting sour
         connectedLichessUsername: 'FixtureOther',
       },
     });
+    const sameOwnerOtherGame = await prisma.importedGame.create({
+      data: {
+        appUserId: user.id,
+        provider: 'LICHESS',
+        providerGameId: 'diagnosis-same-owner-other-game-' + suffix,
+        connectedLichessUserId: 'fixture-user',
+        connectedLichessUsername: 'FixtureUser',
+        plyIndexStatus: 'INDEXED',
+        plyIndexedAt: indexedAt,
+      },
+    });
 
     const analysisRun = await prisma.gameAnalysisRun.create({
       data: {
@@ -150,6 +161,29 @@ test('canonical finding persistence replaces current scope without deleting sour
         detailsJson: { clockBand: 'PRESSURE' },
       },
     });
+    const otherEvidenceRun = await prisma.evidenceRun.create({
+      data: {
+        importedGameId: sameOwnerOtherGame.id,
+        detectorKey: 'fixture-diagnosis-other-source',
+        detectorVersion: 'v1',
+        workKey: randomUUID().replaceAll('-', ''),
+        sourcePlyIndexedAt: indexedAt,
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+        isCurrent: true,
+        completedAt: new Date('2026-09-22T04:03:00.000Z'),
+      },
+    });
+    const otherEvent = await prisma.evidenceEvent.create({
+      data: {
+        evidenceKey: randomUUID().replaceAll('-', ''),
+        runId: otherEvidenceRun.id,
+        findingKey: 'other-event',
+        evidenceType: 'FIXTURE_EVENT',
+        measurementsJson: { value: 1 },
+        detailsJson: { fixture: true },
+      },
+    });
 
     const firstDraft = findingSet(
       randomUUID().replaceAll('-', ''),
@@ -190,32 +224,59 @@ test('canonical finding persistence replaces current scope without deleting sour
     );
     assert.equal(repeated.id, first.id, 'same materialization key must be idempotent');
 
-    const secondDraft = findingSet(
-      randomUUID().replaceAll('-', ''),
-      baseFinding({
-        producerVersion: 'time-pressure-quality-collapse-v2',
-        effect: {
-          metric: 'average-score-loss-delta',
-          value: 81,
-          unit: 'centipawns',
-          direction: 'HIGHER_IS_WORSE',
-          comparator: { baseline: 'NORMAL_CLOCK' },
+    const revisedTimeFinding = baseFinding({
+      producerVersion: 'time-pressure-quality-collapse-v2',
+      effect: {
+        metric: 'average-score-loss-delta',
+        value: 81,
+        unit: 'centipawns',
+        direction: 'HIGHER_IS_WORSE',
+        comparator: { baseline: 'NORMAL_CLOCK' },
+      },
+      evidenceReferences: [{
+        referenceKey: 'game-' + game.id,
+        referenceType: 'IMPORTED_GAME',
+        importedGameId: game.id,
+        sourcePlyStart: 15,
+        sourcePlyEnd: 15,
+        provenance: {
+          aggregate: 'time-pressure-quality-collapse-v2',
+          analysisSnapshotId: analysisRun.snapshotId,
         },
-        evidenceReferences: [{
-          referenceKey: 'game-' + game.id,
-          referenceType: 'IMPORTED_GAME',
-          importedGameId: game.id,
-          sourcePlyStart: 15,
-          sourcePlyEnd: 15,
-          provenance: {
-            aggregate: 'time-pressure-quality-collapse-v2',
-            analysisSnapshotId: analysisRun.snapshotId,
-          },
-          representative: true,
-        }],
-      }),
-      'finding-materialization-v2',
-    );
+        representative: true,
+      }],
+    });
+    const rootCandidate = baseFinding({
+      findingKey: 'root-clock-tactics',
+      diagnosisId: 'ROOT-CLOCK-TACTICS',
+      findingLevel: 'ROOT_CAUSE_CANDIDATE',
+      claimKey: 'root.clock-management-driving-tactical-collapse',
+      producerKey: 'diagnosis-root-synthesis',
+      producerVersion: 'diagnosis-synthesis-v1',
+      effect: null,
+      sourceVersions: {
+        synthesis: 'diagnosis-synthesis-v1',
+        children: ['TACT-001', 'TIME-002'],
+      },
+      evidenceReferences: [{
+        referenceKey: 'root-support-' + game.id,
+        referenceType: 'IMPORTED_GAME',
+        importedGameId: game.id,
+        provenance: {
+          synthesis: 'diagnosis-synthesis-v1',
+          childFindingKeys: ['time-pressure-collapse'],
+        },
+        representative: true,
+      }],
+    });
+    const secondDraft = {
+      ...findingSet(
+        randomUUID().replaceAll('-', ''),
+        revisedTimeFinding,
+        'finding-materialization-v2',
+      ),
+      findings: [revisedTimeFinding, rootCandidate],
+    };
 
     const second = await replaceCurrentDiagnosisFindingScope(
       user.id,
@@ -224,7 +285,18 @@ test('canonical finding persistence replaces current scope without deleting sour
     );
     assert.notEqual(second.id, first.id);
     assert.equal(second.isCurrent, true);
-    assert.equal(second.findings[0].producerVersion, 'time-pressure-quality-collapse-v2');
+    const persistedTimeFinding = second.findings.find(
+      (finding) => finding.findingKey === 'time-pressure-collapse',
+    );
+    const persistedRootCandidate = second.findings.find(
+      (finding) => finding.findingKey === 'root-clock-tactics',
+    );
+    assert.equal(
+      persistedTimeFinding?.producerVersion,
+      'time-pressure-quality-collapse-v2',
+    );
+    assert.equal(persistedRootCandidate?.findingLevel, 'ROOT_CAUSE_CANDIDATE');
+    assert.equal(persistedRootCandidate?.producerKey, 'diagnosis-root-synthesis');
 
     const historical = await prisma.diagnosisFindingSet.findUniqueOrThrow({
       where: { id: first.id },
@@ -272,6 +344,58 @@ test('canonical finding persistence replaces current scope without deleting sour
         prismaDiagnosisFindingRepository,
       ),
       /outside the owned player scope/,
+    );
+
+    const mixedSourceDraft = findingSet(
+      randomUUID().replaceAll('-', ''),
+      baseFinding({
+        findingKey: 'mixed-source',
+        evidenceReferences: [{
+          referenceKey: 'mixed-game-and-event',
+          referenceType: 'EVIDENCE_EVENT',
+          importedGameId: game.id,
+          evidenceEventId: otherEvent.id,
+          provenance: { fixture: true },
+        }],
+      }),
+      'finding-materialization-v4',
+    );
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id,
+        mixedSourceDraft,
+        prismaDiagnosisFindingRepository,
+      ),
+      /combines sources from different games/,
+    );
+
+    await prisma.evidenceRun.update({
+      where: { id: otherEvidenceRun.id },
+      data: {
+        isCurrent: false,
+        supersededAt: new Date('2026-09-22T04:04:00.000Z'),
+      },
+    });
+    const staleEvidenceDraft = findingSet(
+      randomUUID().replaceAll('-', ''),
+      baseFinding({
+        findingKey: 'stale-evidence',
+        evidenceReferences: [{
+          referenceKey: 'stale-event',
+          referenceType: 'EVIDENCE_EVENT',
+          evidenceEventId: otherEvent.id,
+          provenance: { fixture: true },
+        }],
+      }),
+      'finding-materialization-v5',
+    );
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id,
+        staleEvidenceDraft,
+        prismaDiagnosisFindingRepository,
+      ),
+      /not current and succeeded/,
     );
 
     const currentAfterRejectedWrite = await prismaDiagnosisFindingRepository.getCurrentScope(
