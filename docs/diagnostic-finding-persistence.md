@@ -19,7 +19,7 @@ owned current source evidence / aggregates
      -> DiagnosisFindingRelationship (persistence seam only)
 ```
 
-A recalculation creates a new set and supersedes the previous current set atomically. Historical sets remain queryable.
+A recalculation creates a new set and supersedes the previous current set atomically. Historical sets remain queryable. Current reads require the caller's expected taxonomy, synthesis, calculation, and complete policy-version tuple; a row from an older tuple fails closed rather than masquerading as current.
 
 ## Durable entities
 
@@ -36,7 +36,7 @@ It persists:
 - `calculationAsOf`;
 - current/superseded lifecycle state.
 
-The database enforces at most one `isCurrent = true` set for one `appUserId + scopeKey`.
+The database enforces at most one `isCurrent = true` set for one `appUserId + scopeKey`. Materialization keys are unique per owner, so independently identical version/scope inputs for two users cannot collide.
 
 ### `DiagnosisFinding`
 
@@ -112,6 +112,40 @@ A later policy/taxonomy/producer/source-version change creates a new materializa
 The Prisma repository rejects cross-user source references. Evidence-event references must point to a current successful `EvidenceRun` at materialization time. When multiple source identifiers are provided on one reference, they must resolve to the same imported game.
 
 Foreign keys from diagnosis references use `SET NULL` toward authoritative source rows; deleting/superseding diagnosis artifacts therefore cannot delete imported games, evidence events, or analysis runs.
+
+## CRT reference / Why delta
+
+**Reference**
+
+- CRT `player-chess-profile.repository.prisma.ts` and `player-chess-profile.service.ts` for bounded ownership-scoped repository/service separation.
+- CRT tactical-detection run/repository/service persistence for explicit run identity, version/hash provenance, transaction-owned replacement work, and durable supporting-game linkage.
+
+**Preserve**
+
+- Prisma stays behind a backend repository boundary;
+- owned-player scoping is explicit;
+- derived output carries durable version/provenance metadata;
+- replacement/materialization is transactional rather than piecemeal;
+- supporting source games remain traceable.
+
+**Change**
+
+- Why persists heterogeneous canonical findings rather than CRT profile summaries or tactical detections;
+- one immutable finding set owns a complete scope revision;
+- current reads are version-tuple gated;
+- evidence references can retain detector events, analysis runs, plies, sessions, and future stable event identity without copying those source facts;
+- root-cause candidates share the finding lifecycle without becoming detector outputs.
+
+**Omit**
+
+- CRT repertoire/training/course state;
+- UI denormalization;
+- destructive replacement of authoritative source evidence;
+- AI-authored findings.
+
+**Future seam**
+
+The typed draft/read repository contract can be replaced by another persistence implementation without moving Prisma into `packages/chess-domain` or changing the Phase 5 synthesis policy.
 
 ## Phase boundary
 
