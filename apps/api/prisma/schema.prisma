@@ -18,6 +18,7 @@ model AppUser {
   importedGames     ImportedGame[]
   importRuns        ImportRun[]
   importCoverages   AccountImportCoverage[]
+  diagnosisFindingSets DiagnosisFindingSet[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -114,6 +115,7 @@ model ImportedGame {
   terminalClockFacts         TerminalClockSourceFact[]
   analysisRuns               GameAnalysisRun[]
   evidenceRuns               EvidenceRun[]
+  diagnosisFindingReferences DiagnosisFindingEvidenceReference[]
 
   @@unique([appUserId, provider, providerGameId])
   @@index([appUserId, startedAt])
@@ -231,6 +233,7 @@ model GameAnalysisRun {
   updatedAt           DateTime          @updatedAt
   analysedPlies       ImportedGamePly[]
   evidenceRuns         EvidenceRun[]
+  diagnosisFindingReferences DiagnosisFindingEvidenceReference[]
 
   @@index([status, runAfter])
   @@index([importedGameId, status, createdAt])
@@ -311,6 +314,7 @@ model EvidenceEvent {
   detailsJson        Json
   unavailableReason  String?      @db.VarChar(256)
   createdAt          DateTime     @default(now())
+  diagnosisFindingReferences DiagnosisFindingEvidenceReference[]
 
   @@unique([runId, findingKey])
   @@index([runId, evidenceType])
@@ -376,3 +380,104 @@ model AccountImportCoverage {
   @@unique([appUserId, scopeHash])
   @@index([appUserId, coveredThrough])
 }
+
+model DiagnosisFindingSet {
+  id                     Int                           @id @default(autoincrement())
+  appUserId              Int
+  appUser                AppUser                       @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  materializationKey     String                        @unique @db.VarChar(64)
+  scopeKey               String                        @db.VarChar(128)
+  scopeJson              Json
+  taxonomyVersion        String                        @db.VarChar(64)
+  synthesisPolicyVersion String                        @db.VarChar(64)
+  calculationVersion     String                        @db.VarChar(64)
+  policyVersionsJson     Json
+  calculationAsOf        DateTime
+  isCurrent              Boolean                       @default(true)
+  supersededAt           DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  findings               DiagnosisFinding[]
+  relationships          DiagnosisFindingRelationship[]
+
+  @@index([appUserId, scopeKey, createdAt])
+}
+
+model DiagnosisFinding {
+  id                       Int                                  @id @default(autoincrement())
+  findingSetId             Int
+  findingSet               DiagnosisFindingSet                  @relation(fields: [findingSetId], references: [id], onDelete: Cascade)
+  findingKey               String                               @db.VarChar(128)
+  diagnosisId              String                               @db.VarChar(64)
+  findingLevel             String                               @db.VarChar(32)
+  observationState         String                               @db.VarChar(48)
+  claimKey                 String                               @db.VarChar(128)
+  producerKey              String                               @db.VarChar(96)
+  producerVersion          String                               @db.VarChar(64)
+  sampleCount              Int
+  distinctGameCount        Int
+  distinctSessionCount     Int
+  requiredEvidenceCoverage Float?
+  evidenceStrength         String                               @db.VarChar(24)
+  dimensionsJson           Json
+  coverageJson             Json
+  effectMetric             String?                              @db.VarChar(96)
+  effectValue              Float?
+  effectUnit               String?                              @db.VarChar(48)
+  effectDirection          String?                              @db.VarChar(32)
+  comparatorJson           Json?
+  sourceVersionsJson       Json
+  createdAt                DateTime                             @default(now())
+  evidenceReferences       DiagnosisFindingEvidenceReference[]
+  outgoingRelationships    DiagnosisFindingRelationship[]       @relation("DiagnosisRelationshipSource")
+  incomingRelationships    DiagnosisFindingRelationship[]       @relation("DiagnosisRelationshipTarget")
+
+  @@unique([findingSetId, findingKey])
+  @@index([findingSetId, diagnosisId])
+}
+
+model DiagnosisFindingEvidenceReference {
+  id                  Int               @id @default(autoincrement())
+  findingId           Int
+  finding             DiagnosisFinding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  referenceKey        String            @db.VarChar(128)
+  referenceType       String            @db.VarChar(48)
+  importedGameId      Int?
+  importedGame        ImportedGame?     @relation(fields: [importedGameId], references: [id], onDelete: SetNull)
+  evidenceEventId     Int?
+  evidenceEvent       EvidenceEvent?    @relation(fields: [evidenceEventId], references: [id], onDelete: SetNull)
+  sourceAnalysisRunId Int?
+  sourceAnalysisRun   GameAnalysisRun?  @relation(fields: [sourceAnalysisRunId], references: [id], onDelete: SetNull)
+  sourcePlyStart      Int?
+  sourcePlyEnd        Int?
+  sessionKey          String?           @db.VarChar(128)
+  eventIdentityKey    String?           @db.VarChar(192)
+  provenanceJson      Json
+  representative      Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+
+  @@unique([findingId, referenceKey])
+  @@index([importedGameId])
+  @@index([evidenceEventId])
+  @@index([sourceAnalysisRunId])
+  @@index([eventIdentityKey])
+}
+
+model DiagnosisFindingRelationship {
+  id                 Int                 @id @default(autoincrement())
+  findingSetId       Int
+  findingSet         DiagnosisFindingSet @relation(fields: [findingSetId], references: [id], onDelete: Cascade)
+  sourceFindingId    Int
+  sourceFinding      DiagnosisFinding    @relation("DiagnosisRelationshipSource", fields: [sourceFindingId], references: [id], onDelete: Cascade)
+  targetFindingId    Int
+  targetFinding      DiagnosisFinding    @relation("DiagnosisRelationshipTarget", fields: [targetFindingId], references: [id], onDelete: Cascade)
+  relationshipType   String              @db.VarChar(48)
+  policyVersion      String              @db.VarChar(64)
+  supportJson        Json
+  createdAt          DateTime            @default(now())
+
+  @@unique([findingSetId, sourceFindingId, targetFindingId, relationshipType])
+  @@index([sourceFindingId])
+  @@index([targetFindingId])
+}
+
