@@ -278,7 +278,12 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
       }
 
       const repeated = await tx.diagnosisFindingSet.findUnique({
-        where: { materializationKey: draft.materializationKey },
+        where: {
+          appUserId_materializationKey: {
+            appUserId,
+            materializationKey: draft.materializationKey,
+          },
+        },
         select: {
           id: true,
           appUserId: true,
@@ -316,12 +321,16 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
     });
   },
 
-  async getCurrentScope(appUserId, scopeKey) {
+  async getCurrentScope(appUserId, scopeKey, versions) {
     const current = await prisma.diagnosisFindingSet.findFirst({
       where: {
         appUserId,
         scopeKey,
         isCurrent: true,
+        taxonomyVersion: versions.taxonomyVersion,
+        synthesisPolicyVersion: versions.synthesisPolicyVersion,
+        calculationVersion: versions.calculationVersion,
+        policyVersionsJson: { equals: jsonValue(versions.policyVersions) },
       },
       select: { id: true },
     });
