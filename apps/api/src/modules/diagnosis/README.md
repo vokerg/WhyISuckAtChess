@@ -27,3 +27,16 @@ Issue #66 adds `opponent-strength-effect-v1` for `RATING-001`: it summarizes res
 Issue #67 adds the Phase 4B integration/acceptance boundary: `apps/api/test/phase-4b-acceptance.test.mjs` composes the `TIME-001`–`TIME-007` and `RATING-001/002` aggregate contracts over one synthetic account model, while `docs/phase-4b-acceptance.md` records the canonical integration matrix, provenance/coverage conclusions, and residual calibration limits. Phase 5 remains responsible for persistence, ranking, relationship consolidation, and diagnosis synthesis.
 
 Issue #81 freezes the shared Phase 5 `diagnosis-synthesis-v1`, `diagnosis-consolidation-v1`, `diagnosis-ranking-v1`, and `diagnosis-event-identity-v1` policy in `docs/diagnosis-synthesis-ranking-policy.md` with framework-neutral constants in `packages/chess-domain`. Later Phase 5 leaves must consume that contract rather than inventing independent finding lifecycle, overlap, root-theme, or ranking semantics.
+
+## Phase 5 canonical finding persistence
+
+Issue #82 adds the durable current/superseded finding lifecycle described in `docs/diagnostic-finding-persistence.md`.
+
+- `diagnosis-finding.types.ts` defines the canonical backend draft/read contract.
+- `diagnosis-finding.service.ts` validates Phase 5 bounds, effect/count/coverage fields, JSON payloads, duplicate identities, representative limits, and source reference shapes before persistence.
+- `diagnosis-finding.repository.prisma.ts` atomically replaces one owned `scopeKey`, retains historical finding sets, fences cross-owner/current-evidence references, and returns only persisted snapshots.
+- `DiagnosisFindingRelationship` is a persistence seam only; #85 owns graph construction and relationship policy execution.
+- Recalculation never mutates or deletes imported-game, engine-analysis, evidence-event, or aggregate source facts.
+
+Candidate projection (#83), overlap (#84), relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain outside this persistence slice.
+
