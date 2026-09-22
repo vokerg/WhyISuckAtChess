@@ -385,7 +385,7 @@ model DiagnosisFindingSet {
   id                     Int                           @id @default(autoincrement())
   appUserId              Int
   appUser                AppUser                       @relation(fields: [appUserId], references: [id], onDelete: Cascade)
-  materializationKey     String                        @unique @db.VarChar(64)
+  materializationKey     String                        @db.VarChar(64)
   scopeKey               String                        @db.VarChar(128)
   scopeJson              Json
   taxonomyVersion        String                        @db.VarChar(64)
@@ -400,6 +400,7 @@ model DiagnosisFindingSet {
   findings               DiagnosisFinding[]
   relationships          DiagnosisFindingRelationship[]
 
+  @@unique([appUserId, materializationKey], map: "DiagnosisFindingSet_appUserId_materializationKey_key")
   @@index([appUserId, scopeKey, createdAt])
 }
 
