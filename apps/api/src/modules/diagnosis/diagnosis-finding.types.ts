@@ -126,6 +126,13 @@ export interface DiagnosisFindingSetSnapshot {
   relationships: PersistedDiagnosisFindingRelationship[];
 }
 
+export interface DiagnosisFindingVersionTuple {
+  taxonomyVersion: string;
+  synthesisPolicyVersion: string;
+  calculationVersion: string;
+  policyVersions: Readonly<Record<string, unknown>>;
+}
+
 export interface DiagnosisFindingRepository {
   replaceCurrentScope(
     appUserId: number,
@@ -134,5 +141,6 @@ export interface DiagnosisFindingRepository {
   getCurrentScope(
     appUserId: number,
     scopeKey: string,
+    versions: DiagnosisFindingVersionTuple,
   ): Promise<DiagnosisFindingSetSnapshot | null>;
 }
