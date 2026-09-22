@@ -93,8 +93,8 @@ CREATE TABLE "DiagnosisFindingRelationship" (
     CONSTRAINT "DiagnosisFindingRelationship_not_self" CHECK ("sourceFindingId" <> "targetFindingId")
 );
 
-CREATE UNIQUE INDEX "DiagnosisFindingSet_materializationKey_key"
-ON "DiagnosisFindingSet"("materializationKey");
+CREATE UNIQUE INDEX "DiagnosisFindingSet_appUserId_materializationKey_key"
+ON "DiagnosisFindingSet"("appUserId", "materializationKey");
 
 CREATE INDEX "DiagnosisFindingSet_appUserId_scopeKey_createdAt_idx"
 ON "DiagnosisFindingSet"("appUserId", "scopeKey", "createdAt");
