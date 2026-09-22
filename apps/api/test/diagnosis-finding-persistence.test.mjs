@@ -72,6 +72,15 @@ function findingSet(materializationKey, finding, calculationVersion = 'finding-m
   };
 }
 
+function versionTuple(draft) {
+  return {
+    taxonomyVersion: draft.taxonomyVersion,
+    synthesisPolicyVersion: draft.synthesisPolicyVersion,
+    calculationVersion: draft.calculationVersion,
+    policyVersions: draft.policyVersions,
+  };
+}
+
 test('canonical finding persistence replaces current scope without deleting source facts', async () => {
   const suffix = randomUUID();
   let userId = null;
@@ -306,9 +315,24 @@ test('canonical finding persistence replaces current scope without deleting sour
 
     const current = await prismaDiagnosisFindingRepository.getCurrentScope(
       user.id,
-      firstDraft.scopeKey,
+      secondDraft.scopeKey,
+      versionTuple(secondDraft),
     );
     assert.equal(current.id, second.id);
+
+    const staleVersionRead = await prismaDiagnosisFindingRepository.getCurrentScope(
+      user.id,
+      secondDraft.scopeKey,
+      {
+        ...versionTuple(secondDraft),
+        calculationVersion: 'finding-materialization-stale',
+      },
+    );
+    assert.equal(
+      staleVersionRead,
+      null,
+      'a current row from another calculation tuple must fail closed',
+    );
 
     await assert.rejects(
       () => replaceCurrentDiagnosisFindingScope(
@@ -323,6 +347,21 @@ test('canonical finding persistence replaces current scope without deleting sour
     const sourceEvent = await prisma.evidenceEvent.findUnique({ where: { id: event.id } });
     assert.ok(sourceGame, 'finding recalculation must not delete imported-game source facts');
     assert.ok(sourceEvent, 'finding recalculation must not delete evidence source facts');
+
+    const sameKeyOtherOwnerDraft = findingSet(
+      firstDraft.materializationKey,
+      baseFinding({
+        findingKey: 'other-owner-same-materialization',
+        evidenceReferences: [],
+      }),
+    );
+    const otherOwnerSet = await replaceCurrentDiagnosisFindingScope(
+      otherUser.id,
+      sameKeyOtherOwnerDraft,
+      prismaDiagnosisFindingRepository,
+    );
+    assert.equal(otherOwnerSet.materializationKey, firstDraft.materializationKey);
+    assert.equal(otherOwnerSet.appUserId, otherUser.id);
 
     const foreignSourceDraft = findingSet(
       randomUUID().replaceAll('-', ''),
@@ -400,7 +439,8 @@ test('canonical finding persistence replaces current scope without deleting sour
 
     const currentAfterRejectedWrite = await prismaDiagnosisFindingRepository.getCurrentScope(
       user.id,
-      firstDraft.scopeKey,
+      secondDraft.scopeKey,
+      versionTuple(secondDraft),
     );
     assert.equal(
       currentAfterRejectedWrite.id,
