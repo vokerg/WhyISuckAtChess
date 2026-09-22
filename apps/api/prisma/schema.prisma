@@ -476,7 +476,7 @@ model DiagnosisFindingRelationship {
   supportJson        Json
   createdAt          DateTime            @default(now())
 
-  @@unique([findingSetId, sourceFindingId, targetFindingId, relationshipType])
+  @@unique([findingSetId, sourceFindingId, targetFindingId, relationshipType], map: "DiagnosisFindingRelationship_set_source_target_type_key")
   @@index([sourceFindingId])
   @@index([targetFindingId])
 }
