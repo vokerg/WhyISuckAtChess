@@ -190,7 +190,8 @@ function openingSupportingGames(finding: EvidenceFindingDraft): OpeningSupportin
   return value.filter((item): item is OpeningSupportingGame => (
     typeof item === 'object'
     && item !== null
-    && Number.isSafeInteger((item as { importedGameId?: unknown }).importedGameId)
+    && typeof (item as { importedGameId?: unknown }).importedGameId === 'number'
+    && Number.isSafeInteger((item as { importedGameId: number }).importedGameId)
   ));
 }
 
