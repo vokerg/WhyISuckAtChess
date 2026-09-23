@@ -1231,7 +1231,7 @@ export function projectDiagnosisCandidates<K extends DiagnosisCandidateProducerK
   key: K,
   source: DiagnosisCandidateSourceMap[K],
 ): readonly DiagnosisFindingDraft[] {
-  const producer = DIAGNOSIS_CANDIDATE_PRODUCERS[key] as DiagnosisCandidateProducer<K>;
+  const producer = DIAGNOSIS_CANDIDATE_PRODUCERS[key] as unknown as DiagnosisCandidateProducer<K>;
   return producer.project(source);
 }
 
