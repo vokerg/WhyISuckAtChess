@@ -542,55 +542,54 @@ The initial implemented policy is `session-v1`: games remain in one session when
 
 Session workflows consume completed imported-game chronology and source/derived game evidence. They do not own per-ply reconstruction or engine execution.
 
-### 4.11 Diagnosis runs, findings, evidence links, and relationships
+### 4.11 Diagnosis finding sets, evidence references, and relationships
 
-Diagnosis persistence must preserve the concepts in `docs/diagnostic-taxonomy.md` without treating its illustrative field list as a required Prisma layout.
+Issue #82 implements the canonical persistence boundary described in `docs/diagnostic-finding-persistence.md`.
 
-Conceptual durable ownership:
+Durable ownership is now:
 
 ```text
-DiagnosisRun
+DiagnosisFindingSet
   appUserId
-  requested scope/date range
+  materializationKey
+  scopeKey / scopeJson
   taxonomyVersion
-  aggregation/ranking policy version(s)
-  upstream evidence/session versions/coverage snapshot
-  status
+  synthesisPolicyVersion
+  calculationVersion
+  complete policyVersionsJson
   calculationAsOf
+  isCurrent / supersededAt
 
-DiagnosticFinding
-  diagnosisRunId
-  diagnosisId
-  taxonomyVersion
-  detectorOrAggregatorVersion
-  level
-  deterministic title/summary key
-  scope
-  sample denominators
-  coverage denominators/exclusions
-  observed metric
-  baseline/comparator
-  effect/severity/result-impact measures where defined
-  evidenceStrength
-  mechanismConfidence
-  caveats/confounders
+DiagnosisFinding
+  findingSetId
+  stable findingKey / diagnosisId
+  level / observation state
+  deterministic claim key
+  producer identity/version
+  sample + distinct game/session counts
+  required-evidence coverage
+  raw effect metric/value/unit/direction + comparator
+  evidence strength
+  dimensions / coverage / source-version payloads
 
-DiagnosticFindingEvidence
+DiagnosisFindingEvidenceReference
   findingId
-  importedGameId
-  optional ply/position reference
-  optional persisted evidence reference
-  role / representative ordering
+  optional importedGame/evidenceEvent/analysisRun IDs
+  optional ply/session/event-identity context
+  reference provenance
+  representative flag
 
-DiagnosticFindingRelationship
+DiagnosisFindingRelationship
+  findingSetId
   sourceFindingId
   targetFindingId
   registered relationship type
+  policy version / support
 ```
 
-Relationships are finding-to-finding. Raw contextual dimensions are not disguised as finding targets.
+One `appUserId + scopeKey` has at most one current finding set. Recalculation atomically supersedes the old set and creates a new immutable revision; source imported-game/evidence/analysis rows are never owned or deleted by this lifecycle. The relationship table is only a persistence seam in #82; #85 owns graph construction and typed-edge policy execution.
 
-A diagnosis run references immutable/versioned upstream evidence. Re-running newer policy creates new output or supersedes through explicit latest-run selection; it does not mutate historical evidence into a different meaning.
+Relationships remain finding-to-finding. Raw contextual dimensions are not disguised as finding targets.
 
 ### 4.12 Read models are not source-of-truth migrations
 
