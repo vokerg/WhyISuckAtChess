@@ -49,6 +49,7 @@ export interface AnalysisRepository {
     analysisVersion: string;
     settingsHash: string;
     settings: StockfishSettings;
+    importedGameId?: number;
   }): Promise<number | null>;
   recoverStaleRuns(staleBefore: Date): Promise<number>;
   claimNext(workerId: string): Promise<AnalysisRunClaim | null>;
@@ -160,6 +161,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
   async enqueueEligibleGame(input) {
     try {
       return await prisma.$transaction(async (tx) => {
+        const importedGameId = input.importedGameId ?? null;
         const candidates = await tx.$queryRaw<Array<{
           id: number;
           sourcePlyIndexedAt: Date;
@@ -167,6 +169,7 @@ export const prismaAnalysisRepository: AnalysisRepository = {
           SELECT game."id", game."plyIndexedAt" AS "sourcePlyIndexedAt"
           FROM "ImportedGame" AS game
           WHERE game."provider" = 'LICHESS'
+            AND (${importedGameId}::integer IS NULL OR game."id" = ${importedGameId})
             AND game."plyIndexStatus" = 'INDEXED'
             AND game."plyIndexedAt" IS NOT NULL
             AND game."speedCategory" IN ('bullet', 'blitz', 'rapid')
