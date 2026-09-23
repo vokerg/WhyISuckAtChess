@@ -40,5 +40,15 @@ Issue #82 adds the durable current/superseded finding lifecycle described in `do
 - `DiagnosisFindingRelationship` is a persistence seam only; #85 owns graph construction and relationship policy execution.
 - Recalculation never mutates or deletes imported-game, engine-analysis, evidence-event, or aggregate source facts.
 
-Candidate projection (#83), overlap (#84), relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain outside this persistence slice.
+## Phase 5 candidate projection
+
+Issue #83 adds `diagnosis-candidate-projection-v1`, the typed adapter/registry boundary described in `docs/diagnosis-candidate-projection.md`.
+
+- `diagnosis-candidate.registry.ts` projects existing authoritative aggregate/evidence results into `DiagnosisFindingDraft` without rerunning detector or aggregate logic.
+- The registry owns `OPEN-002/003`, `TIME-001..007`, `SESSION-001..003`, and `RATING-001/002`; remaining taxonomy IDs are explicitly unsupported until a taxonomy-safe recurrence/aggregate contract exists.
+- Source evidence strength, coverage, raw effects/units, dimensions, producer versions, and available supporting game/ply references remain inspectable.
+- Aggregates that do not expose stable game/event membership do not receive invented evidence IDs; they fail closed for future overlap work.
+- Duplicate producer ownership, supported/unsupported overlap, taxonomy omission, and projection-version drift fail at module initialization.
+
+Stable event overlap (#84), relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain subsequent Phase 5 leaves.
 
