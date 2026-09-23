@@ -6,6 +6,8 @@ Issue #52 adds the first implemented Phase 4 aggregate: `session-deterioration-v
 
 Issue #54 adds `loss-streak-deterioration-v1` for `SESSION-002`: it reuses `session-v1` prior-loss-streak context, matches streak/non-streak candidates by ordinal and exact time control, and compares provenance-safe move quality without asserting tilt or causality.
 
+Issue #79 adds `overlong-session-stopping-point-v1` for `SESSION-003`: it evaluates the fixed game-count thresholds 4–10, matches pre/post games inside the same session and exact control, requires material deterioration recurring across at least five distinct comparable sessions, and selects the earliest supported threshold without claiming fatigue or another psychological cause. It reuses the #52 provenance-safe `SessionGameQualityRepository`; see `docs/overlong-session-stopping-point.md`.
+
 Issue #58 adds `rating-context-composition-v1` for `RATING-002`: it accepts two bounded disjoint owned game-ID arms, summarizes user-relative rating-difference bands using `time-behavior-v1`, and emits a nullable composition warning without adjusting another aggregate's measured effect. See `docs/rating-context-composition.md`.
 
 Issue #59 adds `time-pressure-exposure-v1` for `TIME-001`: it performs a bounded owned-game timing read, counts only games with complete trustworthy user-decision timing for recurrence, preserves exact-control/increment strata, and reports first pressure entry with current phase context where available. It is exposure evidence only; `TIME-002` owns move-quality deterioration. See `docs/time-pressure-exposure.md`.
