@@ -1,7 +1,9 @@
-import type {
-  DiagnosisEvidenceStrength,
-  DiagnosisFindingLevel,
-  DiagnosisObservationState,
+import {
+  diagnosisGameEventIdentityKey,
+  diagnosisPlyEventIdentityKey,
+  type DiagnosisEvidenceStrength,
+  type DiagnosisFindingLevel,
+  type DiagnosisObservationState,
 } from '@why-i-suck-at-chess/chess-domain';
 import type { EvidenceFindingDraft } from '../evidence/evidence.types';
 import type { OpeningRecurrenceEvidenceResult } from '../evidence/opening-recurrence.service';
@@ -302,6 +304,18 @@ function openingReferences(
     importedGameId: game.importedGameId,
     sourcePlyStart: game.plyNumber ?? null,
     sourcePlyEnd: game.plyNumber ?? null,
+    eventIdentityKey: (
+      game.plyNumber !== undefined
+      && Number.isSafeInteger(game.plyNumber)
+      && game.plyNumber > 0
+    )
+      ? diagnosisPlyEventIdentityKey({
+          importedGameId: game.importedGameId,
+          triggerPly: game.plyNumber,
+          sourceKind: finding.type,
+          sourceVersion: 'opening-v1',
+        })
+      : null,
     provenance: {
       providerGameId: game.providerGameId ?? null,
       positionId: game.positionId ?? null,
@@ -625,6 +639,11 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
       referenceType: 'IMPORTED_GAME',
       importedGameId: game.importedGameId,
       sourcePlyStart: game.early.lastOpeningPly,
+      eventIdentityKey: diagnosisGameEventIdentityKey({
+        importedGameId: game.importedGameId,
+        sourceKind: 'EARLY_TIME_OVERUSE_COMPLETE_CHAIN',
+        sourceVersion: source.policyVersion,
+      }),
       provenance: {
         exactTimeControlKey: game.exactTimeControlKey,
         early: game.early,
