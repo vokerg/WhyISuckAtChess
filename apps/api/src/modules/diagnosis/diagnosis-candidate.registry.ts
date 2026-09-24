@@ -72,13 +72,24 @@ const EVIDENCE_ORDER: Readonly<Record<DiagnosisEvidenceStrength, number>> = {
   HIGH: 3,
 };
 
-function weakestEvidenceStrength(
+function strongestEvidenceStrength(
   ...strengths: readonly DiagnosisEvidenceStrength[]
 ): DiagnosisEvidenceStrength {
   return strengths.reduce(
-    (weakest, strength) => EVIDENCE_ORDER[strength] < EVIDENCE_ORDER[weakest] ? strength : weakest,
-    'HIGH' as DiagnosisEvidenceStrength,
+    (strongest, strength) => EVIDENCE_ORDER[strength] > EVIDENCE_ORDER[strongest] ? strength : strongest,
+    'INSUFFICIENT' as DiagnosisEvidenceStrength,
   );
+}
+
+function signalEvidenceStrength(
+  signals: readonly { strength: DiagnosisEvidenceStrength; detected: boolean }[],
+): DiagnosisEvidenceStrength {
+  const detectedStrengths = signals
+    .filter((signal) => signal.detected && signal.strength !== 'INSUFFICIENT')
+    .map((signal) => signal.strength);
+  return detectedStrengths.length > 0
+    ? strongestEvidenceStrength(...detectedStrengths)
+    : strongestEvidenceStrength(...signals.map((signal) => signal.strength));
 }
 
 function evidenceStrengthFromSample(
@@ -598,14 +609,20 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
   return available.map((comparison) => {
     const comparator = comparison.comparator;
     if (!comparator) throw new Error('Available TIME-005 comparison is missing its comparator.');
-    const strength = weakestEvidenceStrength(
-      comparison.evidenceStrength.result,
-      comparison.evidenceStrength.quality,
-    );
-    const detected = (comparison.deltas.scorePercentagePoints ?? 0) < 0
-      || (comparison.deltas.averageScoreLossCp ?? 0) > 0
-      || (comparison.deltas.majorErrorRatePercentagePoints ?? 0) > 0
-      || (comparison.deltas.blunderRatePercentagePoints ?? 0) > 0;
+    const resultDetected = comparison.evidenceStrength.result !== 'INSUFFICIENT'
+      && comparison.deltas.scorePercentagePoints !== null
+      && comparison.deltas.scorePercentagePoints < 0;
+    const qualityDetected = comparison.evidenceStrength.quality !== 'INSUFFICIENT'
+      && [
+        comparison.deltas.averageScoreLossCp,
+        comparison.deltas.majorErrorRatePercentagePoints,
+        comparison.deltas.blunderRatePercentagePoints,
+      ].some((value) => value !== null && value > 0);
+    const detected = resultDetected || qualityDetected;
+    const strength = signalEvidenceStrength([
+      { strength: comparison.evidenceStrength.result, detected: resultDetected },
+      { strength: comparison.evidenceStrength.quality, detected: qualityDetected },
+    ]);
     return candidate({
       findingKey: 'time-005-' + keyPart(comparison.target.exactTimeControlKey),
       diagnosisId: 'TIME-005',
@@ -682,15 +699,26 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
     })];
   }
   return source.strata.map((stratum) => {
-    const strength = weakestEvidenceStrength(
-      stratum.evidenceStrength.result,
-      stratum.evidenceStrength.quality,
-      stratum.evidenceStrength.timing,
-    );
-    const deltas = Object.values(stratum.deltas).filter(
-      (value): value is number => value !== null && Number.isFinite(value),
-    );
-    const detected = deltas.some((value) => value !== 0);
+    const resultDetected = stratum.evidenceStrength.result !== 'INSUFFICIENT'
+      && stratum.deltas.scorePercentagePoints !== null
+      && stratum.deltas.scorePercentagePoints !== 0;
+    const qualityDetected = stratum.evidenceStrength.quality !== 'INSUFFICIENT'
+      && [
+        stratum.deltas.averageScoreLossCp,
+        stratum.deltas.majorErrorRatePercentagePoints,
+        stratum.deltas.blunderRatePercentagePoints,
+      ].some((value) => value !== null && value !== 0);
+    const timingDetected = stratum.evidenceStrength.timing !== 'INSUFFICIENT'
+      && [
+        stratum.deltas.pressureMoveRatePercentagePoints,
+        stratum.deltas.pressureEntryRatePercentagePoints,
+      ].some((value) => value !== null && value !== 0);
+    const detected = resultDetected || qualityDetected || timingDetected;
+    const strength = signalEvidenceStrength([
+      { strength: stratum.evidenceStrength.result, detected: resultDetected },
+      { strength: stratum.evidenceStrength.quality, detected: qualityDetected },
+      { strength: stratum.evidenceStrength.timing, detected: timingDetected },
+    ]);
     let effect = comparisonEffect(
       stratum.evidenceStrength.quality,
       stratum.deltas.averageScoreLossCp,
@@ -748,16 +776,20 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
 }
 
 function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): DiagnosisFindingDraft[] {
-  const strength = weakestEvidenceStrength(
-    source.comparison.evidenceStrength.timing,
-    source.comparison.evidenceStrength.quality,
-  );
-  const detected = [
-    source.comparison.averageResponseTimeDeltaCentiseconds,
-    source.comparison.averageScoreLossDeltaCp,
-    source.comparison.majorErrorRateDeltaPercent,
-    source.comparison.blunderRateDeltaPercent,
-  ].some((value) => value !== null && value !== 0);
+  const timingDetected = source.comparison.evidenceStrength.timing !== 'INSUFFICIENT'
+    && source.comparison.averageResponseTimeDeltaCentiseconds !== null
+    && source.comparison.averageResponseTimeDeltaCentiseconds !== 0;
+  const qualityDetected = source.comparison.evidenceStrength.quality !== 'INSUFFICIENT'
+    && [
+      source.comparison.averageScoreLossDeltaCp,
+      source.comparison.majorErrorRateDeltaPercent,
+      source.comparison.blunderRateDeltaPercent,
+    ].some((value) => value !== null && value !== 0);
+  const detected = timingDetected || qualityDetected;
+  const strength = signalEvidenceStrength([
+    { strength: source.comparison.evidenceStrength.timing, detected: timingDetected },
+    { strength: source.comparison.evidenceStrength.quality, detected: qualityDetected },
+  ]);
   const effect = source.comparison.evidenceStrength.quality !== 'INSUFFICIENT'
     ? finiteEffect(
         'average-score-loss-delta',
@@ -848,13 +880,20 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
   return comparisons.map((comparison) => {
     const baseline = comparison.baseline;
     if (!baseline) throw new Error('Comparable RATING-001 row is missing its baseline.');
-    const strength = weakestEvidenceStrength(
-      comparison.evidenceStrength.result,
-      comparison.evidenceStrength.quality,
-    );
-    const detected = Object.values(comparison.deltas).some(
-      (value) => value !== null && value !== 0,
-    );
+    const resultDetected = comparison.evidenceStrength.result !== 'INSUFFICIENT'
+      && comparison.deltas.scorePercentagePoints !== null
+      && comparison.deltas.scorePercentagePoints !== 0;
+    const qualityDetected = comparison.evidenceStrength.quality !== 'INSUFFICIENT'
+      && [
+        comparison.deltas.averageScoreLossCp,
+        comparison.deltas.majorErrorRatePercentagePoints,
+        comparison.deltas.blunderRatePercentagePoints,
+      ].some((value) => value !== null && value !== 0);
+    const detected = resultDetected || qualityDetected;
+    const strength = signalEvidenceStrength([
+      { strength: comparison.evidenceStrength.result, detected: resultDetected },
+      { strength: comparison.evidenceStrength.quality, detected: qualityDetected },
+    ]);
     return candidate({
       findingKey: 'rating-001-' + keyPart(comparison.exactTimeControlKey)
         + '-' + keyPart(comparison.targetBand),
