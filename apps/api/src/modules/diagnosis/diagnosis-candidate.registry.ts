@@ -73,6 +73,7 @@ const EVIDENCE_ORDER: Readonly<Record<DiagnosisEvidenceStrength, number>> = {
 };
 
 interface DiagnosisEvidenceSignal {
+  modality: 'RESULT' | 'QUALITY' | 'TIMING';
   strength: DiagnosisEvidenceStrength;
   detected: boolean;
   requiredEvidenceCoverage: number | null;
@@ -86,6 +87,7 @@ function selectSignalEvidence(
   const candidates = detected.length > 0 ? detected : supported;
   if (candidates.length === 0) {
     return signals[0] ?? {
+      modality: 'RESULT',
       strength: 'INSUFFICIENT',
       detected: false,
       requiredEvidenceCoverage: null,
@@ -141,6 +143,52 @@ function finiteEffect(
   return value === null || !Number.isFinite(value)
     ? null
     : { metric, value, unit, direction, comparator: comparator ?? null };
+}
+
+function firstFiniteEffect(
+  effects: readonly {
+    metric: string;
+    value: number | null;
+    unit: string;
+    direction: string;
+  }[],
+): DiagnosisFindingEffectDraft | null {
+  const selected = effects.find(
+    (effect) => effect.value !== null && Number.isFinite(effect.value) && effect.value !== 0,
+  ) ?? effects.find(
+    (effect) => effect.value !== null && Number.isFinite(effect.value),
+  );
+  return selected
+    ? finiteEffect(selected.metric, selected.value, selected.unit, selected.direction)
+    : null;
+}
+
+function qualityDeltaEffect(
+  averageScoreLossDeltaCp: number | null,
+  majorErrorRateDelta: number | null,
+  blunderRateDelta: number | null,
+  direction: string,
+): DiagnosisFindingEffectDraft | null {
+  return firstFiniteEffect([
+    {
+      metric: 'average-score-loss-delta',
+      value: averageScoreLossDeltaCp,
+      unit: 'CENTIPAWNS',
+      direction,
+    },
+    {
+      metric: 'major-error-rate-delta',
+      value: majorErrorRateDelta,
+      unit: 'PERCENTAGE_POINTS',
+      direction,
+    },
+    {
+      metric: 'blunder-rate-delta',
+      value: blunderRateDelta,
+      unit: 'PERCENTAGE_POINTS',
+      direction,
+    },
+  ]);
 }
 
 function candidate(input: {
@@ -557,31 +605,6 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
   })];
 }
 
-function comparisonEffect(
-  qualityStrength: DiagnosisEvidenceStrength,
-  qualityDelta: number | null,
-  resultStrength: DiagnosisEvidenceStrength,
-  resultDelta: number | null,
-): DiagnosisFindingEffectDraft | null {
-  if (qualityStrength !== 'INSUFFICIENT' && qualityDelta !== null) {
-    return finiteEffect(
-      'average-score-loss-delta',
-      qualityDelta,
-      'CENTIPAWNS',
-      'HIGHER_IS_WORSE',
-    );
-  }
-  if (resultStrength !== 'INSUFFICIENT' && resultDelta !== null) {
-    return finiteEffect(
-      'score-percentage-point-delta',
-      resultDelta,
-      'PERCENTAGE_POINTS',
-      'LOWER_IS_WORSE',
-    );
-  }
-  return null;
-}
-
 function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult): DiagnosisFindingDraft[] {
   const available = source.comparisons.filter(
     (comparison) => comparison.status === 'AVAILABLE' && comparison.comparator !== null,
@@ -627,6 +650,7 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
     const detected = resultDetected || qualityDetected;
     const selectedEvidence = selectSignalEvidence([
       {
+        modality: 'RESULT',
         strength: comparison.evidenceStrength.result,
         detected: resultDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -635,6 +659,7 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
         ),
       },
       {
+        modality: 'QUALITY',
         strength: comparison.evidenceStrength.quality,
         detected: qualityDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -670,12 +695,21 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
         ratingComposition: comparison.ratingComposition,
         sourceReferenceStatus: 'SOURCE_AGGREGATE_DOES_NOT_EXPOSE_GAME_IDS',
       },
-      effect: comparisonEffect(
-        comparison.evidenceStrength.quality,
-        comparison.deltas.averageScoreLossCp,
-        comparison.evidenceStrength.result,
-        comparison.deltas.scorePercentagePoints,
-      ),
+      effect: selectedEvidence.strength === 'INSUFFICIENT'
+        ? null
+        : selectedEvidence.modality === 'QUALITY'
+          ? qualityDeltaEffect(
+              comparison.deltas.averageScoreLossCp,
+              comparison.deltas.majorErrorRatePercentagePoints,
+              comparison.deltas.blunderRatePercentagePoints,
+              'HIGHER_IS_WORSE',
+            )
+          : finiteEffect(
+              'score-percentage-point-delta',
+              comparison.deltas.scorePercentagePoints,
+              'PERCENTAGE_POINTS',
+              'LOWER_IS_WORSE',
+            ),
       sourceVersions: {
         aggregate: source.policyVersion,
         timeBehavior: source.timeBehaviorPolicyVersion,
@@ -732,6 +766,7 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
     const detected = resultDetected || qualityDetected || timingDetected;
     const selectedEvidence = selectSignalEvidence([
       {
+        modality: 'RESULT',
         strength: stratum.evidenceStrength.result,
         detected: resultDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -740,6 +775,7 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
         ),
       },
       {
+        modality: 'QUALITY',
         strength: stratum.evidenceStrength.quality,
         detected: qualityDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -748,6 +784,7 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
         ),
       },
       {
+        modality: 'TIMING',
         strength: stratum.evidenceStrength.timing,
         detected: timingDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -757,20 +794,36 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
       },
     ]);
     const strength = selectedEvidence.strength;
-    let effect = comparisonEffect(
-      stratum.evidenceStrength.quality,
-      stratum.deltas.averageScoreLossCp,
-      stratum.evidenceStrength.result,
-      stratum.deltas.scorePercentagePoints,
-    );
-    if (!effect && stratum.evidenceStrength.timing !== 'INSUFFICIENT') {
-      effect = finiteEffect(
-        'pressure-move-rate-delta',
-        stratum.deltas.pressureMoveRatePercentagePoints,
-        'PERCENTAGE_POINTS',
-        'CONTEXT_DIFFERENCE',
-      );
-    }
+    const effect = selectedEvidence.strength === 'INSUFFICIENT'
+      ? null
+      : selectedEvidence.modality === 'QUALITY'
+        ? qualityDeltaEffect(
+            stratum.deltas.averageScoreLossCp,
+            stratum.deltas.majorErrorRatePercentagePoints,
+            stratum.deltas.blunderRatePercentagePoints,
+            'CONTEXT_DIFFERENCE',
+          )
+        : selectedEvidence.modality === 'RESULT'
+          ? finiteEffect(
+              'score-percentage-point-delta',
+              stratum.deltas.scorePercentagePoints,
+              'PERCENTAGE_POINTS',
+              'CONTEXT_DIFFERENCE',
+            )
+          : firstFiniteEffect([
+              {
+                metric: 'pressure-move-rate-delta',
+                value: stratum.deltas.pressureMoveRatePercentagePoints,
+                unit: 'PERCENTAGE_POINTS',
+                direction: 'CONTEXT_DIFFERENCE',
+              },
+              {
+                metric: 'pressure-entry-rate-delta',
+                value: stratum.deltas.pressureEntryRatePercentagePoints,
+                unit: 'PERCENTAGE_POINTS',
+                direction: 'CONTEXT_DIFFERENCE',
+              },
+            ]);
     return candidate({
       findingKey: 'time-006-initial-' + keyPart(stratum.initialSeconds),
       diagnosisId: 'TIME-006',
@@ -819,6 +872,7 @@ function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): Diagno
   const detected = timingDetected || qualityDetected;
   const selectedEvidence = selectSignalEvidence([
     {
+      modality: 'TIMING',
       strength: source.comparison.evidenceStrength.timing,
       detected: timingDetected,
       requiredEvidenceCoverage: minimumCoveragePercent(
@@ -827,6 +881,7 @@ function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): Diagno
       ),
     },
     {
+      modality: 'QUALITY',
       strength: source.comparison.evidenceStrength.quality,
       detected: qualityDetected,
       requiredEvidenceCoverage: minimumCoveragePercent(
@@ -836,19 +891,21 @@ function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): Diagno
     },
   ]);
   const strength = selectedEvidence.strength;
-  const effect = source.comparison.evidenceStrength.quality !== 'INSUFFICIENT'
-    ? finiteEffect(
-        'average-score-loss-delta',
-        source.comparison.averageScoreLossDeltaCp,
-        'CENTIPAWNS',
-        'CONTEXT_DIFFERENCE',
-      )
-    : finiteEffect(
-        'average-response-time-delta',
-        source.comparison.averageResponseTimeDeltaCentiseconds,
-        'CENTISECONDS',
-        'CONTEXT_DIFFERENCE',
-      );
+  const effect = selectedEvidence.strength === 'INSUFFICIENT'
+    ? null
+    : selectedEvidence.modality === 'QUALITY'
+      ? qualityDeltaEffect(
+          source.comparison.averageScoreLossDeltaCp,
+          source.comparison.majorErrorRateDeltaPercent,
+          source.comparison.blunderRateDeltaPercent,
+          'CONTEXT_DIFFERENCE',
+        )
+      : finiteEffect(
+          'average-response-time-delta',
+          source.comparison.averageResponseTimeDeltaCentiseconds,
+          'CENTISECONDS',
+          'CONTEXT_DIFFERENCE',
+        );
   return [candidate({
     findingKey: 'time-007-scope',
     diagnosisId: 'TIME-007',
@@ -933,6 +990,7 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
     const detected = resultDetected || qualityDetected;
     const selectedEvidence = selectSignalEvidence([
       {
+        modality: 'RESULT',
         strength: comparison.evidenceStrength.result,
         detected: resultDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -941,6 +999,7 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
         ),
       },
       {
+        modality: 'QUALITY',
         strength: comparison.evidenceStrength.quality,
         detected: qualityDetected,
         requiredEvidenceCoverage: minimumCoveragePercent(
@@ -976,12 +1035,21 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
         baseline,
         sourceReferenceStatus: 'SOURCE_AGGREGATE_DOES_NOT_EXPOSE_GAME_IDS',
       },
-      effect: comparisonEffect(
-        comparison.evidenceStrength.quality,
-        comparison.deltas.averageScoreLossCp,
-        comparison.evidenceStrength.result,
-        comparison.deltas.scorePercentagePoints,
-      ),
+      effect: selectedEvidence.strength === 'INSUFFICIENT'
+        ? null
+        : selectedEvidence.modality === 'QUALITY'
+          ? qualityDeltaEffect(
+              comparison.deltas.averageScoreLossCp,
+              comparison.deltas.majorErrorRatePercentagePoints,
+              comparison.deltas.blunderRatePercentagePoints,
+              'HIGHER_IS_WORSE',
+            )
+          : finiteEffect(
+              'score-percentage-point-delta',
+              comparison.deltas.scorePercentagePoints,
+              'PERCENTAGE_POINTS',
+              'LOWER_IS_WORSE',
+            ),
       sourceVersions: {
         aggregate: source.policyVersion,
         timeBehavior: source.timeBehaviorPolicyVersion,
