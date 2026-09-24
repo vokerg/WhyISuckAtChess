@@ -213,6 +213,15 @@ test('ply projection is atomic, fenced to its source snapshot, and clears stale 
     assert.equal(supersededAnalysis.status, 'SUPERSEDED');
     assert.equal(supersededAnalysis.claimToken, null);
 
+    // This test intentionally exercises the global persistent queue while other
+    // test files use the same database in parallel. Make this test's pending
+    // fixture deterministically first so runOnce cannot consume another test's
+    // freshly-created pending game.
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { updatedAt: new Date('2000-01-01T00:00:00.000Z') },
+    });
+
     let reconciled = false;
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await ImportedGamePlyIndexService.runOnce();
