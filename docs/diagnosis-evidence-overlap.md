@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This slice makes shared evidence measurable before relationship construction, consolidation, root synthesis, or ranking. It compares stable source identities, not diagnosis labels, effect values, prose, timestamps, or representative-example similarity.
+This slice makes shared evidence measurable before relationship construction, consolidation, root synthesis, or ranking. Overlap output is versioned as `diagnosis-overlap-v1` and carries the `diagnosis-event-identity-v1` identity version. It compares stable source identities, not diagnosis labels, effect values, prose, timestamps, or representative-example similarity.
 
 The implementation has two layers:
 
