@@ -72,15 +72,6 @@ const EVIDENCE_ORDER: Readonly<Record<DiagnosisEvidenceStrength, number>> = {
   HIGH: 3,
 };
 
-function strongestEvidenceStrength(
-  ...strengths: readonly DiagnosisEvidenceStrength[]
-): DiagnosisEvidenceStrength {
-  return strengths.reduce(
-    (strongest, strength) => EVIDENCE_ORDER[strength] > EVIDENCE_ORDER[strongest] ? strength : strongest,
-    'INSUFFICIENT' as DiagnosisEvidenceStrength,
-  );
-}
-
 interface DiagnosisEvidenceSignal {
   strength: DiagnosisEvidenceStrength;
   detected: boolean;
