@@ -245,6 +245,7 @@ test('current-scope service uses the repository version fence before calculating
     policyVersions: { eventIdentity: 'diagnosis-event-identity-v1' },
   };
   let calls = 0;
+  let sourceChecks = 0;
   const repository = {
     async getCurrentScope(appUserId, scopeKey, receivedVersions) {
       calls += 1;
@@ -268,6 +269,11 @@ test('current-scope service uses the repository version fence before calculating
         relationships: [],
       };
     },
+    async assertCurrentSourceReferences(appUserId, snapshot) {
+      sourceChecks += 1;
+      assert.equal(appUserId, 7);
+      assert.equal(snapshot.id, 99);
+    },
   };
 
   const result = await getCurrentDiagnosisFindingOverlaps(
@@ -277,7 +283,49 @@ test('current-scope service uses the repository version fence before calculating
     repository,
   );
   assert.equal(calls, 1);
+  assert.equal(sourceChecks, 1);
   assert.equal(result.findingSetId, 99);
   assert.equal(result.pairs.length, 1);
   assert.equal(result.pairs[0].eventOverlap.intersectionEventCount, 1);
+});
+
+
+test('current-scope service propagates stale-source rejection before overlap calculation', async () => {
+  const versions = {
+    taxonomyVersion: 'taxonomy-v1',
+    synthesisPolicyVersion: 'diagnosis-synthesis-v1',
+    calculationVersion: 'calculation-v1',
+    policyVersions: { eventIdentity: 'diagnosis-event-identity-v1' },
+  };
+  const repository = {
+    async getCurrentScope() {
+      return {
+        id: 100,
+        appUserId: 7,
+        materializationKey: 'materialization-b',
+        scopeKey: 'scope-b',
+        scope: {},
+        taxonomyVersion: versions.taxonomyVersion,
+        synthesisPolicyVersion: versions.synthesisPolicyVersion,
+        calculationVersion: versions.calculationVersion,
+        policyVersions: versions.policyVersions,
+        calculationAsOf: new Date('2026-09-24T00:00:00Z'),
+        isCurrent: true,
+        supersededAt: null,
+        findings: [
+          finding('left', [gameReference(1, 'X')], { id: 10 }),
+          finding('right', [gameReference(1, 'X')], { id: 11 }),
+        ],
+        relationships: [],
+      };
+    },
+    async assertCurrentSourceReferences() {
+      throw new Error('stale source evidence');
+    },
+  };
+
+  await assert.rejects(
+    getCurrentDiagnosisFindingOverlaps(7, 'scope-b', versions, repository),
+    /stale source evidence/,
+  );
 });
