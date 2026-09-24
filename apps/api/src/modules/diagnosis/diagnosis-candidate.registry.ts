@@ -511,12 +511,10 @@ function projectTimePressureQuality(source: TimePressureQualityResult): Diagnosi
       pressure: source.comparison.pressure,
       sourceReferenceStatus: 'SOURCE_AGGREGATE_DOES_NOT_EXPOSE_GAME_IDS',
     },
-    effect: finiteEffect(
-      'average-score-loss-delta',
+    effect: worseningQualityDeltaEffect(
       source.comparison.averageScoreLossDeltaCp,
-      'CENTIPAWNS',
-      'HIGHER_IS_WORSE',
-      { baseline: 'NORMAL_CLOCK', observed: 'PRESSURE_CLOCK' },
+      source.comparison.majorErrorRateDeltaPercent,
+      source.comparison.blunderRateDeltaPercent,
     ),
     sourceVersions: {
       aggregate: source.policyVersion,
@@ -1176,11 +1174,10 @@ function sessionCandidate(input: {
       observed: input.observed,
       sourceReferenceStatus: 'SOURCE_AGGREGATE_DOES_NOT_EXPOSE_GAME_IDS',
     },
-    effect: finiteEffect(
-      'average-score-loss-delta',
+    effect: worseningQualityDeltaEffect(
       input.averageScoreLossDeltaCp,
-      'CENTIPAWNS',
-      'HIGHER_IS_WORSE',
+      input.majorErrorRateDeltaPercent,
+      input.blunderRateDeltaPercent,
     ),
     sourceVersions: {
       aggregate: input.policyVersion,
