@@ -25,13 +25,6 @@ import {
 export const PLY_INDEX_POLICY_VERSION = 1;
 const MAX_SOURCE_SNAPSHOT_RETRIES = 2;
 
-class PlyIndexCandidateDisappearedError extends Error {
-  constructor(readonly importedGameId: number) {
-    super('Imported game not found');
-    this.name = 'PlyIndexCandidateDisappearedError';
-  }
-}
-
 export type PlyIndexStatus = 'INDEXED' | 'ALREADY_INDEXED' | 'SKIPPED' | 'FAILED';
 
 export interface ImportedGamePlyIndexResult {
@@ -76,7 +69,7 @@ async function indexOneAttempt(
   retriesRemaining: number,
 ): Promise<ImportedGamePlyIndexResult> {
   const game = await getImportedGameForPlyIndex(appUserId, importedGameId);
-  if (!game) throw new PlyIndexCandidateDisappearedError(importedGameId);
+  if (!game) throw new Error('Imported game not found');
 
   const retry = () => indexOneAttempt(appUserId, importedGameId, options, retriesRemaining - 1);
   const skipReason = skipReasonForGame(game);
@@ -248,16 +241,12 @@ export const ImportedGamePlyIndexService = {
   runOnce: async (): Promise<boolean> => {
     const candidate = await findNextPendingImportedGameForPlyIndex();
     if (!candidate) return false;
-    try {
-      await indexOneAttempt(
-        candidate.appUserId,
-        candidate.id,
-        {},
-        MAX_SOURCE_SNAPSHOT_RETRIES,
-      );
-    } catch (error) {
-      if (!(error instanceof PlyIndexCandidateDisappearedError)) throw error;
-    }
+    await indexOneAttempt(
+      candidate.appUserId,
+      candidate.id,
+      {},
+      MAX_SOURCE_SNAPSHOT_RETRIES,
+    );
     return true;
   },
 };
