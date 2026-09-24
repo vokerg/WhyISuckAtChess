@@ -127,7 +127,7 @@ Candidate effects retain source metrics instead of replacing them with ranking s
 
 Exact control, increment, rating band, session threshold, and matching policy remain dimensions/comparator metadata rather than graph nodes.
 
-Producer/source versions are copied into sourceVersions. Aggregates that already fence engine data to CURRENT_COMPLETE_SOURCE_SNAPSHOT keep that provenance unchanged; the candidate adapter never reloads or widens the evidence set.
+Each candidate stores `diagnosis-candidate-projection-v1` as its producer version. Upstream aggregate, timing, sessionization, analysis, and other source-policy versions remain in `sourceVersions`. Aggregates that already fence engine data to CURRENT_COMPLETE_SOURCE_SNAPSHOT keep that provenance unchanged; the candidate adapter never reloads or widens the evidence set.
 
 ## Source references and #84
 
