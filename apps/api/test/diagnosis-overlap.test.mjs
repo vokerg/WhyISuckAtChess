@@ -77,6 +77,7 @@ test('full event overlap exposes arm, union, game, and session denominators', ()
     finding('right', refs.map((reference) => ({ ...reference }))),
   );
 
+  assert.equal(result.calculationVersion, 'diagnosis-overlap-v1');
   assert.equal(result.eventIdentityVersion, 'diagnosis-event-identity-v1');
   assert.equal(result.eventOverlap.calculable, true);
   assert.equal(result.eventOverlap.intersectionEventCount, 3);
@@ -285,6 +286,7 @@ test('current-scope service uses the repository version fence before calculating
   assert.equal(calls, 1);
   assert.equal(sourceChecks, 1);
   assert.equal(result.findingSetId, 99);
+  assert.equal(result.calculationVersion, 'diagnosis-overlap-v1');
   assert.equal(result.pairs.length, 1);
   assert.equal(result.pairs[0].eventOverlap.intersectionEventCount, 1);
 });
