@@ -80,7 +80,6 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       analysisVersion: 'test-v1',
       settingsHash: hash,
       settings: DEFAULT_STOCKFISH_SETTINGS,
-      importedGameId: game.id,
     });
     assert.ok(runId, 'bullet game should be eligible for analysis');
 
@@ -204,7 +203,6 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       analysisVersion: 'test-v1',
       settingsHash: hash,
       settings: DEFAULT_STOCKFISH_SETTINGS,
-      importedGameId: game.id,
     });
     assert.ok(revisedRunId, 'a new indexed projection should become eligible under the same engine policy');
     const revisedRun = await prisma.gameAnalysisRun.findUniqueOrThrow({ where: { id: revisedRunId } });
