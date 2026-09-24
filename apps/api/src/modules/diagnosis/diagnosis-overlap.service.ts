@@ -8,6 +8,7 @@ import {
 } from '@why-i-suck-at-chess/chess-domain';
 import type {
   DiagnosisFindingRepository,
+  DiagnosisFindingSetSnapshot,
   DiagnosisFindingVersionTuple,
 } from './diagnosis-finding.types';
 
@@ -96,6 +97,13 @@ export interface DiagnosisFindingOverlapResult {
   gameSetOverlap: DiagnosisGameSetOverlapResult;
 }
 
+export interface DiagnosisFindingOverlapRepository extends DiagnosisFindingRepository {
+  assertCurrentSourceReferences(
+    appUserId: number,
+    snapshot: DiagnosisFindingSetSnapshot,
+  ): Promise<void>;
+}
+
 export interface DiagnosisFindingOverlapScopeResult {
   findingSetId: number;
   scopeKey: string;
@@ -118,7 +126,7 @@ interface PreparedFinding {
 }
 
 function validGameId(value: number | null | undefined): value is number {
-  return Number.isSafeInteger(value) && (value ?? 0) > 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 function nonEmptySessionKey(value: string | null | undefined): value is string {
@@ -450,7 +458,7 @@ export async function getCurrentDiagnosisFindingOverlaps(
   appUserId: number,
   scopeKey: string,
   versions: DiagnosisFindingVersionTuple,
-  repository: DiagnosisFindingRepository,
+  repository: DiagnosisFindingOverlapRepository,
 ): Promise<DiagnosisFindingOverlapScopeResult> {
   if (!Number.isSafeInteger(appUserId) || appUserId <= 0) {
     throw new RangeError('appUserId must be a positive safe integer.');
@@ -463,6 +471,7 @@ export async function getCurrentDiagnosisFindingOverlaps(
   if (!snapshot || !snapshot.isCurrent || snapshot.supersededAt !== null) {
     throw new Error('Current diagnosis finding scope is unavailable for the requested versions.');
   }
+  await repository.assertCurrentSourceReferences(appUserId, snapshot);
 
   return {
     findingSetId: snapshot.id,
