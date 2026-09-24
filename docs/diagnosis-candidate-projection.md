@@ -113,7 +113,7 @@ Projection uses the four Phase 5 observation states without upgrading source evi
 
 Where the source service already exposes an explicit support status, such as TIME-003, TIME-004, RATING-002, or SESSION-003, projection uses that status directly. For comparison aggregates, projection only interprets the already-computed signed raw delta; it does not introduce a new materiality threshold.
 
-Comparative producers grade the modality that actually supports the canonical claim. For diagnoses defined as result **or** quality/timing effects, an unavailable optional modality does not erase adequate evidence in another modality; insufficient modalities are never used to create a detected finding.
+Comparative producers grade the modality that actually supports the canonical claim, and the top-level required-evidence coverage comes from that same modality. For diagnoses defined as result **or** quality/timing effects, an unavailable optional modality does not erase adequate evidence in another modality; insufficient modalities are never used to create a detected finding.
 
 ## Effects, dimensions, and provenance
 
