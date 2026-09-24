@@ -306,3 +306,62 @@ test('rating composition warning remains an explicit confounder finding', () => 
   assert.equal(finding.effect.metric, 'absolute-mean-rating-difference-delta');
   assert.equal(finding.effect.value, 150);
 });
+
+
+test('TIME-007 preserves supported timing evidence when quality evidence is unavailable', () => {
+  const [finding] = projectDiagnosisCandidates('opponentMoveSpeedEffect', {
+    diagnosisId: 'TIME-007',
+    policyVersion: 'opponent-move-speed-effect-v1',
+    timeBehaviorPolicyVersion: 'time-behavior-v1',
+    timingDerivationVersion: 1,
+    definitions: {},
+    coverage: {
+      status: 'COMPLETE',
+      reason: null,
+    },
+    recurrence: {},
+    comparison: {
+      baseline: {
+        eligibleResponses: 24,
+        eligibleGames: 8,
+        requiredTimingCoveragePercent: 100,
+        requiredQualityCoveragePercent: 0,
+      },
+      exposed: {
+        eligibleResponses: 24,
+        eligibleGames: 8,
+        requiredTimingCoveragePercent: 100,
+        requiredQualityCoveragePercent: 0,
+      },
+      averageResponseTimeDeltaCentiseconds: -75,
+      averageScoreLossDeltaCp: null,
+      majorErrorRateDeltaPercent: null,
+      blunderRateDeltaPercent: null,
+      evidenceStrength: {
+        timing: 'LOW',
+        quality: 'INSUFFICIENT',
+      },
+    },
+    phaseComposition: {},
+    strata: [],
+    analysisProvenance: {
+      requirement: 'CURRENT_COMPLETE_SOURCE_SNAPSHOT',
+      analysedRuns: 0,
+      snapshotIds: [],
+      analysisVersions: [],
+      settingsHashes: [],
+      engines: [],
+    },
+    ratingComposition: {
+      status: 'UNAVAILABLE',
+      reason: 'quality-unavailable-fixture',
+      result: null,
+    },
+    caveats: [],
+  });
+
+  assert.equal(finding.observationState, 'PROBLEM_DETECTED');
+  assert.equal(finding.evidenceStrength, 'LOW');
+  assert.equal(finding.effect.metric, 'average-response-time-delta');
+  assert.equal(finding.effect.value, -75);
+});
