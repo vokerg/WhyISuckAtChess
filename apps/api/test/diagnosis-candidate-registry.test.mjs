@@ -181,6 +181,136 @@ test('timing comparison keeps source insufficiency instead of upgrading a large 
   assert.equal(finding.sourceVersions.analysis.requirement, 'CURRENT_COMPLETE_SOURCE_SNAPSHOT');
 });
 
+test('TIME-002 exposes the worsening quality metric that actually supports detection', () => {
+  const [finding] = projectDiagnosisCandidates('timePressureQualityCollapse', {
+    diagnosisId: 'TIME-002',
+    policyVersion: 'time-pressure-quality-collapse-v1',
+    timeBehaviorPolicyVersion: 'time-behavior-v1',
+    timingDerivationVersion: 1,
+    coverage: {
+      status: 'COMPLETE',
+      reason: null,
+      candidateGames: 12,
+      timingEligibleGames: 12,
+      unsupportedGames: 0,
+      timingEligibleUserDecisions: 100,
+      timingCoveredUserDecisions: 100,
+      timingCoveragePercent: 100,
+      contextEligibleUserDecisions: 100,
+      contextCoveragePercent: 100,
+      missingExactControlMoves: 0,
+      missingPhaseMoves: 0,
+      matchedUserDecisions: 80,
+      matchingCoveragePercent: 80,
+      matchedStrata: 2,
+      unmatchedBaselineMoves: 10,
+      unmatchedPressureMoves: 10,
+      analysedMatchedUserDecisions: 80,
+      analysisCoveragePercent: 100,
+      maxCandidateGames: 5000,
+    },
+    comparison: {
+      baseline: {
+        eligibleMoves: 40,
+        eligibleGames: 8,
+        analysedMoves: 40,
+        supportingGames: 8,
+        analysisCoveragePercent: 100,
+        requiredEvidenceCoveragePercent: 100,
+        averageScoreLossCp: 50,
+        majorErrorRatePercent: 2,
+        blunderRatePercent: 1,
+      },
+      pressure: {
+        eligibleMoves: 40,
+        eligibleGames: 8,
+        analysedMoves: 40,
+        supportingGames: 8,
+        analysisCoveragePercent: 100,
+        requiredEvidenceCoveragePercent: 100,
+        averageScoreLossCp: 40,
+        majorErrorRatePercent: 7,
+        blunderRatePercent: 1,
+      },
+      averageScoreLossDeltaCp: -10,
+      majorErrorRateDeltaPercent: 5,
+      blunderRateDeltaPercent: 0,
+      evidenceStrength: 'LOW',
+    },
+    strata: [],
+    analysisProvenance: {
+      requirement: 'CURRENT_COMPLETE_SOURCE_SNAPSHOT',
+      analysedRuns: 8,
+      snapshotIds: ['snapshot-a'],
+      analysisVersions: ['analysis-v1'],
+      settingsHashes: ['settings-a'],
+      engines: [{ name: 'FixtureFish', version: '1' }],
+    },
+    ratingComposition: {
+      status: 'UNAVAILABLE',
+      reason: 'fixture',
+      result: null,
+    },
+    caveats: [],
+  });
+
+  assert.equal(finding.observationState, 'PROBLEM_DETECTED');
+  assert.equal(finding.effect.metric, 'major-error-rate-delta');
+  assert.equal(finding.effect.value, 5);
+  assert.equal(finding.effect.direction, 'HIGHER_IS_WORSE');
+});
+
+test('session deterioration exposes the worsening quality metric that supports detection', () => {
+  const [finding] = projectDiagnosisCandidates('sessionDeterioration', {
+    diagnosisId: 'SESSION-001',
+    policyVersion: 'session-deterioration-v1',
+    sessionizationPolicyVersion: 'session-v1',
+    coverage: {
+      status: 'COMPLETE',
+      reason: null,
+      candidateGames: 24,
+      sessionCoveredGames: 24,
+      sessionUncoveredGames: 0,
+      analysedGames: 24,
+      analysisCoveragePercent: 100,
+    },
+    comparison: {
+      early: {
+        eligibleGames: 12,
+        analysedGames: 12,
+        eligibleSessions: 6,
+        analysedSessions: 6,
+        analysisCoveragePercent: 100,
+        analysedUserMoves: 240,
+        averageScoreLossCp: 50,
+        majorErrorRatePercent: 4,
+        blunderRatePercent: 2,
+      },
+      late: {
+        eligibleGames: 12,
+        analysedGames: 12,
+        eligibleSessions: 6,
+        analysedSessions: 6,
+        analysisCoveragePercent: 100,
+        analysedUserMoves: 220,
+        averageScoreLossCp: 45,
+        majorErrorRatePercent: 8,
+        blunderRatePercent: 2,
+      },
+      averageScoreLossDeltaCp: -5,
+      majorErrorRateDeltaPercent: 4,
+      blunderRateDeltaPercent: 0,
+      evidenceStrength: 'LOW',
+    },
+    caveats: [],
+  });
+
+  assert.equal(finding.observationState, 'PROBLEM_DETECTED');
+  assert.equal(finding.effect.metric, 'major-error-rate-delta');
+  assert.equal(finding.effect.value, 4);
+  assert.equal(finding.effect.direction, 'HIGHER_IS_WORSE');
+});
+
 test('session comparison projects recurrence across distinct sessions without inventing event ids', () => {
   const [finding] = projectDiagnosisCandidates('sessionDeterioration', {
     diagnosisId: 'SESSION-001',
