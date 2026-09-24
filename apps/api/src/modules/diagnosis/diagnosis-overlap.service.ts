@@ -12,6 +12,8 @@ import type {
   DiagnosisFindingVersionTuple,
 } from './diagnosis-finding.types';
 
+export const DIAGNOSIS_OVERLAP_CALCULATION_VERSION = 'diagnosis-overlap-v1' as const;
+
 export interface DiagnosisOverlapEvidenceReference {
   referenceKey: string;
   importedGameId?: number | null;
@@ -80,6 +82,7 @@ export interface DiagnosisGameSetOverlapResult {
 }
 
 export interface DiagnosisFindingOverlapResult {
+  calculationVersion: typeof DIAGNOSIS_OVERLAP_CALCULATION_VERSION;
   eventIdentityVersion: typeof DIAGNOSIS_EVENT_IDENTITY_VERSION;
   left: {
     id: number | null;
@@ -107,6 +110,7 @@ export interface DiagnosisFindingOverlapRepository extends DiagnosisFindingRepos
 export interface DiagnosisFindingOverlapScopeResult {
   findingSetId: number;
   scopeKey: string;
+  calculationVersion: typeof DIAGNOSIS_OVERLAP_CALCULATION_VERSION;
   eventIdentityVersion: typeof DIAGNOSIS_EVENT_IDENTITY_VERSION;
   pairs: readonly DiagnosisFindingOverlapResult[];
 }
@@ -383,6 +387,7 @@ function calculatePreparedOverlap(
   }
 
   return {
+    calculationVersion: DIAGNOSIS_OVERLAP_CALCULATION_VERSION,
     eventIdentityVersion: DIAGNOSIS_EVENT_IDENTITY_VERSION,
     left: {
       id: left.finding.id ?? null,
@@ -476,6 +481,7 @@ export async function getCurrentDiagnosisFindingOverlaps(
   return {
     findingSetId: snapshot.id,
     scopeKey: snapshot.scopeKey,
+    calculationVersion: DIAGNOSIS_OVERLAP_CALCULATION_VERSION,
     eventIdentityVersion: DIAGNOSIS_EVENT_IDENTITY_VERSION,
     pairs: calculateDiagnosisFindingOverlaps(snapshot.findings),
   };
