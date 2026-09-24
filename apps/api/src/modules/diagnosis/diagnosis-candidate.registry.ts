@@ -81,15 +81,30 @@ function strongestEvidenceStrength(
   );
 }
 
-function signalEvidenceStrength(
-  signals: readonly { strength: DiagnosisEvidenceStrength; detected: boolean }[],
-): DiagnosisEvidenceStrength {
-  const detectedStrengths = signals
-    .filter((signal) => signal.detected && signal.strength !== 'INSUFFICIENT')
-    .map((signal) => signal.strength);
-  return detectedStrengths.length > 0
-    ? strongestEvidenceStrength(...detectedStrengths)
-    : strongestEvidenceStrength(...signals.map((signal) => signal.strength));
+interface DiagnosisEvidenceSignal {
+  strength: DiagnosisEvidenceStrength;
+  detected: boolean;
+  requiredEvidenceCoverage: number | null;
+}
+
+function selectSignalEvidence(
+  signals: readonly DiagnosisEvidenceSignal[],
+): DiagnosisEvidenceSignal {
+  const supported = signals.filter((signal) => signal.strength !== 'INSUFFICIENT');
+  const detected = supported.filter((signal) => signal.detected);
+  const candidates = detected.length > 0 ? detected : supported;
+  if (candidates.length === 0) {
+    return signals[0] ?? {
+      strength: 'INSUFFICIENT',
+      detected: false,
+      requiredEvidenceCoverage: null,
+    };
+  }
+  return candidates.reduce(
+    (best, signal) => EVIDENCE_ORDER[signal.strength] > EVIDENCE_ORDER[best.strength]
+      ? signal
+      : best,
+  );
 }
 
 function evidenceStrengthFromSample(
@@ -619,10 +634,25 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
         comparison.deltas.blunderRatePercentagePoints,
       ].some((value) => value !== null && value > 0);
     const detected = resultDetected || qualityDetected;
-    const strength = signalEvidenceStrength([
-      { strength: comparison.evidenceStrength.result, detected: resultDetected },
-      { strength: comparison.evidenceStrength.quality, detected: qualityDetected },
+    const selectedEvidence = selectSignalEvidence([
+      {
+        strength: comparison.evidenceStrength.result,
+        detected: resultDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          comparison.target.resultCoveragePercent,
+          comparator.resultCoveragePercent,
+        ),
+      },
+      {
+        strength: comparison.evidenceStrength.quality,
+        detected: qualityDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          comparison.target.analysisCoveragePercent,
+          comparator.analysisCoveragePercent,
+        ),
+      },
     ]);
+    const strength = selectedEvidence.strength;
     return candidate({
       findingKey: 'time-005-' + keyPart(comparison.target.exactTimeControlKey),
       diagnosisId: 'TIME-005',
@@ -633,12 +663,7 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
       producerVersion: source.policyVersion,
       sampleCount: Math.min(comparison.target.eligibleGames, comparator.eligibleGames),
       distinctGameCount: Math.min(comparison.target.eligibleGames, comparator.eligibleGames),
-      requiredEvidenceCoverage: minimumCoveragePercent(
-        comparison.target.resultCoveragePercent,
-        comparator.resultCoveragePercent,
-        comparison.target.analysisCoveragePercent,
-        comparator.analysisCoveragePercent,
-      ),
+      requiredEvidenceCoverage: selectedEvidence.requiredEvidenceCoverage,
       evidenceStrength: strength,
       dimensions: {
         targetExactTimeControlKey: comparison.target.exactTimeControlKey,
@@ -714,11 +739,33 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
         stratum.deltas.pressureEntryRatePercentagePoints,
       ].some((value) => value !== null && value !== 0);
     const detected = resultDetected || qualityDetected || timingDetected;
-    const strength = signalEvidenceStrength([
-      { strength: stratum.evidenceStrength.result, detected: resultDetected },
-      { strength: stratum.evidenceStrength.quality, detected: qualityDetected },
-      { strength: stratum.evidenceStrength.timing, detected: timingDetected },
+    const selectedEvidence = selectSignalEvidence([
+      {
+        strength: stratum.evidenceStrength.result,
+        detected: resultDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          stratum.noIncrement.resultCoveragePercent,
+          stratum.increment.resultCoveragePercent,
+        ),
+      },
+      {
+        strength: stratum.evidenceStrength.quality,
+        detected: qualityDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          stratum.noIncrement.analysisCoveragePercent,
+          stratum.increment.analysisCoveragePercent,
+        ),
+      },
+      {
+        strength: stratum.evidenceStrength.timing,
+        detected: timingDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          stratum.noIncrement.pressure.timingCoveragePercent,
+          stratum.increment.pressure.timingCoveragePercent,
+        ),
+      },
     ]);
+    const strength = selectedEvidence.strength;
     let effect = comparisonEffect(
       stratum.evidenceStrength.quality,
       stratum.deltas.averageScoreLossCp,
@@ -743,14 +790,7 @@ function projectIncrementEffect(source: IncrementEffectResult): DiagnosisFinding
       producerVersion: source.policyVersion,
       sampleCount: Math.min(stratum.noIncrement.games, stratum.increment.games),
       distinctGameCount: Math.min(stratum.noIncrement.games, stratum.increment.games),
-      requiredEvidenceCoverage: minimumCoveragePercent(
-        stratum.noIncrement.resultCoveragePercent,
-        stratum.increment.resultCoveragePercent,
-        stratum.noIncrement.analysisCoveragePercent,
-        stratum.increment.analysisCoveragePercent,
-        stratum.noIncrement.pressure.timingCoveragePercent,
-        stratum.increment.pressure.timingCoveragePercent,
-      ),
+      requiredEvidenceCoverage: selectedEvidence.requiredEvidenceCoverage,
       evidenceStrength: strength,
       dimensions: {
         initialSeconds: stratum.initialSeconds,
@@ -786,10 +826,25 @@ function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): Diagno
       source.comparison.blunderRateDeltaPercent,
     ].some((value) => value !== null && value !== 0);
   const detected = timingDetected || qualityDetected;
-  const strength = signalEvidenceStrength([
-    { strength: source.comparison.evidenceStrength.timing, detected: timingDetected },
-    { strength: source.comparison.evidenceStrength.quality, detected: qualityDetected },
+  const selectedEvidence = selectSignalEvidence([
+    {
+      strength: source.comparison.evidenceStrength.timing,
+      detected: timingDetected,
+      requiredEvidenceCoverage: minimumCoveragePercent(
+        source.comparison.baseline.requiredTimingCoveragePercent,
+        source.comparison.exposed.requiredTimingCoveragePercent,
+      ),
+    },
+    {
+      strength: source.comparison.evidenceStrength.quality,
+      detected: qualityDetected,
+      requiredEvidenceCoverage: minimumCoveragePercent(
+        source.comparison.baseline.requiredQualityCoveragePercent,
+        source.comparison.exposed.requiredQualityCoveragePercent,
+      ),
+    },
   ]);
+  const strength = selectedEvidence.strength;
   const effect = source.comparison.evidenceStrength.quality !== 'INSUFFICIENT'
     ? finiteEffect(
         'average-score-loss-delta',
@@ -819,12 +874,7 @@ function projectOpponentMoveSpeed(source: OpponentMoveSpeedEffectResult): Diagno
       source.comparison.baseline.eligibleGames,
       source.comparison.exposed.eligibleGames,
     ),
-    requiredEvidenceCoverage: minimumCoveragePercent(
-      source.comparison.baseline.requiredTimingCoveragePercent,
-      source.comparison.exposed.requiredTimingCoveragePercent,
-      source.comparison.baseline.requiredQualityCoveragePercent,
-      source.comparison.exposed.requiredQualityCoveragePercent,
-    ),
+    requiredEvidenceCoverage: selectedEvidence.requiredEvidenceCoverage,
     evidenceStrength: strength,
     dimensions: { ...source.definitions },
     coverage: {
@@ -890,10 +940,25 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
         comparison.deltas.blunderRatePercentagePoints,
       ].some((value) => value !== null && value !== 0);
     const detected = resultDetected || qualityDetected;
-    const strength = signalEvidenceStrength([
-      { strength: comparison.evidenceStrength.result, detected: resultDetected },
-      { strength: comparison.evidenceStrength.quality, detected: qualityDetected },
+    const selectedEvidence = selectSignalEvidence([
+      {
+        strength: comparison.evidenceStrength.result,
+        detected: resultDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          comparison.target.resultCoveragePercent,
+          baseline.resultCoveragePercent,
+        ),
+      },
+      {
+        strength: comparison.evidenceStrength.quality,
+        detected: qualityDetected,
+        requiredEvidenceCoverage: minimumCoveragePercent(
+          comparison.target.analysisCoveragePercent,
+          baseline.analysisCoveragePercent,
+        ),
+      },
     ]);
+    const strength = selectedEvidence.strength;
     return candidate({
       findingKey: 'rating-001-' + keyPart(comparison.exactTimeControlKey)
         + '-' + keyPart(comparison.targetBand),
@@ -905,12 +970,7 @@ function projectOpponentStrength(source: OpponentStrengthEffectResult): Diagnosi
       producerVersion: source.policyVersion,
       sampleCount: Math.min(comparison.target.games, baseline.games),
       distinctGameCount: Math.min(comparison.target.games, baseline.games),
-      requiredEvidenceCoverage: minimumCoveragePercent(
-        comparison.target.resultCoveragePercent,
-        baseline.resultCoveragePercent,
-        comparison.target.analysisCoveragePercent,
-        baseline.analysisCoveragePercent,
-      ),
+      requiredEvidenceCoverage: selectedEvidence.requiredEvidenceCoverage,
       evidenceStrength: strength,
       dimensions: {
         exactTimeControlKey: comparison.exactTimeControlKey,
