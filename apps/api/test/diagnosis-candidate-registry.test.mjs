@@ -366,3 +366,68 @@ test('TIME-007 preserves supported timing evidence when quality evidence is unav
   assert.equal(finding.effect.metric, 'average-response-time-delta');
   assert.equal(finding.effect.value, -75);
 });
+
+
+test('TIME-005 exposes the worsening quality metric that supports detection', () => {
+  const target = {
+    exactTimeControlKey: '180+0',
+    initialSeconds: 180,
+    incrementSeconds: 0,
+    eligibleGames: 8,
+    resultCoveragePercent: 100,
+    analysisCoveragePercent: 100,
+  };
+  const comparator = {
+    exactTimeControlKey: '180+2',
+    initialSeconds: 180,
+    incrementSeconds: 2,
+    eligibleGames: 8,
+    resultCoveragePercent: 100,
+    analysisCoveragePercent: 100,
+  };
+
+  const [finding] = projectDiagnosisCandidates('exactTimeControlUnderperformance', {
+    diagnosisId: 'TIME-005',
+    policyVersion: 'exact-time-control-underperformance-v1',
+    timeBehaviorPolicyVersion: 'time-behavior-v1',
+    coverage: {
+      status: 'COMPLETE',
+      resultCoveragePercent: 100,
+      analysisCoveragePercent: 100,
+    },
+    comparisons: [{
+      status: 'AVAILABLE',
+      reason: null,
+      target,
+      comparatorDefinition: {
+        initialSeconds: 180,
+        requiresDifferentIncrement: true,
+        broadSpeedFallback: false,
+        selectionRule: 'STRONGEST_RESULT_EVIDENCE_THEN_LARGEST_RESULT_SAMPLE_THEN_NEAREST_INCREMENT_THEN_KEY',
+        eligibleComparatorControls: 1,
+      },
+      comparator,
+      deltas: {
+        scorePercentagePoints: null,
+        averageScoreLossCp: -10,
+        majorErrorRatePercentagePoints: 5,
+        blunderRatePercentagePoints: 0,
+      },
+      evidenceStrength: {
+        result: 'INSUFFICIENT',
+        quality: 'LOW',
+      },
+      ratingComposition: {
+        status: 'UNAVAILABLE',
+        reason: 'fixture',
+        result: null,
+      },
+    }],
+    caveats: [],
+  });
+
+  assert.equal(finding.observationState, 'PROBLEM_DETECTED');
+  assert.equal(finding.evidenceStrength, 'LOW');
+  assert.equal(finding.effect.metric, 'major-error-rate-delta');
+  assert.equal(finding.effect.value, 5);
+});
