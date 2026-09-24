@@ -362,6 +362,7 @@ test('TIME-007 preserves supported timing evidence when quality evidence is unav
 
   assert.equal(finding.observationState, 'PROBLEM_DETECTED');
   assert.equal(finding.evidenceStrength, 'LOW');
+  assert.equal(finding.requiredEvidenceCoverage, 1);
   assert.equal(finding.effect.metric, 'average-response-time-delta');
   assert.equal(finding.effect.value, -75);
 });
