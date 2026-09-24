@@ -191,6 +191,39 @@ function qualityDeltaEffect(
   ]);
 }
 
+function worseningQualityDeltaEffect(
+  averageScoreLossDeltaCp: number | null,
+  majorErrorRateDelta: number | null,
+  blunderRateDelta: number | null,
+): DiagnosisFindingEffectDraft | null {
+  const effects = [
+    {
+      metric: 'average-score-loss-delta',
+      value: averageScoreLossDeltaCp,
+      unit: 'CENTIPAWNS',
+      direction: 'HIGHER_IS_WORSE',
+    },
+    {
+      metric: 'major-error-rate-delta',
+      value: majorErrorRateDelta,
+      unit: 'PERCENTAGE_POINTS',
+      direction: 'HIGHER_IS_WORSE',
+    },
+    {
+      metric: 'blunder-rate-delta',
+      value: blunderRateDelta,
+      unit: 'PERCENTAGE_POINTS',
+      direction: 'HIGHER_IS_WORSE',
+    },
+  ] as const;
+  const selected = effects.find(
+    (effect) => effect.value !== null && Number.isFinite(effect.value) && effect.value > 0,
+  );
+  return selected
+    ? finiteEffect(selected.metric, selected.value, selected.unit, selected.direction)
+    : null;
+}
+
 function candidate(input: {
   findingKey: string;
   diagnosisId: CanonicalDiagnosisIdV1;
@@ -698,11 +731,10 @@ function projectExactTimeControl(source: ExactTimeControlUnderperformanceResult)
       effect: selectedEvidence.strength === 'INSUFFICIENT'
         ? null
         : selectedEvidence.modality === 'QUALITY'
-          ? qualityDeltaEffect(
+          ? worseningQualityDeltaEffect(
               comparison.deltas.averageScoreLossCp,
               comparison.deltas.majorErrorRatePercentagePoints,
               comparison.deltas.blunderRatePercentagePoints,
-              'HIGHER_IS_WORSE',
             )
           : finiteEffect(
               'score-percentage-point-delta',
