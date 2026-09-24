@@ -1,4 +1,5 @@
 import {
+  DIAGNOSIS_BOUNDEDNESS_POLICY,
   diagnosisGameEventIdentityKey,
   diagnosisPlyEventIdentityKey,
   type DiagnosisEvidenceStrength,
@@ -594,6 +595,10 @@ function projectPlayedTooFast(source: PlayedTooFastResult): DiagnosisFindingDraf
 function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindingDraft[] {
   const strength = source.chain.evidenceStrength;
   const games = source.games.filter((game) => game.completeChain);
+  const referenceGames = games.slice(
+    0,
+    DIAGNOSIS_BOUNDEDNESS_POLICY.maxEvidenceEventReferencesPerFinding,
+  );
   return [candidate({
     findingKey: 'time-004-scope',
     diagnosisId: 'TIME-004',
@@ -619,6 +624,11 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
     coverage: {
       ...source.coverage,
       chain: source.chain,
+      sourceReferenceStatus: referenceGames.length === games.length
+        ? 'COMPLETE_EVENT_SET'
+        : 'TRUNCATED_EVENT_SET',
+      sourceReferenceCount: referenceGames.length,
+      sourceReferenceTotalGames: games.length,
     },
     effect: finiteEffect(
       'later-average-score-loss-delta',
@@ -634,7 +644,7 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
       analysis: source.analysisProvenance,
       candidateProjection: DIAGNOSIS_CANDIDATE_PROJECTION_VERSION,
     },
-    evidenceReferences: games.map((game, index) => ({
+    evidenceReferences: referenceGames.map((game, index) => ({
       referenceKey: 'time-004-game-' + game.importedGameId,
       referenceType: 'IMPORTED_GAME',
       importedGameId: game.importedGameId,
