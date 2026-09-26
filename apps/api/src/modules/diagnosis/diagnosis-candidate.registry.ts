@@ -276,6 +276,8 @@ function openingFindingStrength(finding: EvidenceFindingDraft): DiagnosisEvidenc
 
 interface OpeningSupportingGame {
   importedGameId: number;
+  evidenceEventId?: number;
+  sourceAnalysisRunId?: number;
   providerGameId?: string;
   plyNumber?: number;
   positionId?: number;
@@ -303,6 +305,8 @@ function openingReferences(
     referenceKey: 'opening-game-' + game.importedGameId + '-ply-' + (game.plyNumber ?? 'unknown'),
     referenceType: 'IMPORTED_GAME_PLY',
     importedGameId: game.importedGameId,
+    evidenceEventId: game.evidenceEventId ?? null,
+    sourceAnalysisRunId: game.sourceAnalysisRunId ?? null,
     sourcePlyStart: game.plyNumber ?? null,
     sourcePlyEnd: game.plyNumber ?? null,
     eventIdentityKey: (
