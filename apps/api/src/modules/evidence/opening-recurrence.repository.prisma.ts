@@ -15,6 +15,8 @@ interface CountRow {
 
 interface SampleRow {
   importedGameId: number;
+  evidenceEventId: number;
+  sourceAnalysisRunId: number;
   providerGameId: string;
   userColor: string | null;
   evidenceType: string;
@@ -100,6 +102,8 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
   const rows = await prisma.$queryRaw<SampleRow[]>(Prisma.sql`
     SELECT
       game."id" AS "importedGameId",
+      event."id" AS "evidenceEventId",
+      run."sourceAnalysisRunId" AS "sourceAnalysisRunId",
       game."providerGameId" AS "providerGameId",
       game."userColor" AS "userColor",
       event."evidenceType" AS "evidenceType",
@@ -170,6 +174,8 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
       samples.push({
         kind: 'MOVE_QUALITY',
         importedGameId: row.importedGameId,
+        evidenceEventId: row.evidenceEventId,
+        sourceAnalysisRunId: row.sourceAnalysisRunId,
         providerGameId: row.providerGameId,
         userColor: row.userColor,
         speedCategory: stringValue(details.speedCategory),
@@ -190,6 +196,8 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
       samples.push({
         kind: 'BAD_POSITION_ENTRY',
         importedGameId: row.importedGameId,
+        evidenceEventId: row.evidenceEventId,
+        sourceAnalysisRunId: row.sourceAnalysisRunId,
         providerGameId: row.providerGameId,
         userColor: row.userColor,
         speedCategory: stringValue(details.speedCategory),
