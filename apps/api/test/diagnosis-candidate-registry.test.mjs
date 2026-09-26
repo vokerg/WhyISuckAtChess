@@ -58,6 +58,8 @@ test('opening recurrence projects a canonical chess mechanism with representativ
         supportingGames: [
           {
             importedGameId: 11,
+            evidenceEventId: 1011,
+            sourceAnalysisRunId: 2011,
             providerGameId: 'fixture-11',
             plyNumber: 7,
             positionId: 101,
@@ -68,6 +70,8 @@ test('opening recurrence projects a canonical chess mechanism with representativ
           },
           {
             importedGameId: 12,
+            evidenceEventId: 1012,
+            sourceAnalysisRunId: 2012,
             providerGameId: 'fixture-12',
             plyNumber: 7,
             positionId: 101,
@@ -92,6 +96,8 @@ test('opening recurrence projects a canonical chess mechanism with representativ
   assert.equal(finding.effect.value, 82.5);
   assert.equal(finding.evidenceReferences.length, 2);
   assert.equal(finding.evidenceReferences[0].importedGameId, 11);
+  assert.equal(finding.evidenceReferences[0].evidenceEventId, 1011);
+  assert.equal(finding.evidenceReferences[0].sourceAnalysisRunId, 2011);
   assert.equal(
     finding.evidenceReferences[0].eventIdentityKey,
     'diagnosis-event-identity-v1|ply|g:11|p:7|k:REPEATED_EARLY_MOVE_ERROR|v:opening-v1',
