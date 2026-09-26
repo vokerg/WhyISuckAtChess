@@ -6,7 +6,10 @@ import {
   DIAGNOSIS_RANKING_WEIGHTS,
   assertDiagnosisPolicyInvariants,
   diagnosisEvidenceRankingMultiplier,
+  diagnosisGameEventIdentityKey,
+  diagnosisPlyEventIdentityKey,
   diagnosisSmallerArmOverlapRate,
+  isCurrentDiagnosisEventIdentityKey,
   isMaterialDiagnosisEventOverlap,
   normalizeDiagnosisRankingComponent,
 } from '../dist/index.js';
@@ -116,4 +119,44 @@ test('material event overlap requires repeated shared evidence across games', ()
     ...material,
     calculable: false,
   }), false);
+});
+
+
+test('diagnosis event identity is versioned and stable for ply and game sources', () => {
+  const ply = diagnosisPlyEventIdentityKey({
+    importedGameId: 42,
+    triggerPly: 17,
+    sourceKind: 'TACTICAL_MOTIF',
+    sourceVersion: 'tactical-v3',
+    eventDiscriminator: 'fork',
+  });
+  assert.equal(
+    ply,
+    'diagnosis-event-identity-v1|ply|g:42|p:17|k:TACTICAL_MOTIF|v:tactical-v3|d:fork',
+  );
+  assert.equal(isCurrentDiagnosisEventIdentityKey(ply), true);
+
+  const game = diagnosisGameEventIdentityKey({
+    importedGameId: 42,
+    sourceKind: 'SESSION_QUALITY',
+    sourceVersion: 'session-v1',
+  });
+  assert.equal(
+    game,
+    'diagnosis-event-identity-v1|game|g:42|k:SESSION_QUALITY|v:session-v1',
+  );
+  assert.equal(isCurrentDiagnosisEventIdentityKey(game), true);
+  assert.equal(isCurrentDiagnosisEventIdentityKey('diagnosis-event-identity-v0|game|g:42'), false);
+
+  assert.throws(() => diagnosisPlyEventIdentityKey({
+    importedGameId: 0,
+    triggerPly: 17,
+    sourceKind: 'TACTICAL_MOTIF',
+    sourceVersion: 'tactical-v3',
+  }));
+  assert.throws(() => diagnosisGameEventIdentityKey({
+    importedGameId: 42,
+    sourceKind: '',
+    sourceVersion: 'session-v1',
+  }));
 });

@@ -50,5 +50,14 @@ Issue #83 adds `diagnosis-candidate-projection-v1`, the typed adapter/registry b
 - Aggregates that do not expose stable game/event membership do not receive invented evidence IDs; they fail closed for future overlap work.
 - Duplicate producer ownership, supported/unsupported overlap, taxonomy omission, and projection-version drift fail at module initialization.
 
-Stable event overlap (#84), relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain subsequent Phase 5 leaves.
+## Phase 5 evidence identity and overlap
+
+Issue #84 implements `diagnosis-event-identity-v1` and deterministic pair/cluster overlap accounting; see `docs/diagnosis-evidence-overlap.md`.
+
+- `diagnosis-overlap.service.ts` keeps event overlap separate from game-set overlap, exposes arm/union/rate/distinct-game/session context, and fails closed when complete stable identity is unavailable.
+- `diagnosis-overlap.repository.prisma.ts` reuses the current finding boundary and rejects missing, unavailable, non-succeeded, superseded, or cross-owner referenced evidence events.
+- opening recurrence plies and complete `TIME-004` chain games carry stable event identity where the upstream source shape is sufficient.
+- cluster work is bounded by the shared 200-current-findings / 1,000-references-per-finding policy; truncated reference sets are not upgraded to authoritative overlap.
+
+Relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain subsequent Phase 5 leaves.
 

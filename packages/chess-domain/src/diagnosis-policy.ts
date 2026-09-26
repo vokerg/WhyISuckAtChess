@@ -126,6 +126,86 @@ export interface DiagnosisEventOverlapSummary {
   sharedDistinctSessions?: number | null;
 }
 
+
+export interface DiagnosisPlyEventIdentityInput {
+  importedGameId: number;
+  triggerPly: number;
+  sourceKind: string;
+  sourceVersion: string;
+  eventDiscriminator?: string | null;
+}
+
+export interface DiagnosisGameEventIdentityInput {
+  importedGameId: number;
+  sourceKind: string;
+  sourceVersion: string;
+  eventDiscriminator?: string | null;
+}
+
+function diagnosisEventIdentityPart(value: string, field: string): string {
+  if (value.length === 0 || value.length > 64) {
+    throw new RangeError(`${field} must contain 1-64 characters`);
+  }
+  return encodeURIComponent(value);
+}
+
+function diagnosisPositiveSafeInteger(value: number, field: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new RangeError(`${field} must be a positive safe integer`);
+  }
+  return value;
+}
+
+function diagnosisEventIdentityKey(parts: readonly string[]): string {
+  const key = [DIAGNOSIS_EVENT_IDENTITY_VERSION, ...parts].join('|');
+  if (key.length > 192) {
+    throw new RangeError('Diagnosis event identity key exceeds 192 characters');
+  }
+  return key;
+}
+
+export function diagnosisPlyEventIdentityKey(
+  input: DiagnosisPlyEventIdentityInput,
+): string {
+  const gameId = diagnosisPositiveSafeInteger(input.importedGameId, 'importedGameId');
+  const triggerPly = diagnosisPositiveSafeInteger(input.triggerPly, 'triggerPly');
+  const sourceKind = diagnosisEventIdentityPart(input.sourceKind, 'sourceKind');
+  const sourceVersion = diagnosisEventIdentityPart(input.sourceVersion, 'sourceVersion');
+  const discriminator = input.eventDiscriminator === null || input.eventDiscriminator === undefined
+    ? null
+    : diagnosisEventIdentityPart(input.eventDiscriminator, 'eventDiscriminator');
+  return diagnosisEventIdentityKey([
+    'ply',
+    `g:${gameId}`,
+    `p:${triggerPly}`,
+    `k:${sourceKind}`,
+    `v:${sourceVersion}`,
+    ...(discriminator ? [`d:${discriminator}`] : []),
+  ]);
+}
+
+export function diagnosisGameEventIdentityKey(
+  input: DiagnosisGameEventIdentityInput,
+): string {
+  const gameId = diagnosisPositiveSafeInteger(input.importedGameId, 'importedGameId');
+  const sourceKind = diagnosisEventIdentityPart(input.sourceKind, 'sourceKind');
+  const sourceVersion = diagnosisEventIdentityPart(input.sourceVersion, 'sourceVersion');
+  const discriminator = input.eventDiscriminator === null || input.eventDiscriminator === undefined
+    ? null
+    : diagnosisEventIdentityPart(input.eventDiscriminator, 'eventDiscriminator');
+  return diagnosisEventIdentityKey([
+    'game',
+    `g:${gameId}`,
+    `k:${sourceKind}`,
+    `v:${sourceVersion}`,
+    ...(discriminator ? [`d:${discriminator}`] : []),
+  ]);
+}
+
+export function isCurrentDiagnosisEventIdentityKey(value: string): boolean {
+  return value.startsWith(`${DIAGNOSIS_EVENT_IDENTITY_VERSION}|`);
+}
+
 export interface DiagnosisRootCauseThemePolicy {
   key: string;
   mechanismDiagnosisIds: readonly string[];

@@ -1,7 +1,10 @@
-import type {
-  DiagnosisEvidenceStrength,
-  DiagnosisFindingLevel,
-  DiagnosisObservationState,
+import {
+  DIAGNOSIS_BOUNDEDNESS_POLICY,
+  diagnosisGameEventIdentityKey,
+  diagnosisPlyEventIdentityKey,
+  type DiagnosisEvidenceStrength,
+  type DiagnosisFindingLevel,
+  type DiagnosisObservationState,
 } from '@why-i-suck-at-chess/chess-domain';
 import type { EvidenceFindingDraft } from '../evidence/evidence.types';
 import type { OpeningRecurrenceEvidenceResult } from '../evidence/opening-recurrence.service';
@@ -273,6 +276,8 @@ function openingFindingStrength(finding: EvidenceFindingDraft): DiagnosisEvidenc
 
 interface OpeningSupportingGame {
   importedGameId: number;
+  evidenceEventId?: number;
+  sourceAnalysisRunId?: number;
   providerGameId?: string;
   plyNumber?: number;
   positionId?: number;
@@ -296,12 +301,31 @@ function openingSupportingGames(finding: EvidenceFindingDraft): OpeningSupportin
 function openingReferences(
   finding: EvidenceFindingDraft,
 ): DiagnosisFindingEvidenceReferenceDraft[] {
+  const sourceEventKind = finding.type === 'REPEATED_EARLY_MOVE_ERROR'
+    ? 'OPENING_MOVE_QUALITY_SAMPLE'
+    : finding.type === 'RECURRING_BAD_OPENING_POSITION'
+      ? 'OPENING_BAD_POSITION_ENTRY'
+      : finding.type;
   return openingSupportingGames(finding).map((game, index) => ({
     referenceKey: 'opening-game-' + game.importedGameId + '-ply-' + (game.plyNumber ?? 'unknown'),
     referenceType: 'IMPORTED_GAME_PLY',
     importedGameId: game.importedGameId,
+    evidenceEventId: game.evidenceEventId ?? null,
+    sourceAnalysisRunId: game.sourceAnalysisRunId ?? null,
     sourcePlyStart: game.plyNumber ?? null,
     sourcePlyEnd: game.plyNumber ?? null,
+    eventIdentityKey: (
+      game.plyNumber !== undefined
+      && Number.isSafeInteger(game.plyNumber)
+      && game.plyNumber > 0
+    )
+      ? diagnosisPlyEventIdentityKey({
+          importedGameId: game.importedGameId,
+          triggerPly: game.plyNumber,
+          sourceKind: sourceEventKind,
+          sourceVersion: 'opening-v1',
+        })
+      : null,
     provenance: {
       providerGameId: game.providerGameId ?? null,
       positionId: game.positionId ?? null,
@@ -580,6 +604,10 @@ function projectPlayedTooFast(source: PlayedTooFastResult): DiagnosisFindingDraf
 function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindingDraft[] {
   const strength = source.chain.evidenceStrength;
   const games = source.games.filter((game) => game.completeChain);
+  const referenceGames = games.slice(
+    0,
+    DIAGNOSIS_BOUNDEDNESS_POLICY.maxEvidenceEventReferencesPerFinding,
+  );
   return [candidate({
     findingKey: 'time-004-scope',
     diagnosisId: 'TIME-004',
@@ -605,6 +633,11 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
     coverage: {
       ...source.coverage,
       chain: source.chain,
+      sourceReferenceStatus: referenceGames.length === games.length
+        ? 'COMPLETE_EVENT_SET'
+        : 'TRUNCATED_EVENT_SET',
+      sourceReferenceCount: referenceGames.length,
+      sourceReferenceTotalGames: games.length,
     },
     effect: finiteEffect(
       'later-average-score-loss-delta',
@@ -620,11 +653,16 @@ function projectEarlyTimeOveruse(source: EarlyTimeOveruseResult): DiagnosisFindi
       analysis: source.analysisProvenance,
       candidateProjection: DIAGNOSIS_CANDIDATE_PROJECTION_VERSION,
     },
-    evidenceReferences: games.map((game, index) => ({
+    evidenceReferences: referenceGames.map((game, index) => ({
       referenceKey: 'time-004-game-' + game.importedGameId,
       referenceType: 'IMPORTED_GAME',
       importedGameId: game.importedGameId,
       sourcePlyStart: game.early.lastOpeningPly,
+      eventIdentityKey: diagnosisGameEventIdentityKey({
+        importedGameId: game.importedGameId,
+        sourceKind: 'EARLY_TIME_OVERUSE_COMPLETE_CHAIN',
+        sourceVersion: source.policyVersion,
+      }),
       provenance: {
         exactTimeControlKey: game.exactTimeControlKey,
         early: game.early,
