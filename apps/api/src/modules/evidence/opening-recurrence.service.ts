@@ -18,6 +18,8 @@ export type OpeningRecurrenceSampleKind =
 export interface OpeningRecurrenceSample {
   kind: OpeningRecurrenceSampleKind;
   importedGameId: number;
+  evidenceEventId: number;
+  sourceAnalysisRunId: number;
   providerGameId: string;
   userColor: 'WHITE' | 'BLACK';
   speedCategory: string | null;
@@ -108,6 +110,8 @@ function supportingReferences(samples: OpeningRecurrenceSample[]) {
     .slice(0, OPENING_RECURRENCE_SUPPORT_LIMIT)
     .map((sample) => ({
       importedGameId: sample.importedGameId,
+      evidenceEventId: sample.evidenceEventId,
+      sourceAnalysisRunId: sample.sourceAnalysisRunId,
       providerGameId: sample.providerGameId,
       plyNumber: sample.plyNumber,
       positionId: sample.positionId,
