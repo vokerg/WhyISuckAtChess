@@ -301,6 +301,11 @@ function openingSupportingGames(finding: EvidenceFindingDraft): OpeningSupportin
 function openingReferences(
   finding: EvidenceFindingDraft,
 ): DiagnosisFindingEvidenceReferenceDraft[] {
+  const sourceEventKind = finding.type === 'REPEATED_EARLY_MOVE_ERROR'
+    ? 'OPENING_MOVE_QUALITY_SAMPLE'
+    : finding.type === 'RECURRING_BAD_OPENING_POSITION'
+      ? 'OPENING_BAD_POSITION_ENTRY'
+      : finding.type;
   return openingSupportingGames(finding).map((game, index) => ({
     referenceKey: 'opening-game-' + game.importedGameId + '-ply-' + (game.plyNumber ?? 'unknown'),
     referenceType: 'IMPORTED_GAME_PLY',
@@ -317,7 +322,7 @@ function openingReferences(
       ? diagnosisPlyEventIdentityKey({
           importedGameId: game.importedGameId,
           triggerPly: game.plyNumber,
-          sourceKind: finding.type,
+          sourceKind: sourceEventKind,
           sourceVersion: 'opening-v1',
         })
       : null,
