@@ -61,3 +61,15 @@ Issue #84 implements `diagnosis-event-identity-v1` and deterministic pair/cluste
 
 Relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain subsequent Phase 5 leaves.
 
+## Phase 5 typed relationship graph
+
+Issue #85 adds `diagnosis-relationship-graph-v1`; see `docs/diagnosis-relationship-graph.md`.
+
+- `diagnosis-relationship.service.ts` builds only the seven taxonomy relationship types from current `PROBLEM_DETECTED` findings, explicit typed rules, #84 overlap output, and explicit `RATING-002` confounder evidence.
+- `SHARES_EVENTS_WITH` and overlap-backed `CONDITIONAL_ON` edges consume `diagnosis-overlap-v1`; they do not recompute or approximate event overlap.
+- `diagnosis-relationship.repository.prisma.ts` atomically replaces the current finding set's relationship rows and rejects endpoints outside the owned current set.
+- context values remain dimensions; they are never persisted as graph nodes.
+- graph generation is bounded, deterministic, and versioned with `diagnosis-synthesis-v1`.
+
+Consolidation (#86), synthesized root candidates (#87), and ranking (#88) consume this graph but remain outside #85.
+
