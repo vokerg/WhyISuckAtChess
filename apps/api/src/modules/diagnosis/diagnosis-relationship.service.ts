@@ -64,7 +64,7 @@ const TACTICAL_MECHANISMS = Object.freeze([
   'TACT-005',
 ]);
 
-export const DIAGNOSIS_RELATIONSHIP_RULES = Object.freeze([
+export const DIAGNOSIS_RELATIONSHIP_RULES: readonly DiagnosisRelationshipRule[] = Object.freeze([
   Object.freeze({
     key: 'tactical-mechanism-specializes-tactical-error-rate',
     relationshipType: 'SPECIALIZES',
@@ -102,7 +102,7 @@ export const DIAGNOSIS_RELATIONSHIP_RULES = Object.freeze([
     sourceDiagnosisIds: Object.freeze(['TIME-004']),
     targetDiagnosisIds: Object.freeze(['TIME-001']),
   }),
-] satisfies readonly DiagnosisRelationshipRule[]);
+]);
 
 function assertPositiveId(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
