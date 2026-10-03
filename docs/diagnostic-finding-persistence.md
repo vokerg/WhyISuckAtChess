@@ -18,6 +18,7 @@ owned current source evidence / aggregates
         -> DiagnosisFindingEvidenceReference
      -> DiagnosisFindingRelationship (persistence seam only)
      -> DiagnosisRootCandidateSupport
+     -> DiagnosisFindingRanking
 ```
 
 A recalculation creates a new set and supersedes the previous current set atomically. Historical sets remain queryable. Current reads require the caller's expected taxonomy, synthesis, calculation, and complete policy-version tuple; a row from an older tuple fails closed rather than masquerading as current.
@@ -75,6 +76,12 @@ Recalculation or deletion of finding sets only deletes derived reference rows. I
 Issue #87 adds a same-revision support seam for synthesized roots. Each row links one canonical `ROOT_CAUSE_CANDIDATE` finding to one supporting canonical finding in the same immutable finding set, records the support role (`MECHANISM`, `CONDITION_OR_OBSERVATION`, or `ADDITIONAL_SUPPORT`), and keeps inspectable synthesis support JSON.
 
 The service validates root/support finding keys before persistence. The repository resolves those keys to the newly created finding IDs after all findings in the replacement revision exist, so #87 preserves durable current supporting finding IDs rather than only historical IDs embedded in JSON.
+
+### `DiagnosisFindingRanking`
+
+Issue #88 adds persisted derived ranking state on the same immutable finding-set revision. Each ranked or root-child drill-down row records the ranking-policy version, normalized components, unchanged raw effect, evidence/overlap multipliers, final score, consolidation state, optional top-level position, and parent synthesized-root IDs.
+
+Ranking rows never mutate canonical findings. The ranking repository transactionally replaces only ranking state for an owned current finding set and rejects stale/superseded revisions. Historical ranking state remains attached to the historical set after a later canonical replacement.
 
 ### `DiagnosisFindingRelationship`
 
@@ -174,5 +181,5 @@ Deferred:
 - #85 relationship graph construction;
 - #86 consolidation;
 - #87 root-cause synthesis execution;
-- #88 ranking execution;
+- #88 ranking execution is implemented by `DiagnosisFindingRanking` and `docs/diagnosis-ranking.md`;
 - Phase 6 API/UI/AI explanation.
