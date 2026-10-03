@@ -438,20 +438,6 @@ function selectTheme(
   const evidenceStrength = weakestEvidenceStrength(mandatory, sampleStrength);
   if (evidenceStrength === 'INSUFFICIENT') return null;
 
-  const relationshipKeys = new Set<string>();
-  const relationships = pairRelationships
-    .filter((relationship) => {
-      const key = [
-        relationship.relationshipType,
-        relationship.sourceFindingId,
-        relationship.targetFindingId,
-      ].join('|');
-      if (relationshipKeys.has(key)) return false;
-      relationshipKeys.add(key);
-      return true;
-    })
-    .sort((left, right) => left.id - right.id);
-
   const selectedMandatoryIds = new Set(mandatory.map((finding) => finding.id));
   const additional = theme.key !== 'LATE_SESSION_TACTICAL_DETERIORATION'
     ? []
@@ -478,6 +464,35 @@ function selectTheme(
           ));
         })
         .sort(stableFindingOrder);
+
+  const additionalIds = new Set(additional.map((finding) => finding.id));
+  const allRelationships = [
+    ...pairRelationships,
+    ...snapshot.relationships.filter((relationship) => (
+      relationshipSupportsRootLink(relationship)
+      && (
+        additionalIds.has(relationship.sourceFindingId)
+        || additionalIds.has(relationship.targetFindingId)
+      )
+      && (
+        selectedMandatoryIds.has(relationship.sourceFindingId)
+        || selectedMandatoryIds.has(relationship.targetFindingId)
+      )
+    )),
+  ];
+  const relationshipKeys = new Set<string>();
+  const relationships = allRelationships
+    .filter((relationship) => {
+      const key = [
+        relationship.relationshipType,
+        relationship.sourceFindingId,
+        relationship.targetFindingId,
+      ].join('|');
+      if (relationshipKeys.has(key)) return false;
+      relationshipKeys.add(key);
+      return true;
+    })
+    .sort((left, right) => left.id - right.id);
 
   return {
     theme,
