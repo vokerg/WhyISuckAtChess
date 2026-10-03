@@ -262,25 +262,21 @@ function resolveRepresentative(
   selected: ReadonlyMap<number, SuppressionCandidate>,
 ): number {
   const seen = new Set<number>([targetId]);
-  let current = selected.get(targetId)?.source.id;
-  if (current === undefined) {
+  const firstCandidate = selected.get(targetId);
+  if (!firstCandidate) {
     throw new Error('Suppressed finding is missing a representative candidate.');
   }
+  let current: number = firstCandidate.source.id;
 
-  while (selected.has(current)) {
+  while (true) {
     if (seen.has(current)) {
       throw new Error('Diagnosis consolidation suppression contains a cycle.');
     }
+    const nextCandidate = selected.get(current);
+    if (!nextCandidate) return current;
     seen.add(current);
-    const next = selected.get(current)?.source.id;
-    if (next === undefined) break;
-    current = next;
+    current = nextCandidate.source.id;
   }
-
-  if (seen.has(current)) {
-    throw new Error('Diagnosis consolidation suppression contains a cycle.');
-  }
-  return current;
 }
 
 function sortedUniqueIds(values: readonly number[]): number[] {
