@@ -57,3 +57,4 @@ export const LichessImportRequestSchema = z.object({
 export type LichessImportRequest = z.infer<typeof LichessImportRequestSchema>;
 
 export * from './imported-games.schemas';
+export * from './diagnosis.schemas';
