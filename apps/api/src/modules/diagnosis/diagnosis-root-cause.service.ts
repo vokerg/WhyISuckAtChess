@@ -24,6 +24,7 @@ import type {
   PersistedDiagnosisFindingRelationship,
 } from './diagnosis-finding.types';
 import type { DiagnosisFindingOverlapRepository } from './diagnosis-overlap.service';
+import { DIAGNOSIS_RELATIONSHIP_GRAPH_VERSION } from './diagnosis-relationship.service';
 
 export const DIAGNOSIS_ROOT_SYNTHESIS_PRODUCER_KEY = 'diagnosis-root-synthesis' as const;
 
@@ -201,6 +202,12 @@ function validateCurrentRelationships(
     }
     if (relationship.policyVersion !== DIAGNOSIS_SYNTHESIS_POLICY_VERSION) {
       throw new Error('Root synthesis cannot consume a stale relationship policy version.');
+    }
+    if (
+      !isRecord(relationship.support)
+      || relationship.support.graphVersion !== DIAGNOSIS_RELATIONSHIP_GRAPH_VERSION
+    ) {
+      throw new Error('Root synthesis cannot consume a stale relationship graph version.');
     }
   }
 }
