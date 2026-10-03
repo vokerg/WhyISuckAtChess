@@ -158,9 +158,47 @@ function validateRelationships(
   }
 }
 
+function rootSupportFindingKeys(
+  finding: PersistedDiagnosisFinding,
+): ReadonlySet<string> | null {
+  if (
+    finding.findingLevel !== 'ROOT_CAUSE_CANDIDATE'
+    || finding.producerKey !== 'diagnosis-root-synthesis'
+    || finding.producerVersion !== DIAGNOSIS_SYNTHESIS_POLICY_VERSION
+    || !isRecord(finding.coverage)
+  ) {
+    return null;
+  }
+
+  const keys = new Set<string>();
+  for (const field of [
+    'mechanismFindingKeys',
+    'conditionOrObservationFindingKeys',
+    'additionalSupportFindingKeys',
+  ]) {
+    const value = finding.coverage[field];
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      if (typeof item === 'string') keys.add(item);
+    }
+  }
+  return keys;
+}
+
+function isSynthesizedRootSupportPair(
+  left: PersistedDiagnosisFinding,
+  right: PersistedDiagnosisFinding,
+): boolean {
+  const leftSupportKeys = rootSupportFindingKeys(left);
+  if (leftSupportKeys?.has(right.findingKey)) return true;
+  const rightSupportKeys = rootSupportFindingKeys(right);
+  return rightSupportKeys?.has(left.findingKey) === true;
+}
+
 function buildMaterialPeers(
   overlaps: readonly DiagnosisFindingOverlapResult[],
   supportedIds: ReadonlySet<number>,
+  findingsById: ReadonlyMap<number, PersistedDiagnosisFinding>,
 ): ReadonlyMap<number, ReadonlySet<number>> {
   const mutable = new Map<number, Set<number>>();
   for (const id of supportedIds) mutable.set(id, new Set<number>());
@@ -177,6 +215,11 @@ function buildMaterialPeers(
     ) {
       continue;
     }
+    const left = findingsById.get(leftId);
+    const right = findingsById.get(rightId);
+    if (!left || !right) continue;
+    if (isSynthesizedRootSupportPair(left, right)) continue;
+
     mutable.get(leftId)?.add(rightId);
     mutable.get(rightId)?.add(leftId);
   }
@@ -310,7 +353,7 @@ export function buildDiagnosisConsolidation(
   const overlapIndex = buildOverlapIndex(overlaps, findingsById);
   const supportedFindings = findings.filter(isSupportedFinding);
   const supportedIds = new Set(supportedFindings.map((finding) => finding.id));
-  const materialPeers = buildMaterialPeers(overlaps, supportedIds);
+  const materialPeers = buildMaterialPeers(overlaps, supportedIds, findingsById);
   const clusterKeys = buildClusterKeys(findings, materialPeers);
 
   const candidatesByTarget = new Map<number, SuppressionCandidate[]>();
