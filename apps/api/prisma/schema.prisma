@@ -401,6 +401,7 @@ model DiagnosisFindingSet {
   relationships          DiagnosisFindingRelationship[]
   consolidations          DiagnosisFindingConsolidation[]
   rootCandidateSupports    DiagnosisRootCandidateSupport[]
+  rankings                 DiagnosisFindingRanking[]
 
   @@unique([appUserId, materializationKey], map: "DiagnosisFindingSet_appUserId_materializationKey_key")
   @@index([appUserId, scopeKey, createdAt])
@@ -438,6 +439,7 @@ model DiagnosisFinding {
   representedConsolidations DiagnosisFindingConsolidation[]        @relation("DiagnosisConsolidationRepresentative")
   rootCandidateSupportRows DiagnosisRootCandidateSupport[]             @relation("DiagnosisRootCandidateSupportRoot")
   supportsRootCandidates   DiagnosisRootCandidateSupport[]             @relation("DiagnosisRootCandidateSupportChild")
+  rankingState             DiagnosisFindingRanking?                    @relation("DiagnosisFindingRankingFinding")
 
   @@unique([findingSetId, findingKey])
   @@index([findingSetId, diagnosisId])
@@ -526,4 +528,28 @@ model DiagnosisRootCandidateSupport {
   @@unique([rootFindingId, supportingFindingId], map: "DiagnosisRootCandidateSupport_root_supporting_key")
   @@index([findingSetId])
   @@index([supportingFindingId])
+}
+
+
+model DiagnosisFindingRanking {
+  id                    Int                 @id @default(autoincrement())
+  findingSetId          Int
+  findingSet            DiagnosisFindingSet @relation(fields: [findingSetId], references: [id], onDelete: Cascade)
+  findingId             Int                 @unique
+  finding               DiagnosisFinding    @relation("DiagnosisFindingRankingFinding", fields: [findingId], references: [id], onDelete: Cascade)
+  topLevelRanked        Boolean
+  rankPosition          Int?
+  finalScore            Float
+  weightedScore         Float
+  evidenceMultiplier    Float
+  overlapMultiplier     Float
+  rankingPolicyVersion  String              @db.VarChar(64)
+  componentsJson        Json
+  rawEffectJson         Json?
+  consolidationState    String              @db.VarChar(48)
+  parentRootFindingIds  Int[]               @default([])
+  supportJson           Json
+  createdAt             DateTime            @default(now())
+
+  @@index([findingSetId, topLevelRanked, rankPosition])
 }
