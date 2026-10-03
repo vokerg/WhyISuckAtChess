@@ -46,6 +46,21 @@ export interface DiagnosisFindingDraft {
   evidenceReferences: readonly DiagnosisFindingEvidenceReferenceDraft[];
 }
 
+export const DIAGNOSIS_ROOT_SUPPORT_ROLES = [
+  'MECHANISM',
+  'CONDITION_OR_OBSERVATION',
+  'ADDITIONAL_SUPPORT',
+] as const;
+
+export type DiagnosisRootSupportRole = typeof DIAGNOSIS_ROOT_SUPPORT_ROLES[number];
+
+export interface DiagnosisRootCandidateSupportDraft {
+  rootFindingKey: string;
+  supportingFindingKey: string;
+  role: DiagnosisRootSupportRole;
+  support: Readonly<Record<string, unknown>>;
+}
+
 export interface DiagnosisFindingSetDraft {
   materializationKey: string;
   scopeKey: string;
@@ -56,6 +71,7 @@ export interface DiagnosisFindingSetDraft {
   policyVersions: Readonly<Record<string, unknown>>;
   calculationAsOf: Date;
   findings: readonly DiagnosisFindingDraft[];
+  rootSupports?: readonly DiagnosisRootCandidateSupportDraft[];
 }
 
 export interface PersistedDiagnosisFindingEvidenceReference {
@@ -121,6 +137,14 @@ export interface PersistedDiagnosisFindingConsolidation {
   support: unknown;
 }
 
+export interface PersistedDiagnosisRootCandidateSupport {
+  id: number;
+  rootFindingId: number;
+  supportingFindingId: number;
+  role: string;
+  support: unknown;
+}
+
 export interface DiagnosisFindingSetSnapshot {
   id: number;
   appUserId: number;
@@ -137,6 +161,7 @@ export interface DiagnosisFindingSetSnapshot {
   findings: PersistedDiagnosisFinding[];
   relationships: PersistedDiagnosisFindingRelationship[];
   consolidations: PersistedDiagnosisFindingConsolidation[];
+  rootSupports: PersistedDiagnosisRootCandidateSupport[];
 }
 
 export interface DiagnosisFindingVersionTuple {
