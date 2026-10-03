@@ -2,6 +2,7 @@ import {
   DIAGNOSIS_BOUNDEDNESS_POLICY,
   DIAGNOSIS_CONSOLIDATION_POLICY_VERSION,
   DIAGNOSIS_EVIDENCE_POLICY,
+  DIAGNOSIS_EVENT_IDENTITY_VERSION,
   DIAGNOSIS_SYNTHESIS_POLICY_VERSION,
 } from '@why-i-suck-at-chess/chess-domain';
 import type {
@@ -497,6 +498,9 @@ export async function materializeCurrentDiagnosisConsolidation(
     || versions.policyVersions.consolidation !== DIAGNOSIS_CONSOLIDATION_POLICY_VERSION
   ) {
     throw new Error('Diagnosis consolidation only supports the current consolidation-policy version.');
+  }
+  if (versions.policyVersions.eventIdentity !== DIAGNOSIS_EVENT_IDENTITY_VERSION) {
+    throw new Error('Diagnosis consolidation only supports the current event-identity version.');
   }
 
   const snapshot: DiagnosisFindingSetSnapshot | null = await repository.getCurrentScope(
