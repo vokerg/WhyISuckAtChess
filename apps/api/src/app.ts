@@ -20,6 +20,11 @@ import {
   ImportedGamesQueryService as defaultImportedGamesQueryService,
   type ImportedGamesQueryService,
 } from './modules/imported-games/imported-games.service';
+import { registerDiagnosisRoutes } from './modules/diagnosis/diagnosis.routes';
+import {
+  diagnosisSummaryService as defaultDiagnosisSummaryService,
+  type DiagnosisSummaryService,
+} from './modules/diagnosis/diagnosis-summary.service';
 import prisma from './prisma';
 
 export interface PrismaLifecycle {
@@ -32,6 +37,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
   lichessService?: LichessConnectionService;
   accountImportService?: LichessAccountImportService;
   importedGamesService?: ImportedGamesQueryService;
+  diagnosisSummaryService?: DiagnosisSummaryService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -62,6 +68,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerImportedGamesRoutes(
     app,
     options.importedGamesService ?? defaultImportedGamesQueryService,
+  );
+  await registerDiagnosisRoutes(
+    app,
+    options.diagnosisSummaryService ?? defaultDiagnosisSummaryService,
   );
 
   return app;
