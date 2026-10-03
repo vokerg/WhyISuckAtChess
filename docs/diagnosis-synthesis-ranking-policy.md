@@ -250,6 +250,14 @@ Mechanism must be one of `TACT-001` through `TACT-005`. Material non-root sessio
 
 Adding/removing a root theme or changing prerequisites requires a synthesis-policy version bump.
 
+### 10.1 V1 execution boundary
+
+Issue #87 implements these gates without inventing source membership that an aggregate does not expose. The repeated mechanism side must provide complete current stable event identity for the event support used to establish distinct-game recurrence and the maximum-single-game share. A registered observation/contributing-condition may contribute authoritative aggregate denominators, coverage, distinct-session counts, and raw effects without fabricated game IDs when its typed relationship does not require event overlap.
+
+When a relationship rule requires overlap (`SHARES_EVENTS_WITH` and the current overlap-backed `CONDITIONAL_ON` rule), persisted material overlap is mandatory. Other registered semantic edges may satisfy graph connectivity without a second overlap requirement. Root evidence strength is never upgraded above the weakest mandatory child, and a root keeps child raw effects/units rather than inventing a cross-family effect metric.
+
+Synthesized roots use the same canonical `DiagnosisFinding` lifecycle and persist same-revision supporting-finding links. Publishing roots creates a replacement immutable finding-set revision; relationships and consolidation are then recalculated on that revision before ranking.
+
 ## 11. Deterministic ranking
 
 Ranking consumes only **current top-level consolidated findings and supported root candidates**. It never ranks stale revisions or raw duplicate children as independent top-level reasons.
