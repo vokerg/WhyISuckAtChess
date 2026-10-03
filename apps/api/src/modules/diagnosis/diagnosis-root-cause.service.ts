@@ -27,7 +27,7 @@ import type { DiagnosisFindingOverlapRepository } from './diagnosis-overlap.serv
 
 export const DIAGNOSIS_ROOT_SYNTHESIS_PRODUCER_KEY = 'diagnosis-root-synthesis' as const;
 
-export interface DiagnosisRootSynthesisRepository extends DiagnosisFindingOverlapRepository {}
+export type DiagnosisRootSynthesisRepository = DiagnosisFindingOverlapRepository;
 
 export interface DiagnosisRootCandidateBuildResult {
   findings: readonly DiagnosisFindingDraft[];
