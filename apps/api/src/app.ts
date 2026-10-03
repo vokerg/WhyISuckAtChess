@@ -22,6 +22,10 @@ import {
 } from './modules/imported-games/imported-games.service';
 import { registerDiagnosisRoutes } from './modules/diagnosis/diagnosis.routes';
 import {
+  diagnosisDrillDownService as defaultDiagnosisDrillDownService,
+  type DiagnosisDrillDownService,
+} from './modules/diagnosis/diagnosis-drill-down.service';
+import {
   diagnosisSummaryService as defaultDiagnosisSummaryService,
   type DiagnosisSummaryService,
 } from './modules/diagnosis/diagnosis-summary.service';
@@ -38,6 +42,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
   accountImportService?: LichessAccountImportService;
   importedGamesService?: ImportedGamesQueryService;
   diagnosisSummaryService?: DiagnosisSummaryService;
+  diagnosisDrillDownService?: DiagnosisDrillDownService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -72,6 +77,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerDiagnosisRoutes(
     app,
     options.diagnosisSummaryService ?? defaultDiagnosisSummaryService,
+    options.diagnosisDrillDownService ?? defaultDiagnosisDrillDownService,
   );
 
   return app;
