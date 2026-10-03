@@ -109,6 +109,18 @@ export interface PersistedDiagnosisFindingRelationship {
   support: unknown;
 }
 
+export interface PersistedDiagnosisFindingConsolidation {
+  id: number;
+  findingId: number;
+  representativeFindingId: number | null;
+  state: string;
+  topLevelEligible: boolean;
+  clusterKey: string;
+  reasonKeys: string[];
+  policyVersion: string;
+  support: unknown;
+}
+
 export interface DiagnosisFindingSetSnapshot {
   id: number;
   appUserId: number;
@@ -124,6 +136,7 @@ export interface DiagnosisFindingSetSnapshot {
   supersededAt: Date | null;
   findings: PersistedDiagnosisFinding[];
   relationships: PersistedDiagnosisFindingRelationship[];
+  consolidations: PersistedDiagnosisFindingConsolidation[];
 }
 
 export interface DiagnosisFindingVersionTuple {
