@@ -59,7 +59,7 @@ Issue #84 implements `diagnosis-event-identity-v1` and deterministic pair/cluste
 - opening recurrence plies and complete `TIME-004` chain games carry stable event identity where the upstream source shape is sufficient.
 - cluster work is bounded by the shared 200-current-findings / 1,000-references-per-finding policy; truncated reference sets are not upgraded to authoritative overlap.
 
-Relationship construction (#85) and consolidation (#86) now consume this overlap boundary; root synthesis (#87) and ranking (#88) remain subsequent Phase 5 leaves.
+Relationship construction (#85), consolidation (#86), and root synthesis (#87) now consume this overlap boundary; ranking (#88) remains the next Phase 5 leaf.
 
 ## Phase 5 typed relationship graph
 
@@ -71,7 +71,7 @@ Issue #85 adds `diagnosis-relationship-graph-v1`; see `docs/diagnosis-relationsh
 - context values remain dimensions; they are never persisted as graph nodes.
 - graph generation is bounded, deterministic, and versioned with `diagnosis-synthesis-v1`.
 
-Consolidation (#86) consumes this graph; synthesized root candidates (#87) and ranking (#88) remain outside #85.
+Consolidation (#86) and synthesized root candidates (#87) consume this graph; ranking (#88) remains outside #85.
 
 
 ## Phase 5 deterministic consolidation
@@ -84,4 +84,17 @@ Issue #86 adds `diagnosis-consolidation-v1`; see `docs/diagnosis-consolidation.m
 - `DiagnosisFindingConsolidation` persists one explicit hierarchy state per current finding, including top-level eligibility, representative/cluster membership, deterministic reason keys, policy version, and inspectable support.
 - recalculation atomically replaces derived consolidation state for the current finding set; canonical findings and source evidence are never deleted or rewritten.
 
-Root-cause synthesis (#87) and deterministic ranking (#88) consume this hierarchy and remain subsequent Phase 5 leaves.
+Root-cause synthesis (#87) now consumes this hierarchy; deterministic ranking (#88) remains the next Phase 5 leaf.
+
+## Phase 5 deterministic root-cause synthesis
+
+Issue #87 implements registered `diagnosis-synthesis-v1` root promotion; see `docs/diagnosis-root-cause-synthesis.md`.
+
+- `diagnosis-root-cause.service.ts` consumes only current supported top-level consolidated findings and current typed relationships.
+- mandatory mechanism evidence must expose a complete current stable event set; aggregate context may contribute authoritative counts/effects without invented game IDs when its typed relationship does not require overlap.
+- promotion enforces at least five distinct supporting games, the 50% coverage gate, the 50% maximum single-game event share, and theme-specific distinct-session recurrence.
+- only `CLOCK_MANAGEMENT_DRIVING_TACTICAL_COLLAPSE` and `LATE_SESSION_TACTICAL_DETERIORATION` can promote under the v1 registry; supported `SESSION-003` plugs into the late-session proof only as additional support.
+- `DiagnosisRootCandidateSupport` preserves same-revision child finding IDs plus the source relationship/consolidation/effect/coverage proof for drill-down.
+- root publication uses the #82 immutable replacement lifecycle. The replacement keeps every component finding, appends synthesized roots, supersedes the source revision, and intentionally requires #85/#86 refresh before #88 ranking.
+
+Deterministic ranking (#88) consumes the refreshed hierarchy and remains the next Phase 5 leaf.

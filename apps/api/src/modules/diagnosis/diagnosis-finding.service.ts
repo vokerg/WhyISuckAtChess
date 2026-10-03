@@ -4,6 +4,7 @@ import {
   DIAGNOSIS_FINDING_LEVELS,
   DIAGNOSIS_OBSERVATION_STATES,
 } from '@why-i-suck-at-chess/chess-domain';
+import { DIAGNOSIS_ROOT_SUPPORT_ROLES } from './diagnosis-finding.types';
 import type {
   DiagnosisFindingDraft,
   DiagnosisFindingRepository,
@@ -175,12 +176,63 @@ export function validateDiagnosisFindingSetDraft(
   }
 
   const findingKeys = new Set<string>();
+  const findingsByKey = new Map<string, DiagnosisFindingDraft>();
   for (const finding of draft.findings) {
     validateFinding(finding);
     if (findingKeys.has(finding.findingKey)) {
       throw new Error(`Duplicate diagnosis finding key: ${finding.findingKey}`);
     }
     findingKeys.add(finding.findingKey);
+    findingsByKey.set(finding.findingKey, finding);
+  }
+
+  const supportPairs = new Set<string>();
+  for (const support of draft.rootSupports ?? []) {
+    assertNonEmptyString(support.rootFindingKey, 'rootFindingKey', 128);
+    assertNonEmptyString(support.supportingFindingKey, 'supportingFindingKey', 128);
+    if (!DIAGNOSIS_ROOT_SUPPORT_ROLES.includes(support.role)) {
+      throw new RangeError(`Unsupported diagnosis root support role: ${support.role}`);
+    }
+    if (support.rootFindingKey === support.supportingFindingKey) {
+      throw new Error('Diagnosis root candidate cannot support itself.');
+    }
+
+    const root = findingsByKey.get(support.rootFindingKey);
+    const supporting = findingsByKey.get(support.supportingFindingKey);
+    if (!root || !supporting) {
+      throw new Error('Diagnosis root support must reference findings in the same draft.');
+    }
+    if (root.findingLevel !== 'ROOT_CAUSE_CANDIDATE') {
+      throw new Error('Diagnosis root support source must be a root-cause candidate.');
+    }
+    if (support.role === 'MECHANISM' && supporting.findingLevel !== 'MECHANISM') {
+      throw new Error('MECHANISM root support must reference a mechanism finding.');
+    }
+    if (
+      support.role === 'CONDITION_OR_OBSERVATION'
+      && supporting.findingLevel !== 'CONTRIBUTING_CONDITION'
+      && supporting.findingLevel !== 'OBSERVATION'
+    ) {
+      throw new Error(
+        'CONDITION_OR_OBSERVATION root support must reference a condition or observation.',
+      );
+    }
+    if (
+      support.role === 'ADDITIONAL_SUPPORT'
+      && supporting.findingLevel !== 'ROOT_CAUSE_CANDIDATE'
+    ) {
+      throw new Error('ADDITIONAL_SUPPORT must reference a root-cause candidate.');
+    }
+
+    const pairKey = support.rootFindingKey + '|' + support.supportingFindingKey;
+    if (supportPairs.has(pairKey)) {
+      throw new Error('Diagnosis root support contains a duplicate finding pair.');
+    }
+    supportPairs.add(pairKey);
+    assertJsonSerializable(
+      support.support,
+      `root support for ${support.rootFindingKey}/${support.supportingFindingKey}`,
+    );
   }
 }
 

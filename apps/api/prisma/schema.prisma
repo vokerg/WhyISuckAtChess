@@ -400,6 +400,7 @@ model DiagnosisFindingSet {
   findings               DiagnosisFinding[]
   relationships          DiagnosisFindingRelationship[]
   consolidations          DiagnosisFindingConsolidation[]
+  rootCandidateSupports    DiagnosisRootCandidateSupport[]
 
   @@unique([appUserId, materializationKey], map: "DiagnosisFindingSet_appUserId_materializationKey_key")
   @@index([appUserId, scopeKey, createdAt])
@@ -435,6 +436,8 @@ model DiagnosisFinding {
   incomingRelationships    DiagnosisFindingRelationship[]       @relation("DiagnosisRelationshipTarget")
   consolidationState       DiagnosisFindingConsolidation?         @relation("DiagnosisConsolidationFinding")
   representedConsolidations DiagnosisFindingConsolidation[]        @relation("DiagnosisConsolidationRepresentative")
+  rootCandidateSupportRows DiagnosisRootCandidateSupport[]             @relation("DiagnosisRootCandidateSupportRoot")
+  supportsRootCandidates   DiagnosisRootCandidateSupport[]             @relation("DiagnosisRootCandidateSupportChild")
 
   @@unique([findingSetId, findingKey])
   @@index([findingSetId, diagnosisId])
@@ -506,3 +509,21 @@ model DiagnosisFindingConsolidation {
   @@index([representativeFindingId])
 }
 
+
+
+model DiagnosisRootCandidateSupport {
+  id                  Int                 @id @default(autoincrement())
+  findingSetId        Int
+  findingSet          DiagnosisFindingSet @relation(fields: [findingSetId], references: [id], onDelete: Cascade)
+  rootFindingId       Int
+  rootFinding         DiagnosisFinding    @relation("DiagnosisRootCandidateSupportRoot", fields: [rootFindingId], references: [id], onDelete: Cascade)
+  supportingFindingId Int
+  supportingFinding   DiagnosisFinding    @relation("DiagnosisRootCandidateSupportChild", fields: [supportingFindingId], references: [id], onDelete: Cascade)
+  role                String              @db.VarChar(48)
+  supportJson         Json
+  createdAt           DateTime            @default(now())
+
+  @@unique([rootFindingId, supportingFindingId], map: "DiagnosisRootCandidateSupport_root_supporting_key")
+  @@index([findingSetId])
+  @@index([supportingFindingId])
+}
