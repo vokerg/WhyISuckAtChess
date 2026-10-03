@@ -303,7 +303,15 @@ Then apply overlap state:
 
 Ranking must expose component values, raw metric/effect, evidence multiplier, overlap/consolidation state, final score, and ranking-policy version.
 
-### 11.1 Tie breaking
+### 11.1 V1 execution registry
+
+Issue #88 executes this policy with the fixed normalization registry documented in `docs/diagnosis-ranking.md`. Frequency uses `distinctGameCount` with fixed 5/40 anchors; evidence uses required-evidence coverage directly; positive distinct-session recurrence uses fixed 1/5 anchors; and specificity uses a fixed finding-level mapping. Severity must match an exact registered raw effect metric/unit/direction; synthesized roots derive severity from their strongest normalized mandatory child while retaining child raw effects.
+
+V1 does not fabricate result-impact, conditional-concentration, or recency scalars when the canonical finding contract does not independently expose them. Those optional weights are omitted from both numerator and denominator. Any added component source, changed severity anchor/orientation, or changed specificity mapping requires a ranking-policy version bump.
+
+Root-support children remain persisted drill-down ranking rows but do not receive independent top-level positions while their supported synthesized root is current. This is the ranking-side anti-double-counting boundary.
+
+### 11.2 Tie breaking
 
 Exact final-score ties are ordered deterministically by:
 
@@ -385,7 +393,6 @@ This policy does not implement:
 - candidate adapters;
 - graph persistence;
 - consolidation execution;
-- ranking execution;
 - Phase 6 API/UI;
 - AI explanation;
 - causal or psychological inference;
