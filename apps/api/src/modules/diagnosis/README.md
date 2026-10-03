@@ -1,6 +1,6 @@
 # diagnosis module seam
 
-Owns bounded cross-game aggregation, evidence strength/coverage, finding construction, relationship/deduplication, and later diagnosis synthesis. This module must not import Lichess/provider DTOs directly.
+Owns bounded cross-game aggregation, evidence strength/coverage, finding construction, relationship/deduplication, root synthesis, and deterministic ranking. This module must not import provider/Lichess DTOs, web/UI code, or AI-provider code directly.
 
 Issue #52 adds the first implemented Phase 4 aggregate: `session-deterioration-v1` composes the `sessions` boundary with current complete engine move-quality evidence for `SESSION-001`. It remains aggregate evidence only; persistence, ranking, API/UI exposure, and psychological interpretation stay outside this slice.
 
@@ -111,4 +111,16 @@ Issue #88 implements persisted `diagnosis-ranking-v1` execution; see `docs/diagn
 - `DiagnosisFindingRanking` persists one derived ranking row per ranked/drill-down finding on the immutable finding set; stale/superseded set writes fail closed.
 - exact-score ties use evidence grade, distinct-game count, diagnosis ID, then stable finding key.
 
-The Phase 5 integration/acceptance pass (#89) is the next leaf.
+## Phase 5 integration acceptance
+
+Issue #89 accepts the complete deterministic Phase 5 hierarchy described in `docs/phase-5-acceptance.md`.
+
+- `phase-5-acceptance.test.mjs` composes current candidate projection, event overlap, typed relationships, consolidation, root synthesis, hierarchy refresh, and ranking across one canonical synthetic scope.
+- `TIME-002` candidate projection preserves its `RATING-002` composition result so the generic graph can persist explicit `CONFOUNDED_BY` semantics without silently adjusting the measured effect.
+- material overlap between a current synthesized root and the child finding whose stable events it deliberately copies remains measurable, but consolidation no longer treats that known support pair as unresolved duplicate evidence or applies the #88 overlap penalty to the root.
+- overlapping specific/generic labels collapse to drill-down through the accepted typed relationship + material-overlap contract; root children remain non-top-level ranking rows while unrelated findings retain independent ranks.
+- sparse evidence remains `INSUFFICIENT_EVIDENCE` rather than becoming either a positive or a clean negative; stale synthesis/ranking versions fail closed.
+- the candidate registry continues to expose unsupported taxonomy breadth rather than inventing aggregates. `CAL-001` remains deferred until authoritative user IANA timezone data exists.
+- diagnosis architecture guardrails reject provider, Angular/Chessground/web UI, and AI-provider imports. Phase 6 explanation may consume bounded accepted outputs but cannot become calculation authority.
+
+With #89 merged, #80's Phase 5 deterministic engine milestone is complete; the next product work is Phase 6 read models/explanation/UI.
