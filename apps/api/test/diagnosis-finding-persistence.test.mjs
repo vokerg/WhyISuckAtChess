@@ -524,3 +524,54 @@ test('root-cause candidates use the same canonical lifecycle without detector-on
 
   assert.doesNotThrow(() => validateDiagnosisFindingSetDraft(1, draft));
 });
+
+test('root support validation fences same-draft identity and support roles', () => {
+  const mechanism = baseFinding({
+    findingKey: 'mechanism-child',
+    diagnosisId: 'TIME-004',
+    findingLevel: 'MECHANISM',
+  });
+  const root = baseFinding({
+    findingKey: 'root-clock-management',
+    diagnosisId: 'CLOCK_MANAGEMENT_DRIVING_TACTICAL_COLLAPSE',
+    findingLevel: 'ROOT_CAUSE_CANDIDATE',
+    claimKey: 'root.clock-management-driving-tactical-collapse',
+    producerKey: 'diagnosis-root-synthesis',
+    producerVersion: 'diagnosis-synthesis-v1',
+  });
+  const draft = {
+    ...findingSet('root-support-fixture', mechanism),
+    findings: [mechanism, root],
+    rootSupports: [{
+      rootFindingKey: root.findingKey,
+      supportingFindingKey: mechanism.findingKey,
+      role: 'MECHANISM',
+      support: { fixture: true },
+    }],
+  };
+
+  assert.doesNotThrow(() => validateDiagnosisFindingSetDraft(1, draft));
+
+  assert.throws(
+    () => validateDiagnosisFindingSetDraft(1, {
+      ...draft,
+      rootSupports: [{
+        ...draft.rootSupports[0],
+        role: 'CONDITION_OR_OBSERVATION',
+      }],
+    }),
+    /condition or observation/,
+  );
+
+  assert.throws(
+    () => validateDiagnosisFindingSetDraft(1, {
+      ...draft,
+      rootSupports: [{
+        ...draft.rootSupports[0],
+        supportingFindingKey: 'missing-child',
+      }],
+    }),
+    /same draft/,
+  );
+});
+
