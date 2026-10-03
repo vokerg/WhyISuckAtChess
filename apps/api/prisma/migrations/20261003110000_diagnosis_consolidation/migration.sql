@@ -11,7 +11,7 @@ CREATE TABLE "DiagnosisFindingConsolidation" (
     "state" VARCHAR(48) NOT NULL,
     "topLevelEligible" BOOLEAN NOT NULL,
     "clusterKey" VARCHAR(160) NOT NULL,
-    "reasonKeys" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "reasonKeys" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "policyVersion" VARCHAR(64) NOT NULL,
     "supportJson" JSONB NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
