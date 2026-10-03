@@ -46,3 +46,17 @@ Representative evidence is limited to the existing Phase 5 maximum of three exam
 ## Phase boundary
 
 This endpoint is the first Phase 6 read boundary. Angular diagnosis summary/drill-down views and optional grounded explanation can build on it. AI may explain accepted output later, but it must not create, suppress, promote, or rank authoritative findings.
+
+
+## Phase 6 web consumer
+
+Issue #102 adds the first Angular consumer at `/diagnosis`.
+
+- the application root redirects to the diagnosis summary rather than the imported-game library;
+- the page requests only the current owned `overall` scope through the shared response schema;
+- backend `UNAVAILABLE` states remain distinct from transport/schema failures;
+- findings are rendered in the persisted response order with rank, evidence strength, sample/game/session counts, required coverage, raw effect data, and policy versions visible;
+- representative evidence with an imported-game ID links to the existing `/games/:gameId` replay route;
+- the web layer contains presentation labels only. It does not calculate scores, re-rank findings, promote/suppress hierarchy members, or infer new chess facts.
+
+The summary remains intentionally shallow. Drill-down, comparison views, and optional grounded explanation require their own bounded backend contracts rather than reaching into diagnosis persistence from Angular.

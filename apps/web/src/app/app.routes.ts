@@ -1,10 +1,12 @@
 import type { Routes } from '@angular/router';
+import { DiagnosisSummaryPageComponent } from './features/diagnosis/pages/diagnosis-summary-page.component';
 import { GameReplayPageComponent } from './features/games/pages/game-replay-page.component';
 import { ImportedGamesPageComponent } from './features/games/pages/imported-games-page.component';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'games' },
+  { path: '', pathMatch: 'full', redirectTo: 'diagnosis' },
+  { path: 'diagnosis', component: DiagnosisSummaryPageComponent },
   { path: 'games', component: ImportedGamesPageComponent },
   { path: 'games/:gameId', component: GameReplayPageComponent },
-  { path: '**', redirectTo: 'games' },
+  { path: '**', redirectTo: 'diagnosis' },
 ];

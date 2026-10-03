@@ -7,7 +7,7 @@
     "build": "ng build",
     "typecheck": "ngc -p tsconfig.app.json --noEmit",
     "lint": "npm run typecheck",
-    "test": "npm run build --workspace=@why-i-suck-at-chess/contracts && node --experimental-strip-types --test test/*.test.mjs && ngc -p tsconfig.integration-test.json && esbuild ../../dist/out-tsc/web-integration/test/replay-evidence.integration.test.js --bundle --platform=node --format=esm --packages=external --outfile=../../dist/out-tsc/web-integration/replay-evidence.integration.test.mjs && node --test ../../dist/out-tsc/web-integration/replay-evidence.integration.test.mjs"
+    "test": "npm run build --workspace=@why-i-suck-at-chess/contracts && node --experimental-strip-types --test test/*.test.mjs && ngc -p tsconfig.integration-test.json && esbuild ../../dist/out-tsc/web-integration/test/replay-evidence.integration.test.js --bundle --platform=node --format=esm --packages=external --outfile=../../dist/out-tsc/web-integration/replay-evidence.integration.test.mjs && esbuild ../../dist/out-tsc/web-integration/test/diagnosis-summary.integration.test.js --bundle --platform=node --format=esm --packages=external --outfile=../../dist/out-tsc/web-integration/diagnosis-summary.integration.test.mjs && node --test ../../dist/out-tsc/web-integration/replay-evidence.integration.test.mjs ../../dist/out-tsc/web-integration/diagnosis-summary.integration.test.mjs"
   },
   "dependencies": {
     "@angular/common": "^21.2.19",
