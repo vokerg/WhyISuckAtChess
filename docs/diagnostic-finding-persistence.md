@@ -17,6 +17,7 @@ owned current source evidence / aggregates
      -> DiagnosisFinding
         -> DiagnosisFindingEvidenceReference
      -> DiagnosisFindingRelationship (persistence seam only)
+     -> DiagnosisRootCandidateSupport
 ```
 
 A recalculation creates a new set and supersedes the previous current set atomically. Historical sets remain queryable. Current reads require the caller's expected taxonomy, synthesis, calculation, and complete policy-version tuple; a row from an older tuple fails closed rather than masquerading as current.
@@ -69,6 +70,12 @@ Evidence references are child records, not copies of source facts. A reference c
 
 Recalculation or deletion of finding sets only deletes derived reference rows. It never cascades from a finding into imported games, evidence events, or analysis runs.
 
+### `DiagnosisRootCandidateSupport`
+
+Issue #87 adds a same-revision support seam for synthesized roots. Each row links one canonical `ROOT_CAUSE_CANDIDATE` finding to one supporting canonical finding in the same immutable finding set, records the support role (`MECHANISM`, `CONDITION_OR_OBSERVATION`, or `ADDITIONAL_SUPPORT`), and keeps inspectable synthesis support JSON.
+
+The service validates root/support finding keys before persistence. The repository resolves those keys to the newly created finding IDs after all findings in the replacement revision exist, so #87 preserves durable current supporting finding IDs rather than only historical IDs embedded in JSON.
+
 ### `DiagnosisFindingRelationship`
 
 Issue #82 reserves the durable finding-to-finding relationship seam with source/target canonical finding IDs, registered relationship type, policy version, and support payload.
@@ -87,7 +94,8 @@ Issue #85 owns relationship construction, allowed-edge enforcement, current-grap
 6. reject one reference that mixes sources from different games;
 7. supersede the previous current set for the scope;
 8. create the replacement set, findings, and evidence references;
-9. return the newly current immutable snapshot.
+9. create any validated same-revision root-candidate support links after finding IDs exist;
+10. return the newly current immutable snapshot.
 
 A transaction failure leaves the previous set current.
 
