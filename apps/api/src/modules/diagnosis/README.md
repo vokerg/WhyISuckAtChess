@@ -59,7 +59,7 @@ Issue #84 implements `diagnosis-event-identity-v1` and deterministic pair/cluste
 - opening recurrence plies and complete `TIME-004` chain games carry stable event identity where the upstream source shape is sufficient.
 - cluster work is bounded by the shared 200-current-findings / 1,000-references-per-finding policy; truncated reference sets are not upgraded to authoritative overlap.
 
-Relationship construction (#85), consolidation (#86), root synthesis (#87), and ranking (#88) remain subsequent Phase 5 leaves.
+Relationship construction (#85) and consolidation (#86) now consume this overlap boundary; root synthesis (#87) and ranking (#88) remain subsequent Phase 5 leaves.
 
 ## Phase 5 typed relationship graph
 
@@ -71,5 +71,17 @@ Issue #85 adds `diagnosis-relationship-graph-v1`; see `docs/diagnosis-relationsh
 - context values remain dimensions; they are never persisted as graph nodes.
 - graph generation is bounded, deterministic, and versioned with `diagnosis-synthesis-v1`.
 
-Consolidation (#86), synthesized root candidates (#87), and ranking (#88) consume this graph but remain outside #85.
+Consolidation (#86) consumes this graph; synthesized root candidates (#87) and ranking (#88) remain outside #85.
 
+
+## Phase 5 deterministic consolidation
+
+Issue #86 adds `diagnosis-consolidation-v1`; see `docs/diagnosis-consolidation.md`.
+
+- `diagnosis-consolidation.service.ts` consumes current canonical findings, #84 overlap, and persisted #85 relationship edges without recomputing detector facts.
+- specific supported mechanisms may suppress materially overlapping generic observations/broader mechanisms only through `SPECIALIZES` or `EXPLAINS_OBSERVATION`; incomplete or sub-material overlap fails closed.
+- contributing conditions and explicit confounders remain visible, while unresolved material overlap remains independently rankable but explicitly marked for #88's overlap multiplier.
+- `DiagnosisFindingConsolidation` persists one explicit hierarchy state per current finding, including top-level eligibility, representative/cluster membership, deterministic reason keys, policy version, and inspectable support.
+- recalculation atomically replaces derived consolidation state for the current finding set; canonical findings and source evidence are never deleted or rewritten.
+
+Root-cause synthesis (#87) and deterministic ranking (#88) consume this hierarchy and remain subsequent Phase 5 leaves.
