@@ -285,6 +285,16 @@ test('canonical finding persistence replaces current scope without deleting sour
         'finding-materialization-v2',
       ),
       findings: [revisedTimeFinding, rootCandidate],
+      rootSupports: [{
+        rootFindingKey: 'root-clock-tactics',
+        supportingFindingKey: 'time-pressure-collapse',
+        role: 'MECHANISM',
+        support: {
+          sourceFindingSetId: first.id,
+          sourceFindingId: first.findings[0].id,
+          relationshipType: 'CONTRIBUTES_TO',
+        },
+      }],
     };
 
     const second = await replaceCurrentDiagnosisFindingScope(
@@ -306,6 +316,11 @@ test('canonical finding persistence replaces current scope without deleting sour
     );
     assert.equal(persistedRootCandidate?.findingLevel, 'ROOT_CAUSE_CANDIDATE');
     assert.equal(persistedRootCandidate?.producerKey, 'diagnosis-root-synthesis');
+    assert.equal(second.rootSupports.length, 1);
+    assert.equal(second.rootSupports[0].rootFindingId, persistedRootCandidate?.id);
+    assert.equal(second.rootSupports[0].supportingFindingId, persistedTimeFinding?.id);
+    assert.equal(second.rootSupports[0].role, 'MECHANISM');
+    assert.equal(second.rootSupports[0].support.sourceFindingSetId, first.id);
 
     const historical = await prisma.diagnosisFindingSet.findUniqueOrThrow({
       where: { id: first.id },
