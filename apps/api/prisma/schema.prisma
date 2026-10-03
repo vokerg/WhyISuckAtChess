@@ -399,6 +399,7 @@ model DiagnosisFindingSet {
   updatedAt              DateTime                      @updatedAt
   findings               DiagnosisFinding[]
   relationships          DiagnosisFindingRelationship[]
+  consolidations          DiagnosisFindingConsolidation[]
 
   @@unique([appUserId, materializationKey], map: "DiagnosisFindingSet_appUserId_materializationKey_key")
   @@index([appUserId, scopeKey, createdAt])
@@ -432,6 +433,8 @@ model DiagnosisFinding {
   evidenceReferences       DiagnosisFindingEvidenceReference[]
   outgoingRelationships    DiagnosisFindingRelationship[]       @relation("DiagnosisRelationshipSource")
   incomingRelationships    DiagnosisFindingRelationship[]       @relation("DiagnosisRelationshipTarget")
+  consolidationState       DiagnosisFindingConsolidation?         @relation("DiagnosisConsolidationFinding")
+  representedConsolidations DiagnosisFindingConsolidation[]        @relation("DiagnosisConsolidationRepresentative")
 
   @@unique([findingSetId, findingKey])
   @@index([findingSetId, diagnosisId])
@@ -480,5 +483,26 @@ model DiagnosisFindingRelationship {
   @@unique([findingSetId, sourceFindingId, targetFindingId, relationshipType], map: "DiagnosisFindingRelationship_set_source_target_type_key")
   @@index([sourceFindingId])
   @@index([targetFindingId])
+}
+
+
+model DiagnosisFindingConsolidation {
+  id                      Int                 @id @default(autoincrement())
+  findingSetId            Int
+  findingSet              DiagnosisFindingSet @relation(fields: [findingSetId], references: [id], onDelete: Cascade)
+  findingId               Int                 @unique
+  finding                 DiagnosisFinding    @relation("DiagnosisConsolidationFinding", fields: [findingId], references: [id], onDelete: Cascade)
+  representativeFindingId Int?
+  representativeFinding   DiagnosisFinding?   @relation("DiagnosisConsolidationRepresentative", fields: [representativeFindingId], references: [id], onDelete: Cascade)
+  state                   String              @db.VarChar(48)
+  topLevelEligible        Boolean
+  clusterKey              String              @db.VarChar(160)
+  reasonKeys              String[]            @default([])
+  policyVersion           String              @db.VarChar(64)
+  supportJson             Json
+  createdAt               DateTime            @default(now())
+
+  @@index([findingSetId])
+  @@index([representativeFindingId])
 }
 
