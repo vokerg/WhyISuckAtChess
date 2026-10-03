@@ -257,6 +257,39 @@ test('mandatory child coverage below 50 percent fails closed', () => {
   assert.equal(result.findings.length, 0);
 });
 
+test('stale mechanism event identity cannot promote a root', () => {
+  const mechanism = mechanismFinding(1, 'TIME-004');
+  mechanism.evidenceReferences = mechanism.evidenceReferences.map((reference) => ({
+    ...reference,
+    eventIdentityKey: reference.eventIdentityKey.replace(
+      'diagnosis-event-identity-v1',
+      'diagnosis-event-identity-v0',
+    ),
+  }));
+  const fixture = clockFixture({ mechanism });
+
+  const result = buildDiagnosisRootCandidates(fixture.snapshot);
+  assert.equal(result.findings.length, 0);
+});
+
+test('stale relationship graph support is rejected', () => {
+  const mechanism = mechanismFinding(1, 'TIME-004');
+  const context = contextFinding(2, 'TIME-002');
+  const source = snapshot([mechanism, context], [
+    relationship(10, mechanism, context, 'CONTRIBUTES_TO', {
+      support: {
+        graphVersion: 'diagnosis-relationship-graph-v0',
+        ruleKey: 'stale-fixture',
+      },
+    }),
+  ]);
+
+  assert.throws(
+    () => buildDiagnosisRootCandidates(source),
+    /stale relationship graph version/,
+  );
+});
+
 test('one-game event concentration above the v1 maximum cannot promote', () => {
   const findingKey = 'time-004-concentrated';
   const games = [1, 1, 1, 1, 1, 1, 2, 3, 4, 5];
