@@ -1,6 +1,6 @@
 # Implementation architecture and dependency graph
 
-**Status:** Phase 1 canonical implementation architecture, updated through the Phase 5 diagnosis-policy foundation  
+**Status:** Phase 1 canonical implementation architecture, updated through the accepted Phase 5 diagnosis engine  
 **Scope:** issue #8  
 **Parent:** issue #1  
 **Depends on:** issues #2, #3, and #4  
@@ -40,6 +40,8 @@ Exact Prisma model names, SQL indexes, endpoint paths, and TypeScript symbol nam
 > **Phase 4B timing-policy update (2026-09-19):** issue #57 adds `time-behavior-v1` as the shared deterministic contract for pressure/ample/fast timing states, exact-control/phase matching, rating-composition warnings, and 50% plus 5/15/40 evidence gates. It remains a timing-module policy consumed by later diagnosis aggregates; no `TIME-*` finding is implemented by the policy itself. See `docs/time-behavior-analysis.md`.
 >
 > **Phase 5 diagnosis-policy update (2026-09-21):** issue #81 adds the framework-neutral `diagnosis-synthesis-v1`, `diagnosis-consolidation-v1`, `diagnosis-ranking-v1`, and `diagnosis-event-identity-v1` contract. It freezes finding lifecycle/version semantics, stable evidence-event identity, relationship direction, material overlap, consolidation, registered root themes, deterministic ranking inputs/tie-breaking, representative evidence, staleness, and boundedness before the persistence/graph/ranking leaves implement them. See `docs/diagnosis-synthesis-ranking-policy.md` and `packages/chess-domain/src/diagnosis-policy.ts`.
+>
+> **Phase 5 acceptance update (2026-10-03):** issue #89 accepts the composed candidate -> finding revision -> overlap -> typed relationship -> consolidation -> root synthesis -> refreshed hierarchy -> deterministic ranking path. The acceptance pass preserves `TIME-002` rating-composition provenance, excludes known synthesized-root/child proof reuse from unresolved-overlap penalties, hardens diagnosis provider/UI/AI import guardrails, and leaves unsupported taxonomy producer breadth explicit. See `docs/phase-5-acceptance.md`.
 
 ---
 
@@ -585,11 +587,30 @@ DiagnosisFindingRelationship
   targetFindingId
   registered relationship type
   policy version / support
+
+DiagnosisFindingConsolidation
+  findingSetId / findingId
+  representative finding / cluster
+  top-level eligibility + explicit state/reasons
+  consolidation policy version / support
+
+DiagnosisRootCandidateSupport
+  findingSetId
+  synthesized rootFindingId
+  supportingFindingId
+  role: mechanism / condition-or-observation / additional
+  frozen source proof
+
+DiagnosisFindingRanking
+  findingSetId / findingId
+  top-level vs drill-down rank state
+  normalized component values / multipliers / final score
+  ranking policy + calculation version
 ```
 
-One `appUserId + scopeKey` has at most one current finding set. Recalculation atomically supersedes the old set and creates a new immutable revision; source imported-game/evidence/analysis rows are never owned or deleted by this lifecycle. The relationship table is only a persistence seam in #82; #85 owns graph construction and typed-edge policy execution.
+One `appUserId + scopeKey` has at most one current finding set. Recalculation atomically supersedes the old set and creates a new immutable revision; source imported-game/evidence/analysis rows are never owned or deleted by this lifecycle. #85 constructs typed relationship rows, #86 derives non-destructive consolidation state, #87 may publish a replacement revision containing registered synthesized roots plus same-revision root-support links, and #88 persists deterministic ranking only after the replacement hierarchy has been refreshed.
 
-Relationships remain finding-to-finding. Raw contextual dimensions are not disguised as finding targets.
+Relationships remain finding-to-finding. Raw contextual dimensions are not disguised as finding targets. Known synthesized-root/child event reuse remains inspectable overlap but is not classified as an unresolved material-overlap cluster, because those copied events are the root's explicit proof rather than an independent duplicate diagnosis.
 
 ### 4.12 Read models are not source-of-truth migrations
 
@@ -966,7 +987,7 @@ Add executable checks or lint/import rules for at least:
 
 - `packages/chess-domain` cannot import Prisma, Fastify, Angular, provider clients, or application modules;
 - `packages/contracts` cannot import Prisma models;
-- `diagnosis` cannot import Lichess provider adapter/DTO modules;
+- `diagnosis` cannot import Lichess/provider adapter/DTO modules or Angular/Chessground/web UI code;
 - deterministic `evidence`/`diagnosis` code cannot depend on an AI provider;
 - `apps/web` cannot import backend/Prisma modules;
 - provider adapters cannot import diagnosis/UI modules;
