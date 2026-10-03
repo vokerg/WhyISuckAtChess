@@ -60,3 +60,33 @@ Issue #102 adds the first Angular consumer at `/diagnosis`.
 - the web layer contains presentation labels only. It does not calculate scores, re-rank findings, promote/suppress hierarchy members, or infer new chess facts.
 
 The summary remains intentionally shallow. Drill-down, comparison views, and optional grounded explanation require their own bounded backend contracts rather than reaching into diagnosis persistence from Angular.
+
+
+## Phase 6 drill-down read model
+
+Issue #104 adds the first bounded detail boundary:
+
+`GET /api/diagnosis/findings/:findingId?scopeKey=<scope>`
+
+The endpoint reuses the available diagnosis summary as the authority for the selected parent. A finding ID is accepted only when it is a current persisted top-level ranked finding in the authenticated user's requested scope. IDs outside that current summary return `UNAVAILABLE / FINDING_NOT_FOUND` and do not trigger a broader lookup.
+
+For an available parent, the repository reads only child `DiagnosisFindingRanking` rows whose persisted `parentRootFindingIds` contains that parent. Each returned child must also have exactly one same-revision `DiagnosisRootCandidateSupport` row for that parent; the API exposes only its typed role (`MECHANISM`, `CONDITION_OR_OBSERVATION`, or `ADDITIONAL_SUPPORT`). It does not infer a relationship from diagnosis IDs, finding levels, effect similarity, or browser rules.
+
+Supporting findings expose:
+
+- stable finding/diagnosis identifiers and claim;
+- finding level and observation state;
+- evidence strength and sample/game/session counts;
+- required evidence coverage;
+- the raw effect tuple when complete;
+- persisted consolidation state and persisted final score;
+- the support role for the selected root;
+- up to three representative evidence references.
+
+Supporting rows intentionally have no independent rank position. Phase 5 persists them as drill-down ranking state beneath supported synthesized roots, so Phase 6 preserves the parent assignment and final score without promoting children back into the top-level list.
+
+The drill-down response reuses the summary's finding-set identity, calculation timestamp, and version tuple. Stale/incomplete ranking or hierarchy state remains unavailable, and a current-revision race fails closed rather than mixing finding generations.
+
+The same privacy boundary applies as the summary: no `coverageJson`, `sourceVersionsJson`, ranking components/support blobs, root-support proof blobs, provider credentials, or AI output cross the HTTP contract. The current finding-set policy bounds the drill-down population to at most 200 current findings and representative evidence remains capped at three references per finding.
+
+This backend contract is a future seam for an Angular drill-down page and optional grounded explanation. Those consumers may present accepted facts, but they must not recalculate hierarchy, assign child ranks, or create new diagnosis claims.
