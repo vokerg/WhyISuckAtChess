@@ -42,6 +42,12 @@ for (const file of await sourceFiles('apps/api/src/modules/diagnosis')) {
     if (/lichess|provider|account-imports\/providers/i.test(specifier)) {
       violations.push(`${file}: diagnosis must not import provider code (${specifier})`);
     }
+    if (/@angular|chessground|(^|\/)(?:apps\/web|web\/src)(?:\/|$)/i.test(specifier)) {
+      violations.push(`${file}: diagnosis must not import UI code (${specifier})`);
+    }
+    if (/openai|anthropic|gemini|ai-sdk|(^|\/)ai(?:\/|$)/i.test(specifier)) {
+      violations.push(`${file}: diagnosis must not depend on AI (${specifier})`);
+    }
   }
 }
 
