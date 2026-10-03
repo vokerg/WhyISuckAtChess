@@ -124,3 +124,15 @@ Issue #89 accepts the complete deterministic Phase 5 hierarchy described in `doc
 - diagnosis architecture guardrails reject provider, Angular/Chessground/web UI, and AI-provider imports. Phase 6 explanation may consume bounded accepted outputs but cannot become calculation authority.
 
 With #89 merged, #80's Phase 5 deterministic engine milestone is complete; the next product work is Phase 6 read models/explanation/UI.
+
+## Phase 6 diagnosis summary read model
+
+Issue #100 introduces the first Phase 6 consumer boundary; see `docs/diagnosis-summary-read-model.md`.
+
+- `diagnosis-summary.repository.prisma.ts` performs an ownership-scoped read of the one current finding set and projects only fields required by the product contract.
+- `diagnosis-summary.service.ts` validates current synthesis/consolidation/ranking generations and persisted rank completeness; it never runs diagnosis recalculation.
+- `diagnosis.routes.ts` exposes authenticated `GET /api/diagnosis/summary?scopeKey=...` through strict shared contracts.
+- only persisted top-level ranked findings cross the summary boundary; synthesized-root children remain drill-down state and representative evidence is bounded to three references.
+- stale/incomplete hierarchy state is returned explicitly as unavailable instead of exposing a partially recalculated diagnosis.
+
+This is a read boundary only. Later Phase 6 UI and optional AI explanation must consume it (or similarly bounded drill-down contracts) rather than importing diagnosis persistence or becoming calculation authority.
