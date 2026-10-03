@@ -533,6 +533,7 @@ function projectTimePressureQuality(source: TimePressureQualityResult): Diagnosi
       ...source.coverage,
       baseline: source.comparison.baseline,
       pressure: source.comparison.pressure,
+      ratingComposition: source.ratingComposition,
       sourceReferenceStatus: 'SOURCE_AGGREGATE_DOES_NOT_EXPOSE_GAME_IDS',
     },
     effect: worseningQualityDeltaEffect(
