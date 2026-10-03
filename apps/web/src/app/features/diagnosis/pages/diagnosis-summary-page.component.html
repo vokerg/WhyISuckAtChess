@@ -1,0 +1,134 @@
+<main class="diagnosis-page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Why I suck at chess</p>
+      <h1>Your ranked weaknesses</h1>
+      <p class="hero-copy">
+        This is the current deterministic diagnosis: ranked findings backed by persisted evidence,
+        not a fresh interpretation calculated in the browser.
+      </p>
+    </div>
+    <a class="secondary-link" routerLink="/games">Browse imported games</a>
+  </header>
+
+  @if (error(); as message) {
+    <section class="state-card error" role="alert">
+      <div>
+        <p class="state-kicker">Request failed</p>
+        <h2>Diagnosis could not be loaded</h2>
+        <p>{{ message }}</p>
+      </div>
+      <button type="button" (click)="load()">Try again</button>
+    </section>
+  } @else if (loading()) {
+    <section class="state-card" aria-live="polite">
+      <p class="state-kicker">Loading</p>
+      <h2>Reading the current diagnosis…</h2>
+      <p>The page waits for the authoritative persisted ranking instead of reconstructing it locally.</p>
+    </section>
+  } @else if (summary(); as current) {
+    @if (current.status === 'UNAVAILABLE') {
+      <section class="state-card">
+        <p class="state-kicker">Diagnosis unavailable</p>
+        <h2>There is no complete current answer to show yet</h2>
+        <p>{{ unavailableMessageFor(current.reason) }}</p>
+        <a routerLink="/games">Inspect the game evidence that is already available</a>
+      </section>
+    } @else {
+      <section class="summary-strip" aria-label="Diagnosis summary metadata">
+        <div>
+          <span>Ranked findings</span>
+          <strong>{{ current.items.length }}</strong>
+        </div>
+        <div>
+          <span>Scope</span>
+          <strong>{{ current.scopeKey }}</strong>
+        </div>
+        <div>
+          <span>Finding set</span>
+          <strong>#{{ current.findingSetId }}</strong>
+        </div>
+        <div class="wide">
+          <span>Calculated</span>
+          <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
+        </div>
+      </section>
+
+      @if (current.items.length === 0) {
+        <section class="state-card">
+          <p class="state-kicker">No ranked weaknesses</p>
+          <h2>The current diagnosis has no top-level findings</h2>
+          <p>This is different from missing or stale data: the persisted diagnosis is available, but its ranked list is empty.</p>
+        </section>
+      } @else {
+        <ol class="finding-list" aria-label="Ranked diagnosis findings">
+          @for (item of current.items; track trackFinding($index, item)) {
+            <li class="finding-card">
+              <div class="rank-badge" aria-label="Rank {{ item.rankPosition }}">#{{ item.rankPosition }}</div>
+
+              <div class="finding-body">
+                <div class="finding-heading">
+                  <div>
+                    <p class="diagnosis-id">{{ item.diagnosisId }}</p>
+                    <h2>{{ titleFor(item) }}</h2>
+                    <p class="claim">{{ claimFor(item) }}</p>
+                  </div>
+                  <div class="evidence-strength" [attr.data-strength]="item.evidenceStrength">
+                    {{ item.evidenceStrength }} evidence
+                  </div>
+                </div>
+
+                <dl class="metrics">
+                  <div>
+                    <dt>Rank score</dt>
+                    <dd>{{ scoreFor(item.finalScore) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Samples</dt>
+                    <dd>{{ item.sampleCount }}</dd>
+                  </div>
+                  <div>
+                    <dt>Games</dt>
+                    <dd>{{ item.distinctGameCount }}</dd>
+                  </div>
+                  <div>
+                    <dt>Sessions</dt>
+                    <dd>{{ item.distinctSessionCount }}</dd>
+                  </div>
+                  <div>
+                    <dt>Required coverage</dt>
+                    <dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd>
+                  </div>
+                </dl>
+
+                @if (effectFor(item); as effect) {
+                  <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+                }
+
+                @if (item.representativeEvidence.length > 0) {
+                  <section class="evidence-section" aria-label="Representative evidence">
+                    <h3>Representative evidence</h3>
+                    <div class="evidence-links">
+                      @for (evidence of item.representativeEvidence; track trackEvidence($index, evidence)) {
+                        @if (evidenceHrefFor(evidence); as href) {
+                          <a [routerLink]="href">{{ evidenceLabelFor(evidence) }}</a>
+                        } @else {
+                          <span>{{ evidenceLabelFor(evidence) }}</span>
+                        }
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+      }
+
+      <footer class="version-note">
+        Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
+        calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
+      </footer>
+    }
+  }
+</main>
