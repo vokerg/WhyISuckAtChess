@@ -34,6 +34,9 @@ async function loadSet(
       consolidations: {
         orderBy: { findingId: 'asc' },
       },
+      rootCandidateSupports: {
+        orderBy: { id: 'asc' },
+      },
     },
   });
 
@@ -114,6 +117,13 @@ async function loadSet(
       reasonKeys: consolidation.reasonKeys,
       policyVersion: consolidation.policyVersion,
       support: consolidation.supportJson,
+    })),
+    rootSupports: row.rootCandidateSupports.map((support) => ({
+      id: support.id,
+      rootFindingId: support.rootFindingId,
+      supportingFindingId: support.supportingFindingId,
+      role: support.role,
+      support: support.supportJson,
     })),
   };
 }
@@ -227,6 +237,8 @@ async function createFindingSet(
     select: { id: true },
   });
 
+  const findingIdsByKey = new Map<string, number>();
+
   for (const finding of draft.findings) {
     const created = await tx.diagnosisFinding.create({
       data: {
@@ -256,6 +268,7 @@ async function createFindingSet(
       },
       select: { id: true },
     });
+    findingIdsByKey.set(finding.findingKey, created.id);
 
     if (finding.evidenceReferences.length > 0) {
       await tx.diagnosisFindingEvidenceReference.createMany({
@@ -275,6 +288,26 @@ async function createFindingSet(
         })),
       });
     }
+  }
+
+  const rootSupports = draft.rootSupports ?? [];
+  if (rootSupports.length > 0) {
+    await tx.diagnosisRootCandidateSupport.createMany({
+      data: rootSupports.map((support) => {
+        const rootFindingId = findingIdsByKey.get(support.rootFindingKey);
+        const supportingFindingId = findingIdsByKey.get(support.supportingFindingKey);
+        if (!rootFindingId || !supportingFindingId) {
+          throw new Error('Diagnosis root support references a missing persisted finding.');
+        }
+        return {
+          findingSetId: set.id,
+          rootFindingId,
+          supportingFindingId,
+          role: support.role,
+          supportJson: jsonValue(support.support),
+        };
+      }),
+    });
   }
 
   return set.id;
