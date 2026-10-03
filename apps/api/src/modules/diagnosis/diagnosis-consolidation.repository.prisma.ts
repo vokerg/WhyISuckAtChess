@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { DIAGNOSIS_CONSOLIDATION_POLICY_VERSION } from '@why-i-suck-at-chess/chess-domain';
 import prisma from '../../prisma';
 import type { PersistedDiagnosisFindingConsolidation } from './diagnosis-finding.types';
 import { prismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
@@ -63,6 +64,9 @@ function assertUniqueDrafts(
     }
     if (draft.representativeFindingId === draft.findingId) {
       throw new Error('Diagnosis consolidation cannot represent a finding with itself.');
+    }
+    if (draft.policyVersion !== DIAGNOSIS_CONSOLIDATION_POLICY_VERSION) {
+      throw new Error('Diagnosis consolidation draft uses a stale policy version.');
     }
     if (draft.clusterKey.length === 0 || draft.clusterKey.length > 160) {
       throw new RangeError('Diagnosis consolidation clusterKey must contain 1-160 characters.');
