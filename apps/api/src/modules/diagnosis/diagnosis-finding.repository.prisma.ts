@@ -31,6 +31,9 @@ async function loadSet(
       relationships: {
         orderBy: { id: 'asc' },
       },
+      consolidations: {
+        orderBy: { findingId: 'asc' },
+      },
     },
   });
 
@@ -100,6 +103,17 @@ async function loadSet(
       relationshipType: relationship.relationshipType,
       policyVersion: relationship.policyVersion,
       support: relationship.supportJson,
+    })),
+    consolidations: row.consolidations.map((consolidation) => ({
+      id: consolidation.id,
+      findingId: consolidation.findingId,
+      representativeFindingId: consolidation.representativeFindingId,
+      state: consolidation.state,
+      topLevelEligible: consolidation.topLevelEligible,
+      clusterKey: consolidation.clusterKey,
+      reasonKeys: consolidation.reasonKeys,
+      policyVersion: consolidation.policyVersion,
+      support: consolidation.supportJson,
     })),
   };
 }
