@@ -104,6 +104,14 @@ The page preserves backend semantics:
 
 The consumer is presentation-only. It does not fetch ranking-component blobs, support proof blobs, provider data or AI output; it does not synthesize new claims or modify the persisted hierarchy. Future comparison/explanation work must use its own bounded authority-preserving contract.
 
+## Phase 6 read-only evidence interpretation
+
+Issue #110 adds a reusable accessible `How to read this diagnosis` disclosure to the AVAILABLE summary and drill-down views. It adapts CRT's Player Chess Profile coverage-note presentation pattern, without importing the profile's derived metrics or introducing any new data access.
+
+The guide distinguishes normalized persisted *ranking priority* from causal probability, evidence *strength grade* from statistical significance, eligible supporting *sample observations* from distinct game/session counts, *required evidence coverage* from the frequency of a weakness, and raw *effect* from a prediction. It also states that comparative grades can be limited by the weaker arm and concentration, without inferring why any individual finding received its grade.
+
+Representative references remain a maximum of three examples, not a reconstructed denominator. Drill-down children remain unranked independently. This is deliberately static policy interpretation, not an AI explanation or an additional authority for scores, coverage, ranking, or relationships.
+
 ## Phase 6 evidence-to-replay navigation
 
 Issue #108 connects representative references to a *position*, not just a game. Both the ranked summary and drill-down parent/child cards link owned imported-game evidence to `/games/:gameId?ply=<sourcePlyStart>` when the persisted start ply is a positive safe integer and its optional end does not precede it. A reference without a usable ply still links to the game; a reference without an imported-game ID is not linked. A range selects its first recorded ply, without claiming that all range events are shown at that one move.
