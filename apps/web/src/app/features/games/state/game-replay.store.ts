@@ -8,6 +8,7 @@ import type {
 import { firstValueFrom } from 'rxjs';
 import { ImportedGamesApiService } from '../data-access/imported-games-api.service';
 import { ReplayStepper } from './replay-stepper';
+import { resolveReplayRequestedPly } from './replay-deep-link';
 
 export type ReplayEvidenceCoverageState = ImportedGameEvidenceRun['coverage']['status'] | 'NO_RUNS';
 
@@ -94,6 +95,14 @@ export class GameReplayStore {
   });
 
   private loadGeneration = 0;
+  private requestedPly: number | null = null;
+
+  setRequestedPly(ply: number | null): void {
+    this.requestedPly = ply;
+    if (this.replay() !== null) {
+      this.selectPly(resolveReplayRequestedPly(ply, this.totalPlies()));
+    }
+  }
 
   initialize(gameId: number): void {
     const generation = ++this.loadGeneration;
@@ -124,7 +133,9 @@ export class GameReplayStore {
       if (generation !== this.loadGeneration || gameId !== this.gameId()) return;
       this.replay.set(replay);
       this.stepper.setTotalPlies(replay.plies.length);
-      this.setCurrentPly(this.stepper.goToStart());
+      this.setCurrentPly(this.stepper.select(
+        resolveReplayRequestedPly(this.requestedPly, replay.plies.length),
+      ));
     } catch (error) {
       if (generation === this.loadGeneration && gameId === this.gameId()) {
         this.error.set(readError(error, 'Could not load imported game replay.'));

@@ -67,6 +67,19 @@ export function diagnosisEvidenceHref(
   return evidence.importedGameId === null ? null : `/games/${evidence.importedGameId}`;
 }
 
+export function diagnosisEvidenceQueryParams(
+  evidence: DiagnosisSummaryRepresentativeEvidence,
+): { ply: number } | null {
+  const start = evidence.sourcePlyStart;
+  const end = evidence.sourcePlyEnd;
+  if (
+    evidence.importedGameId === null || start === null ||
+    !Number.isSafeInteger(start) || start <= 0 ||
+    (end !== null && end < start)
+  ) return null;
+  return { ply: start };
+}
+
 export function diagnosisEvidenceLabel(
   evidence: DiagnosisSummaryRepresentativeEvidence,
 ): string {

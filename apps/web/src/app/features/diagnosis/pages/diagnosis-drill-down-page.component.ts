@@ -26,6 +26,7 @@ import {
   diagnosisEffectLabel,
   diagnosisEvidenceHref,
   diagnosisEvidenceLabel,
+  diagnosisEvidenceQueryParams,
   diagnosisScoreLabel,
   diagnosisTitle,
 } from '../helpers/diagnosis-summary-view-model';
@@ -61,6 +62,7 @@ export class DiagnosisDrillDownPageComponent implements OnInit {
   protected readonly coverageFor = diagnosisCoverageLabel;
   protected readonly effectFor = diagnosisEffectLabel;
   protected readonly evidenceHrefFor = diagnosisEvidenceHref;
+  protected readonly evidenceQueryFor = diagnosisEvidenceQueryParams;
   protected readonly evidenceLabelFor = diagnosisEvidenceLabel;
   protected readonly scoreFor = diagnosisScoreLabel;
   protected readonly roleFor = diagnosisSupportRoleLabel;

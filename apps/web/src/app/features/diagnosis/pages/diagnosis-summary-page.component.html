@@ -111,7 +111,7 @@
                     <div class="evidence-links">
                       @for (evidence of item.representativeEvidence; track trackEvidence($index, evidence)) {
                         @if (evidenceHrefFor(evidence); as href) {
-                          <a [routerLink]="href">{{ evidenceLabelFor(evidence) }}</a>
+                          <a [routerLink]="href" [queryParams]="evidenceQueryFor(evidence)">{{ evidenceLabelFor(evidence) }}</a>
                         } @else {
                           <span>{{ evidenceLabelFor(evidence) }}</span>
                         }
