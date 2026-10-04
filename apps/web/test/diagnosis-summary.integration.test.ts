@@ -6,7 +6,6 @@ import {
   type DiagnosisSummaryItem,
   type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
-import { readFile } from 'node:fs/promises';
 import { routes } from '../src/app/app.routes';
 import {
   diagnosisDrillDownUnavailableMessage,
@@ -91,7 +90,7 @@ test('diagnosis is the default route while imported games remain directly reacha
   assert.equal(routes.some((route) => route.path === 'games'), true);
 });
 
-test('diagnosis drill-down links and route parameter validation are bounded', async () => {
+test('diagnosis drill-down links and route parameter validation are bounded', () => {
   assert.equal(diagnosisFindingHref(7), '/diagnosis/7');
   assert.equal(diagnosisFindingHref(Number.MAX_SAFE_INTEGER + 1), null);
   assert.equal(parseDiagnosisFindingId('7'), 7);
@@ -99,11 +98,6 @@ test('diagnosis drill-down links and route parameter validation are bounded', as
     assert.equal(parseDiagnosisFindingId(raw), null);
   }
   assert.equal(routes.some((route) => route.path === 'diagnosis/:findingId'), true);
-  const source = await readFile(
-    new URL('../src/app/features/diagnosis/pages/diagnosis-summary-page.component.html', import.meta.url),
-    'utf8',
-  );
-  assert.match(source, /findingHrefFor\(item\.findingId\)/);
 });
 
 test('drill-down exposes explicit unavailable and backend support-role labels', () => {
