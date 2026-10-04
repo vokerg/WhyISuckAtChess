@@ -211,6 +211,7 @@ test('Prisma drill-down read is ownership scoped and projects only bounded evide
   assert.deepEqual(captured.select.rankings.where, {
     topLevelRanked: false,
     parentRootFindingIds: { has: 1 },
+    finding: { is: { findingSetId: 71 } },
   });
   assert.equal(
     captured.select.rankings.select.finding.select.evidenceReferences.take,
@@ -218,7 +219,7 @@ test('Prisma drill-down read is ownership scoped and projects only bounded evide
   );
   assert.deepEqual(
     captured.select.rankings.select.finding.select.supportsRootCandidates.where,
-    { rootFindingId: 1 },
+    { rootFindingId: 1, findingSetId: 71 },
   );
   assert.equal(
     captured.select.rankings.select.finding.select.supportsRootCandidates.take,
