@@ -13,6 +13,7 @@ import type {
   DiagnosisSummaryResponse,
 } from '@why-i-suck-at-chess/contracts';
 import { firstValueFrom } from 'rxjs';
+import { DiagnosisEvidenceGuideComponent } from '../components/diagnosis-evidence-guide.component';
 import { DiagnosisSummaryApiService } from '../data-access/diagnosis-summary-api.service';
 import { diagnosisFindingHref } from '../helpers/diagnosis-drill-down-view-model';
 import {
@@ -30,7 +31,7 @@ import {
 @Component({
   selector: 'app-diagnosis-summary-page',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DiagnosisEvidenceGuideComponent],
   templateUrl: './diagnosis-summary-page.component.html',
   styleUrl: './diagnosis-summary-page.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
