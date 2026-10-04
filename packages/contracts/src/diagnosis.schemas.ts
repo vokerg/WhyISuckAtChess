@@ -99,3 +99,65 @@ export type DiagnosisSummaryRepresentativeEvidence = z.output<
 >;
 export type DiagnosisSummaryItem = z.output<typeof diagnosisSummaryItemSchema>;
 export type DiagnosisSummaryResponse = z.output<typeof diagnosisSummaryResponseSchema>;
+
+export const diagnosisDrillDownParamsSchema = z.object({
+  findingId: z.coerce.number().int().positive(),
+}).strict();
+
+export type DiagnosisDrillDownParams = z.output<typeof diagnosisDrillDownParamsSchema>;
+
+export const diagnosisDrillDownQuerySchema = diagnosisSummaryQuerySchema;
+export type DiagnosisDrillDownQuery = z.output<typeof diagnosisDrillDownQuerySchema>;
+
+export const diagnosisDrillDownSupportRoleSchema = z.enum([
+  'MECHANISM',
+  'CONDITION_OR_OBSERVATION',
+  'ADDITIONAL_SUPPORT',
+]);
+
+export const diagnosisDrillDownSupportingFindingSchema = diagnosisSummaryItemSchema
+  .omit({ rankPosition: true })
+  .extend({
+    supportRole: diagnosisDrillDownSupportRoleSchema,
+  })
+  .strict();
+
+export const diagnosisDrillDownUnavailableReasonSchema = z.enum([
+  'NO_CURRENT_DIAGNOSIS',
+  'HIERARCHY_INCOMPLETE',
+  'RANKING_INCOMPLETE',
+  'RANKING_STALE',
+  'FINDING_NOT_FOUND',
+]);
+
+export const diagnosisDrillDownAvailableSchema = z.object({
+  status: z.literal('AVAILABLE'),
+  scopeKey: z.string().min(1).max(128),
+  findingSetId: z.number().int().positive(),
+  calculationAsOf: z.iso.datetime({ offset: true }),
+  versions: z.object({
+    taxonomy: z.string().min(1),
+    synthesis: z.string().min(1),
+    calculation: z.string().min(1),
+    ranking: z.string().min(1),
+  }).strict(),
+  finding: diagnosisSummaryItemSchema,
+  supportingFindings: z.array(diagnosisDrillDownSupportingFindingSchema).max(200),
+}).strict();
+
+export const diagnosisDrillDownUnavailableSchema = z.object({
+  status: z.literal('UNAVAILABLE'),
+  scopeKey: z.string().min(1).max(128),
+  reason: diagnosisDrillDownUnavailableReasonSchema,
+}).strict();
+
+export const diagnosisDrillDownResponseSchema = z.discriminatedUnion('status', [
+  diagnosisDrillDownAvailableSchema,
+  diagnosisDrillDownUnavailableSchema,
+]);
+
+export type DiagnosisDrillDownSupportRole = z.output<typeof diagnosisDrillDownSupportRoleSchema>;
+export type DiagnosisDrillDownSupportingFinding = z.output<
+  typeof diagnosisDrillDownSupportingFindingSchema
+>;
+export type DiagnosisDrillDownResponse = z.output<typeof diagnosisDrillDownResponseSchema>;

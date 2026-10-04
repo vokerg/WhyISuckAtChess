@@ -136,3 +136,17 @@ Issue #100 introduces the first Phase 6 consumer boundary; see `docs/diagnosis-s
 - stale/incomplete hierarchy state is returned explicitly as unavailable instead of exposing a partially recalculated diagnosis.
 
 This is a read boundary only. Later Phase 6 UI and optional AI explanation must consume it (or similarly bounded drill-down contracts) rather than importing diagnosis persistence or becoming calculation authority.
+
+
+## Phase 6 diagnosis drill-down read model
+
+Issue #104 extends the consumer boundary with authenticated `GET /api/diagnosis/findings/:findingId?scopeKey=...`; see `docs/diagnosis-summary-read-model.md`.
+
+- the selected parent must already appear in the current persisted top-level summary;
+- `diagnosis-drill-down.repository.prisma.ts` reads only same-revision child ranking rows whose persisted `parentRootFindingIds` contains that parent and projects a bounded representative-evidence slice;
+- same-revision `DiagnosisRootCandidateSupport` supplies the typed child role; missing/ambiguous support state fails closed instead of reconstructing hierarchy;
+- `diagnosis-drill-down.service.ts` preserves persisted final scores and parent assignment but gives children no independent top-level rank;
+- current policy/version, consolidation, ownership, and boundedness checks remain authoritative;
+- internal coverage/source-version/ranking/support JSON blobs and AI output stay behind the module boundary.
+
+A later Angular drill-down consumer can use this contract without importing Prisma or duplicating Phase 5 policy.
