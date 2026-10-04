@@ -7,6 +7,7 @@ import {
   type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
+import { diagnosisEvidenceGuideEntries } from '../src/app/features/diagnosis/components/diagnosis-evidence-guide.component';
 import {
   diagnosisDrillDownUnavailableMessage,
   diagnosisFindingHref,
@@ -49,6 +50,19 @@ function finding(overrides: Partial<DiagnosisSummaryItem> = {}): DiagnosisSummar
     ...overrides,
   };
 }
+
+test('diagnosis interpretation explains priority, evidence and source denominators without invented claims', () => {
+  const entries = new Map(diagnosisEvidenceGuideEntries.map(({ label, description }) => [label, description]));
+  assert.equal(entries.size, 6);
+  assert.match(entries.get('Rank and score') ?? '', /not a probability/i);
+  assert.match(entries.get('Rank and score') ?? '', /no independent top-level rank/i);
+  assert.match(entries.get('Evidence strength') ?? '', /not statistical significance/i);
+  assert.match(entries.get('Evidence strength') ?? '', /weaker group/i);
+  assert.match(entries.get('Samples, games, and sessions') ?? '', /not interchangeable/i);
+  assert.match(entries.get('Required coverage') ?? '', /not the percentage of games/i);
+  assert.match(entries.get('Measured effect') ?? '', /not a forecast/i);
+  assert.match(entries.get('Representative evidence') ?? '', /not the complete sample/i);
+});
 
 test('diagnosis presentation maps persisted findings without changing their semantics', () => {
   const item = finding();
