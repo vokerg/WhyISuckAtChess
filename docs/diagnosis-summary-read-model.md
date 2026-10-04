@@ -90,3 +90,16 @@ The drill-down response reuses the summary's finding-set identity, calculation t
 The same privacy boundary applies as the summary: no `coverageJson`, `sourceVersionsJson`, ranking components/support blobs, root-support proof blobs, provider credentials, or AI output cross the HTTP contract. The current finding-set policy bounds the drill-down population to at most 200 current findings and representative evidence remains capped at three references per finding.
 
 This backend contract is a future seam for an Angular drill-down page and optional grounded explanation. Those consumers may present accepted facts, but they must not recalculate hierarchy, assign child ranks, or create new diagnosis claims.
+
+## Phase 6 drill-down web consumer
+
+Issue #106 consumes the bounded detail endpoint in a standalone Angular page at `/diagnosis/:findingId`. Every ranked parent on `/diagnosis` links to its corresponding detail page; the browser requests only the `overall` scope and uses the strict shared `DiagnosisDrillDownResponse` schema. Invalid/non-positive/unsafe route IDs do not reach the API. Responses for a different scope or selected parent are rejected instead of displayed.
+
+The page preserves backend semantics:
+- the selected parent retains its **persisted** top-level rank, score, evidence strength, counts, effect, coverage, observation/hierarchy state, revision and policy versions;
+- supporting findings appear in the **received order** with their persisted `supportRole`, final score, raw effect, source coverage and representative evidence; they have no assigned rank or inferred relationship;
+- up to three existing imported-game evidence references per finding navigate to the owned game replay route;
+- transport/schema errors are distinct from backend `UNAVAILABLE` reasons (including a finding no longer present in the current ranked summary), and an available parent with zero children is shown as a distinct valid empty state;
+- route changes invalidate in-flight UI requests so a delayed prior response cannot overwrite the newly selected finding.
+
+The consumer is presentation-only. It does not fetch ranking-component blobs, support proof blobs, provider data or AI output; it does not synthesize new claims or modify the persisted hierarchy. Future comparison/explanation work must use its own bounded authority-preserving contract.

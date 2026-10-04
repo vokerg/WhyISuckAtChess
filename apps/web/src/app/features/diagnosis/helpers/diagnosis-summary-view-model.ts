@@ -20,11 +20,11 @@ const DIAGNOSIS_LABELS: Readonly<Record<string, string>> = {
   CLOCK_MANAGEMENT_DRIVING_TACTICAL_COLLAPSE: 'Clock management is driving tactical collapse',
 };
 
-export function diagnosisTitle(item: DiagnosisSummaryItem): string {
+export function diagnosisTitle(item: Pick<DiagnosisSummaryItem, 'diagnosisId'>): string {
   return DIAGNOSIS_LABELS[item.diagnosisId] ?? humanize(item.diagnosisId);
 }
 
-export function diagnosisClaimLabel(item: DiagnosisSummaryItem): string {
+export function diagnosisClaimLabel(item: Pick<DiagnosisSummaryItem, 'claimKey'>): string {
   return humanize(item.claimKey.replace(/^[^.]+\./, ''));
 }
 
@@ -51,7 +51,7 @@ export function diagnosisCoverageLabel(value: number | null): string {
   return value === null ? 'Not recorded' : `${Math.round(value * 100)}%`;
 }
 
-export function diagnosisEffectLabel(item: DiagnosisSummaryItem): string | null {
+export function diagnosisEffectLabel(item: Pick<DiagnosisSummaryItem, 'effect'>): string | null {
   if (!item.effect) return null;
   return [
     humanize(item.effect.metric),

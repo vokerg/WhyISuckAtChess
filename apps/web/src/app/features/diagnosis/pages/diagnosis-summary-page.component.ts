@@ -14,6 +14,7 @@ import type {
 } from '@why-i-suck-at-chess/contracts';
 import { firstValueFrom } from 'rxjs';
 import { DiagnosisSummaryApiService } from '../data-access/diagnosis-summary-api.service';
+import { diagnosisFindingHref } from '../helpers/diagnosis-drill-down-view-model';
 import {
   diagnosisClaimLabel,
   diagnosisCoverageLabel,
@@ -44,6 +45,7 @@ export class DiagnosisSummaryPageComponent implements OnInit {
     return summary?.status === 'AVAILABLE' ? summary : null;
   });
 
+  protected readonly findingHrefFor = diagnosisFindingHref;
   protected readonly titleFor = diagnosisTitle;
   protected readonly claimFor = diagnosisClaimLabel;
   protected readonly coverageFor = diagnosisCoverageLabel;

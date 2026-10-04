@@ -119,6 +119,9 @@
                     </div>
                   </section>
                 }
+                @if (findingHrefFor(item.findingId); as href) {
+                  <a class="detail-link" [routerLink]="href">Inspect supporting findings →</a>
+                }
               </div>
             </li>
           }

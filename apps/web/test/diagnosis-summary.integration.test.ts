@@ -1,11 +1,18 @@
 import '@angular/compiler';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type {
-  DiagnosisSummaryItem,
-  DiagnosisSummaryRepresentativeEvidence,
+import {
+  diagnosisDrillDownResponseSchema,
+  type DiagnosisSummaryItem,
+  type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
+import {
+  diagnosisDrillDownUnavailableMessage,
+  diagnosisFindingHref,
+  diagnosisSupportRoleLabel,
+  parseDiagnosisFindingId,
+} from '../src/app/features/diagnosis/helpers/diagnosis-drill-down-view-model';
 import {
   diagnosisCoverageLabel,
   diagnosisEffectLabel,
@@ -81,4 +88,83 @@ test('diagnosis is the default route while imported games remain directly reacha
   assert.equal(routes[0]?.redirectTo, 'diagnosis');
   assert.equal(routes.some((route) => route.path === 'diagnosis'), true);
   assert.equal(routes.some((route) => route.path === 'games'), true);
+});
+
+test('diagnosis drill-down links and route parameter validation are bounded', () => {
+  assert.equal(diagnosisFindingHref(7), '/diagnosis/7');
+  assert.equal(diagnosisFindingHref(Number.MAX_SAFE_INTEGER + 1), null);
+  assert.equal(parseDiagnosisFindingId('7'), 7);
+  for (const raw of [null, '', '0', '-2', '1.5', '7x', '01', '9007199254740992']) {
+    assert.equal(parseDiagnosisFindingId(raw), null);
+  }
+  assert.equal(routes.some((route) => route.path === 'diagnosis/:findingId'), true);
+});
+
+test('drill-down exposes explicit unavailable and backend support-role labels', () => {
+  assert.match(diagnosisDrillDownUnavailableMessage('FINDING_NOT_FOUND'), /not in the current ranked diagnosis/);
+  assert.equal(
+    diagnosisDrillDownUnavailableMessage('RANKING_INCOMPLETE'),
+    diagnosisUnavailableMessage('RANKING_INCOMPLETE'),
+  );
+  assert.equal(diagnosisSupportRoleLabel('MECHANISM'), 'Supporting mechanism');
+  assert.equal(diagnosisSupportRoleLabel('CONDITION_OR_OBSERVATION'), 'Condition or observation');
+  assert.equal(diagnosisSupportRoleLabel('ADDITIONAL_SUPPORT'), 'Additional support');
+});
+
+test('drill-down contract keeps unranked supporting findings and bounded evidence', () => {
+  const parent = finding();
+  const { rankPosition, ...childFields } = finding({
+    findingId: 8,
+    findingKey: 'time-pressure-context',
+    diagnosisId: 'TIME-001',
+  });
+  assert.equal(rankPosition, 1);
+  const child = { ...childFields, supportRole: 'MECHANISM' };
+  const response = {
+    status: 'AVAILABLE',
+    scopeKey: 'overall',
+    findingSetId: 12,
+    calculationAsOf: '2026-10-04T05:00:00.000Z',
+    versions: {
+      taxonomy: 'diagnostic-taxonomy-v1',
+      synthesis: 'diagnosis-synthesis-v1',
+      calculation: 'diagnosis-candidates-v1',
+      ranking: 'diagnosis-ranking-v1',
+    },
+    finding: parent,
+    supportingFindings: [child],
+  };
+  const parsed = diagnosisDrillDownResponseSchema.parse(response);
+  assert.equal(parsed.status, 'AVAILABLE');
+  if (parsed.status === 'AVAILABLE') {
+    assert.deepEqual(parsed.supportingFindings.map((item) => item.findingId), [8]);
+    assert.equal(parsed.supportingFindings[0]?.finalScore, child.finalScore);
+    assert.equal('rankPosition' in parsed.supportingFindings[0], false);
+  }
+  assert.throws(() => diagnosisDrillDownResponseSchema.parse({
+    ...response,
+    supportingFindings: [{ ...child, rankPosition: 2 }],
+  }));
+  assert.throws(() => diagnosisDrillDownResponseSchema.parse({
+    ...response,
+    supportingFindings: [{ ...child, supportRole: 'INFERRED_ROLE' }],
+  }));
+  assert.throws(() => diagnosisDrillDownResponseSchema.parse({
+    ...response,
+    supportingFindings: Array(201).fill(child),
+  }));
+  assert.throws(() => diagnosisDrillDownResponseSchema.parse({
+    ...response,
+    supportingFindings: [{
+      ...child,
+      representativeEvidence: Array(4).fill({
+        referenceKey: 'event',
+        referenceType: 'IMPORTED_GAME',
+        importedGameId: 42,
+        sourcePlyStart: 5,
+        sourcePlyEnd: 5,
+        eventIdentityKey: 'event',
+      }),
+    }],
+  }));
 });

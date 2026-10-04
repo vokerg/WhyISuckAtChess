@@ -1,0 +1,176 @@
+<main class="diagnosis-page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Why I suck at chess</p>
+      <h1>What supports this weakness?</h1>
+      <p class="hero-copy">
+        Inspect the saved diagnosis and its supporting findings. Their relationships and scores
+        come from the deterministic backend, not from this page.
+      </p>
+    </div>
+    <a class="secondary-link" routerLink="/diagnosis">← All ranked weaknesses</a>
+  </header>
+
+  @if (error(); as message) {
+    <section class="state-card error" role="alert">
+      <div>
+        <p class="state-kicker">Request failed</p>
+        <h2>Finding could not be loaded</h2>
+        <p>{{ message }}</p>
+      </div>
+      @if (selectedFindingId() !== null) {
+        <button type="button" (click)="load()">Try again</button>
+      }
+    </section>
+  } @else if (loading()) {
+    <section class="state-card" aria-live="polite">
+      <p class="state-kicker">Loading</p>
+      <h2>Reading current finding evidence…</h2>
+      <p>Only persisted current-revision diagnosis evidence is used.</p>
+    </section>
+  } @else if (detail(); as current) {
+    @if (current.status === 'UNAVAILABLE') {
+      <section class="state-card">
+        <div>
+          <p class="state-kicker">Finding unavailable</p>
+          <h2>There is no current finding to display</h2>
+          <p>{{ unavailableMessageFor(current.reason) }}</p>
+          <a routerLink="/diagnosis">Return to the ranked summary</a>
+        </div>
+        <button type="button" (click)="load()">Retry</button>
+      </section>
+    } @else {
+      <section class="summary-strip" aria-label="Diagnosis revision metadata">
+        <div><span>Rank</span><strong>#{{ current.finding.rankPosition }}</strong></div>
+        <div><span>Scope</span><strong>{{ current.scopeKey }}</strong></div>
+        <div><span>Finding set</span><strong>#{{ current.findingSetId }}</strong></div>
+        <div class="wide">
+          <span>Calculated</span>
+          <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
+        </div>
+      </section>
+
+      <section class="finding-card" aria-label="Selected top-level finding">
+        <div class="rank-badge" [attr.aria-label]="'Rank ' + current.finding.rankPosition">
+          #{{ current.finding.rankPosition }}
+        </div>
+        <div class="finding-body">
+          <div class="finding-heading">
+            <div>
+              <p class="diagnosis-id">{{ current.finding.diagnosisId }}</p>
+              <h2>{{ titleFor(current.finding) }}</h2>
+              <p class="claim">{{ claimFor(current.finding) }}</p>
+              <p class="finding-context">
+                {{ current.finding.findingLevel }} · {{ current.finding.observationState }} ·
+                {{ current.finding.consolidationState }}
+              </p>
+            </div>
+            <div class="evidence-strength" [attr.data-strength]="current.finding.evidenceStrength">
+              {{ current.finding.evidenceStrength }} evidence
+            </div>
+          </div>
+
+          <dl class="metrics">
+            <div><dt>Rank score</dt><dd>{{ scoreFor(current.finding.finalScore) }}</dd></div>
+            <div><dt>Samples</dt><dd>{{ current.finding.sampleCount }}</dd></div>
+            <div><dt>Games</dt><dd>{{ current.finding.distinctGameCount }}</dd></div>
+            <div><dt>Sessions</dt><dd>{{ current.finding.distinctSessionCount }}</dd></div>
+            <div><dt>Required coverage</dt><dd>{{ coverageFor(current.finding.requiredEvidenceCoverage) }}</dd></div>
+          </dl>
+          @if (effectFor(current.finding); as effect) {
+            <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+          }
+          @if (current.finding.representativeEvidence.length > 0) {
+            <section class="evidence-section" aria-label="Top-level finding evidence">
+              <h3>Representative evidence</h3>
+              <div class="evidence-links">
+                @for (evidence of current.finding.representativeEvidence; track trackEvidence($index, evidence)) {
+                  @if (evidenceHrefFor(evidence); as href) {
+                    <a [routerLink]="href">{{ evidenceLabelFor(evidence) }}</a>
+                  } @else {
+                    <span>{{ evidenceLabelFor(evidence) }}</span>
+                  }
+                }
+              </div>
+            </section>
+          }
+        </div>
+      </section>
+
+      <section class="supporting-section" aria-labelledby="supporting-heading">
+        <div class="supporting-heading">
+          <div>
+            <p class="eyebrow">Persisted hierarchy</p>
+            <h2 id="supporting-heading">Supporting findings</h2>
+            <p>Roles and scores are persisted by the diagnosis engine. Children are not independently ranked weaknesses.</p>
+          </div>
+          <strong class="support-count">{{ current.supportingFindings.length }} findings</strong>
+        </div>
+
+        @if (current.supportingFindings.length === 0) {
+          <div class="state-card">
+            <div>
+              <h3>No supporting findings</h3>
+              <p>This current top-level finding has no persisted drill-down children.</p>
+            </div>
+          </div>
+        } @else {
+          <ul class="finding-list supporting-list" aria-label="Supporting diagnosis findings">
+            @for (item of current.supportingFindings; track item.findingId) {
+              <li class="finding-card">
+                <div class="support-symbol" aria-hidden="true">↳</div>
+                <div class="finding-body">
+                  <div class="finding-heading">
+                    <div>
+                      <p class="diagnosis-id">{{ item.diagnosisId }}</p>
+                      <h3>{{ titleFor(item) }}</h3>
+                      <p class="claim">{{ claimFor(item) }}</p>
+                      <p class="finding-context">
+                        {{ item.findingLevel }} · {{ item.observationState }} · {{ item.consolidationState }}
+                      </p>
+                    </div>
+                    <div class="support-labels">
+                      <span class="role-label">{{ roleFor(item.supportRole) }}</span>
+                      <span class="evidence-strength" [attr.data-strength]="item.evidenceStrength">
+                        {{ item.evidenceStrength }} evidence
+                      </span>
+                    </div>
+                  </div>
+                  <dl class="metrics">
+                    <div><dt>Persisted score</dt><dd>{{ scoreFor(item.finalScore) }}</dd></div>
+                    <div><dt>Samples</dt><dd>{{ item.sampleCount }}</dd></div>
+                    <div><dt>Games</dt><dd>{{ item.distinctGameCount }}</dd></div>
+                    <div><dt>Sessions</dt><dd>{{ item.distinctSessionCount }}</dd></div>
+                    <div><dt>Required coverage</dt><dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd></div>
+                  </dl>
+                  @if (effectFor(item); as effect) {
+                    <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+                  }
+                  @if (item.representativeEvidence.length > 0) {
+                    <section class="evidence-section" aria-label="Supporting finding evidence">
+                      <h3>Representative evidence</h3>
+                      <div class="evidence-links">
+                        @for (evidence of item.representativeEvidence; track trackEvidence($index, evidence)) {
+                          @if (evidenceHrefFor(evidence); as href) {
+                            <a [routerLink]="href">{{ evidenceLabelFor(evidence) }}</a>
+                          } @else {
+                            <span>{{ evidenceLabelFor(evidence) }}</span>
+                          }
+                        }
+                      </div>
+                    </section>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <footer class="version-note">
+        Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
+        calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
+      </footer>
+    }
+  }
+</main>
