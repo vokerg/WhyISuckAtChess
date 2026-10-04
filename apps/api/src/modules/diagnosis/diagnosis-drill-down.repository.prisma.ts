@@ -74,7 +74,7 @@ export function createPrismaDiagnosisDrillDownRepository(
               topLevelRanked: false,
               parentRootFindingIds: { has: parentFindingId },
               finding: { is: { findingSetId } },
-            }
+            },
             orderBy: [
               { finalScore: 'desc' },
               { findingId: 'asc' },
