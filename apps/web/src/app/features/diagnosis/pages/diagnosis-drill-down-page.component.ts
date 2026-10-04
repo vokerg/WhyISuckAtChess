@@ -14,6 +14,7 @@ import type {
   DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { distinctUntilChanged, firstValueFrom, map } from 'rxjs';
+import { DiagnosisEvidenceGuideComponent } from '../components/diagnosis-evidence-guide.component';
 import { DiagnosisDrillDownApiService } from '../data-access/diagnosis-drill-down-api.service';
 import {
   diagnosisDrillDownUnavailableMessage,
@@ -34,7 +35,7 @@ import {
 @Component({
   selector: 'app-diagnosis-drill-down-page',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, DiagnosisEvidenceGuideComponent],
   templateUrl: './diagnosis-drill-down-page.component.html',
   styleUrls: [
     './diagnosis-summary-page.component.css',
