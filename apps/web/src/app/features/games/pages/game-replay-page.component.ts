@@ -1,15 +1,18 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   HostListener,
   OnInit,
   inject,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { distinctUntilChanged, map } from 'rxjs';
 import { ChessgroundBoardComponent } from '../../../shared/chess/board/chessground-board.component';
 import { ReplayEvidencePanelComponent } from '../components/replay-evidence-panel.component';
 import { GameReplayStore } from '../state/game-replay.store';
+import { parseReplayRequestedPly } from '../state/replay-deep-link';
 
 @Component({
   selector: 'app-game-replay-page',
@@ -22,6 +25,7 @@ import { GameReplayStore } from '../state/game-replay.store';
 })
 export class GameReplayPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly store = inject(GameReplayStore);
 
   ngOnInit(): void {
@@ -29,8 +33,17 @@ export class GameReplayPageComponent implements OnInit {
       .pipe(
         map((params) => Number(params.get('gameId'))),
         distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((gameId) => this.store.initialize(gameId));
+
+    this.route.queryParamMap
+      .pipe(
+        map((params) => parseReplayRequestedPly(params.get('ply'))),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((ply) => this.store.setRequestedPly(ply));
   }
 
   @HostListener('window:keydown', ['$event'])

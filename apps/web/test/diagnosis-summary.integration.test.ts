@@ -18,6 +18,7 @@ import {
   diagnosisEffectLabel,
   diagnosisEvidenceHref,
   diagnosisEvidenceLabel,
+  diagnosisEvidenceQueryParams,
   diagnosisTitle,
   diagnosisUnavailableMessage,
 } from '../src/app/features/diagnosis/helpers/diagnosis-summary-view-model';
@@ -80,7 +81,14 @@ test('representative imported-game evidence links to the existing replay route',
     eventIdentityKey: 'event-42',
   };
   assert.equal(diagnosisEvidenceHref(evidence), '/games/42');
+  assert.deepEqual(diagnosisEvidenceQueryParams(evidence), { ply: 31 });
   assert.equal(diagnosisEvidenceLabel(evidence), 'Game 42 · ply 31');
+  assert.deepEqual(diagnosisEvidenceQueryParams({ ...evidence, sourcePlyEnd: 34 }), { ply: 31 });
+  for (const ply of [null, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(diagnosisEvidenceQueryParams({ ...evidence, sourcePlyStart: ply }), null);
+  }
+  assert.equal(diagnosisEvidenceQueryParams({ ...evidence, sourcePlyEnd: 30 }), null);
+  assert.equal(diagnosisEvidenceQueryParams({ ...evidence, importedGameId: null }), null);
 });
 
 test('diagnosis is the default route while imported games remain directly reachable', () => {

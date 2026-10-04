@@ -103,3 +103,9 @@ The page preserves backend semantics:
 - route changes invalidate in-flight UI requests so a delayed prior response cannot overwrite the newly selected finding.
 
 The consumer is presentation-only. It does not fetch ranking-component blobs, support proof blobs, provider data or AI output; it does not synthesize new claims or modify the persisted hierarchy. Future comparison/explanation work must use its own bounded authority-preserving contract.
+
+## Phase 6 evidence-to-replay navigation
+
+Issue #108 connects representative references to a *position*, not just a game. Both the ranked summary and drill-down parent/child cards link owned imported-game evidence to `/games/:gameId?ply=<sourcePlyStart>` when the persisted start ply is a positive safe integer and its optional end does not precede it. A reference without a usable ply still links to the game; a reference without an imported-game ID is not linked. A range selects its first recorded ply, without claiming that all range events are shown at that one move.
+
+The replay route parses only canonical positive safe integer ply query values, waits for its owned replay response, then selects that ply only when it exists in the indexed game. Missing, malformed, or out-of-range targets display the starting position rather than substituting another move. A query-only change updates the current selection without fetching the game again; stale results from an earlier game route are ignored. This browser-only navigation adds no diagnosis recomputation, source-data mutation or access to unsanitized evidence blobs.

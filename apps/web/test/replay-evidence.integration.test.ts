@@ -11,7 +11,7 @@ import {
   type Renderer2,
 } from '@angular/core';
 import type { ImportedGameReplay } from '@why-i-suck-at-chess/contracts';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { ReplayEvidencePanelComponent } from '../src/app/features/games/components/replay-evidence-panel.component';
 import { ImportedGamesApiService } from '../src/app/features/games/data-access/imported-games-api.service';
 import { GameReplayStore } from '../src/app/features/games/state/game-replay.store';
@@ -379,4 +379,57 @@ test('partial coverage is rendered differently from a complete no-finding state'
   assert.match(text, /evidence coverage is PARTIAL/);
   assert.match(text, /Missing evidence is not equivalent to a negative finding/);
   assert.doesNotMatch(text, /under complete detector coverage/);
+});
+
+test('deep-linked replay selection survives async load, query changes, and old game responses', async () => {
+  const requests: Array<{ url: string; response: Subject<ImportedGameReplay> }> = [];
+  const injector = Injector.create({
+    providers: [
+      GameReplayStore,
+      ImportedGamesApiService,
+      {
+        provide: HttpClient,
+        useValue: {
+          get: (url: string) => {
+            const response = new Subject<ImportedGameReplay>();
+            requests.push({ url, response });
+            return response;
+          },
+        },
+      },
+    ],
+  });
+  const store = injector.get(GameReplayStore);
+  store.initialize(42);
+  store.setRequestedPly(2);
+  assert.equal(store.currentPlyNumber(), 0);
+  assert.equal(requests.length, 1);
+  requests[0]!.response.next(replayFixture());
+  requests[0]!.response.complete();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(store.currentPlyNumber(), 2);
+  store.setRequestedPly(1);
+  assert.equal(store.currentPlyNumber(), 1);
+  assert.equal(requests.length, 1, 'query-only navigation must not reload the game');
+  store.setRequestedPly(99);
+  assert.equal(store.currentPlyNumber(), 0);
+  store.setRequestedPly(null);
+  assert.equal(store.currentPlyNumber(), 0);
+
+  store.initialize(43);
+  store.initialize(44);
+  store.setRequestedPly(2);
+  assert.equal(requests.length, 3);
+  requests[1]!.response.next({ ...replayFixture(), id: 43 });
+  requests[1]!.response.complete();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(store.replay(), null, 'an old game must not replace a newer load');
+  requests[2]!.response.next({ ...replayFixture(), id: 44 });
+  requests[2]!.response.complete();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(store.replay()?.id, 44);
+  assert.equal(store.currentPlyNumber(), 2);
 });
