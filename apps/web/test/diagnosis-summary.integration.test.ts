@@ -7,6 +7,13 @@ import {
   type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
+import { DOCUMENT } from '@angular/common';
+import { createEnvironmentInjector, Injector, runInInjectionContext } from '@angular/core';
+import { of, Subject, throwError } from 'rxjs';
+import { LichessOnboardingApiService } from '../src/app/features/lichess/data-access/lichess-onboarding-api.service';
+import { LichessOnboardingStore } from '../src/app/features/lichess/state/lichess-onboarding.store';
+import type { LichessConnectionStatus, LichessImportRun } from '@why-i-suck-at-chess/contracts';
+
 import {
   apiErrorCode,
   apiErrorMessage,
@@ -250,4 +257,98 @@ test('import progress status and errors distinguish auth, provider and applicati
   assert.equal(apiErrorCode({ error: { code: 7 } }), null);
   assert.match(apiErrorMessage({ status: 401 }, 'failed'), /Application authentication/);
   assert.equal(apiErrorMessage({ status: 500 }, 'failed'), 'failed');
+});
+
+function onboardingRun(status: LichessImportRun['status']): LichessImportRun {
+  return {
+    id: 7, provider: 'LICHESS', status,
+    lichessUserIdSnapshot: 'lichess-owner', lichessUsernameSnapshot: 'Owner',
+    scope: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+    requestedFrom: '2026-09-01T00:00:00.000Z',
+    requestedTo: '2026-09-30T00:00:00.000Z',
+    windowsTotal: 1, windowsCompleted: 0, gamesSeen: 0, gamesMatchedScope: 0,
+    gamesImported: 0, gamesDuplicate: 0, gamesUpdated: 0, gamesSkipped: 0,
+    gamesFailed: 0, gamesSkippedOutOfScope: 0, errorCode: null, error: null,
+    lastProgressAt: null, rateLimitUntil: null, startedAt: null, completedAt: null,
+  };
+}
+
+const connected: LichessConnectionStatus = {
+  connected: true, credentialState: 'usable', reconnectRequired: false,
+  account: {
+    lichessUserId: 'lichess-owner',
+    username: 'Owner',
+    scopes: [],
+    connectedAt: '2026-09-01T00:00:00.000Z',
+    expiresAt: null,
+  },
+};
+
+function onboardingHarness(api: object) {
+  const environment = createEnvironmentInjector([
+    { provide: DOCUMENT, useValue: { defaultView: { confirm: () => true, location: { assign: () => undefined } } } },
+    { provide: LichessOnboardingApiService, useValue: api },
+  ], Injector.NULL);
+  const store = runInInjectionContext(environment, () => new LichessOnboardingStore());
+  return { store, destroy: () => environment.destroy() };
+}
+
+test('Lichess store recovers an active run and attaches to conflicts instead of issuing duplicates', async () => {
+  let requested = 0;
+  const api = {
+    connection: () => of(connected),
+    latest: () => of(onboardingRun('QUEUED')),
+    create: () => { requested++; return of(onboardingRun('QUEUED')); },
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    assert.equal(store.usable, true);
+    assert.equal(store.run()?.id, 7);
+    await store.startImport();
+    assert.equal(requested, 0, 'do not duplicate an already active run');
+    assert.equal(store.run()?.status, 'QUEUED');
+  } finally { destroy(); }
+
+  const conflictApi = {
+    connection: () => of(connected),
+    latest: (() => {
+      let calls = 0;
+      return () => of(++calls === 1 ? null : onboardingRun('QUEUED'));
+    })(),
+    create: () => throwError(() => ({ status: 409, error: { code: 'ACTIVE_IMPORT' } })),
+  };
+  const conflict = onboardingHarness(conflictApi);
+  try {
+    await conflict.store.load();
+    assert.equal(conflict.store.run(), null);
+    await conflict.store.startImport();
+    assert.equal(conflict.store.run()?.id, 7, 'recovers server run after 409');
+    assert.match(conflict.store.notice() ?? '', /Recovered/);
+  } finally { conflict.destroy(); }
+});
+
+test('polling cannot overlap and stale responses cannot restore a cancelled run', async () => {
+  let requests = 0;
+  const pending = new Subject<LichessImportRun>();
+  const api = {
+    connection: () => of(connected),
+    latest: () => of(onboardingRun('RUNNING')),
+    run: () => { requests++; return pending.asObservable(); },
+    cancel: () => of(onboardingRun('CANCELLED')),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    await new Promise((resolve) => setTimeout(resolve, 2650));
+    assert.equal(requests, 1);
+    await new Promise((resolve) => setTimeout(resolve, 2700));
+    assert.equal(requests, 1, 'second poll cannot overlap pending request');
+    await store.cancelImport();
+    assert.equal(store.run()?.status, 'CANCELLED');
+    pending.next(onboardingRun('RUNNING'));
+    pending.complete();
+    await Promise.resolve();
+    assert.equal(store.run()?.status, 'CANCELLED', 'old poll is generation-fenced');
+  } finally { destroy(); }
 });
