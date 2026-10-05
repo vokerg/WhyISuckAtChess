@@ -58,7 +58,7 @@ export function credentialDescription(state: LichessCredentialState): string {
 
 export function callbackDescription(value: string | null): string | null {
   switch (value) {
-    case '1': return 'Lichess returned from authorization. The connection below is verified by the server.';
+    case '1': return 'Authorization return noted. The server verifies the connection below; this notice is not proof of a usable credential.';
     case 'cancelled': return 'Lichess authorization was cancelled. The existing connection, if any, is shown below.';
     case 'error': return 'Lichess authorization failed. You can try connecting again.';
     case 'conflict': return 'This Lichess identity belongs to another application user.';
