@@ -939,3 +939,14 @@ Lichess authoritative connection
 ```
 
 No arrow may discard provider clock evidence, pretend every raw clock state is necessarily a ply, fabricate first-move think time, add increment blindly to a game-ending move, collapse exact control into broad speed, substitute a derived value for source evidence, or treat missing/unsupported timing as normal behavior.
+
+
+## Phase 6 browser onboarding and recovery (#112)
+
+The browser entry path is `/settings/lichess` (reachable from `/diagnosis` and `/games`). The page uses only the authenticated backend identity from `GET /api/me/lichess-connection` and the existing OAuth/PKCE start/callback/disconnect routes. A `lichessConnected` callback query param is a notice, **not** connection authority; the status endpoint must be read after redirect. Usable, missing, expired, revoked, and undecryptable credentials remain distinguishable; reconnect is explicit. Application authentication errors remain separate from provider authorization.
+
+The page defaults its **displayed** import scope to the past 30 days, permits editing local date/time and rated/casual coverage, validates the half-open range, and sends UTC ISO instants on a user-initiated `POST /api/me/imports/lichess`. No full-history import, auto-import, arbitrary public account tracking, or new worker action is introduced.
+
+A strict shared run contract covers current status, requested UTC window and account snapshot, window/game counters, progress/retry timing, and safe error-code presentation. The owned active-first/latest `GET /api/me/imports/lichess/latest` read restores a reload without local-storage run authority; creation conflicts attach through that same read. The browser polls `GET /api/me/imports/:runId` only for active states, with one request at a time and guards for stale responses, navigation, run replacements, and destruction. Cancellation uses the existing authenticated run endpoint.
+
+An import may finish with zero new games, and imported games may still await indexing, Stockfish analysis, detector evidence, or a current ranked diagnosis. Links to `/games` and `/diagnosis` do not imply these separate stages have completed. No source clock, timestamp, exact control, rated/identity provenance, analysis authority, or diagnosis policy is changed by this product slice.
