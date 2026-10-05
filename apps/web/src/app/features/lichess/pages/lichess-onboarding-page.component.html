@@ -142,7 +142,7 @@
       @if (run.rateLimitUntil && run.status === 'QUEUED') {
         <p role="status">Retry not before {{ run.rateLimitUntil }}.</p>
       }
-      @if (run.errorCode) {
+      @if (run.errorCode && (run.status === 'FAILED' || run.status === 'QUEUED')) {
         <p class="detail" role="status">{{ safeImportError(run.errorCode) }} ({{ run.errorCode }})</p>
       }
       @if (run.status === 'COMPLETED') {
