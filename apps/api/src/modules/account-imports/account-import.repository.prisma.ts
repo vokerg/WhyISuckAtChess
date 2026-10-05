@@ -57,6 +57,19 @@ export function createPrismaAccountImportRepository(database: PrismaClient = pri
       return row ? toStoredRun(row) : null;
     },
 
+    getLatestRun: async (appUserId) => {
+      const active = await database.importRun.findFirst({
+        where: { appUserId, provider: 'LICHESS', status: { in: [...ACTIVE_STATUSES] } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      if (active) return toStoredRun(active);
+      const latest = await database.importRun.findFirst({
+        where: { appUserId, provider: 'LICHESS' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      return latest ? toStoredRun(latest) : null;
+    },
+
     claimNextRun: async (now, staleAfter) => database.$transaction(async (transaction) => {
       const candidate = await transaction.importRun.findFirst({
         where: {
