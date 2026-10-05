@@ -76,7 +76,7 @@ test('API latest and run/cancel use authenticated app user; unsafe and foreign r
     const latest = await app.inject({ method: 'GET', url: '/api/me/imports/lichess/latest' });
     assert.equal(latest.statusCode, 200);
     assert.deepEqual(latest.json(), { importRun: toImportRunResponse(storedRun()) });
-    for (const id of ['999', 'not-a-number', '9007199254740992']) {
+    for (const id of ['999', 'not-a-number', '9007199254740992', '05', '5e0', '0x5']) {
       const response = await app.inject({ method: 'GET', url: '/api/me/imports/' + id });
       assert.equal(response.statusCode, id === '999' ? 404 : 400);
     }
