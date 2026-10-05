@@ -110,10 +110,11 @@ export class LichessOnboardingStore {
     this.error.set(null);
     try {
       await firstValueFrom(this.api.disconnect());
-      const status = await firstValueFrom(this.api.connection());
       if (!this.isCurrent(generation)) return;
-      this.connection.set(status);
+      // A successful DELETE is authoritative. Do not show an old usable credential if re-reading fails.
+      this.connection.set(null);
       this.notice.set('Lichess disconnect completed. Imported games and evidence remain available.');
+      await this.refreshConnection(generation);
     } catch (error) {
       if (this.isCurrent(generation)) this.error.set(apiErrorMessage(error, 'Could not disconnect Lichess.'));
     } finally {
@@ -147,7 +148,11 @@ export class LichessOnboardingStore {
       if (apiErrorCode(error) === 'ACTIVE_IMPORT') {
         await this.recoverLatest(generation);
         if (this.isCurrent(generation)) {
-          this.notice.set('An import is already active. Recovered its server-owned progress.');
+          if (this.run()) {
+            this.notice.set('An import is already active. Recovered its server-owned progress.');
+          } else {
+            this.error.set('An import is already active, but progress could not be recovered. Reload to retry.');
+          }
         }
       } else if (apiErrorCode(error) === 'LICHESS_RECONNECT_REQUIRED') {
         this.error.set('Lichess credentials are unavailable. Reconnect before importing.');
