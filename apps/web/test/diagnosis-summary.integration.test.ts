@@ -7,6 +7,17 @@ import {
   type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
+import {
+  apiErrorCode,
+  apiErrorMessage,
+  callbackDescription,
+  credentialDescription,
+  importScope,
+  isActiveImport,
+  localDateTimeValue,
+  safeImportError,
+} from '../src/app/features/lichess/helpers/lichess-onboarding-view-model';
+
 import { diagnosisEvidenceGuideEntries } from '../src/app/features/diagnosis/components/diagnosis-evidence-guide.component';
 import {
   diagnosisDrillDownUnavailableMessage,
@@ -189,4 +200,54 @@ test('drill-down contract keeps unranked supporting findings and bounded evidenc
       }),
     }],
   }));
+});
+
+test('Lichess onboarding is routed without replacing the diagnosis default or game replay', () => {
+  assert.equal(routes.find((r) => r.path === '')?.redirectTo, 'diagnosis');
+  assert.ok(routes.find((r) => r.path === 'settings/lichess')?.component);
+  assert.ok(routes.find((r) => r.path === 'games/:gameId')?.component);
+});
+
+test('import scope uses explicit bounded UTC instants, validates invalid/future requests', () => {
+  const now = new Date('2026-10-05T09:30:00.000Z');
+  const from = '2026-09-05T07:30';
+  const to = '2026-10-05T07:30';
+  const all = importScope(from, to, 'any', now);
+  assert.ok(all.request);
+  assert.equal(all.error, null);
+  assert.equal(all.request.from, new Date(from).toISOString());
+  assert.equal(all.request.to, new Date(to).toISOString());
+  assert.equal('rated' in all.request, false);
+  assert.equal(importScope(from, to, 'rated', now).request?.rated, true);
+  assert.equal(importScope(from, to, 'casual', now).request?.rated, false);
+  assert.match(importScope(to, from, 'any', now).error ?? '', /after start/);
+  assert.equal(importScope('', to, 'any', now).request, null);
+  assert.equal(importScope(from, 'invalid', 'any', now).request, null);
+  assert.equal(importScope(from, '2027-01-01T10:00', 'any', now).request, null);
+  assert.match(localDateTimeValue(new Date(from)), /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/);
+});
+
+test('OAuth query strings cannot assert connection and credential states remain distinct', () => {
+  assert.match(callbackDescription('1') ?? '', /verified by the server/);
+  assert.match(callbackDescription('cancelled') ?? '', /cancelled/);
+  assert.match(callbackDescription('error') ?? '', /failed/);
+  assert.match(callbackDescription('conflict') ?? '', /another application user/);
+  assert.equal(callbackDescription('unexpected'), null);
+  for (const state of ['expired', 'revoked', 'undecryptable']) {
+    assert.match(credentialDescription(state), /reconnect/i);
+  }
+  assert.match(credentialDescription('missing'), /No Lichess identity/);
+  assert.match(credentialDescription('usable'), /Usable/);
+});
+
+test('import progress status and errors distinguish auth, provider and application authorization', () => {
+  for (const state of ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED']) assert.equal(isActiveImport(state), true);
+  for (const state of ['COMPLETED', 'CANCELLED', 'FAILED']) assert.equal(isActiveImport(state), false);
+  assert.match(safeImportError('RATE_LIMITED'), /retry automatically/);
+  assert.match(safeImportError('AUTH_REVOKED'), /Reconnect/);
+  assert.match(safeImportError('PROVIDER_HTTP_ERROR'), /provider/);
+  assert.equal(apiErrorCode({ error: { code: 'ACTIVE_IMPORT' } }), 'ACTIVE_IMPORT');
+  assert.equal(apiErrorCode({ error: { code: 7 } }), null);
+  assert.match(apiErrorMessage({ status: 401 }, 'failed'), /Application authentication/);
+  assert.equal(apiErrorMessage({ status: 500 }, 'failed'), 'failed');
 });
