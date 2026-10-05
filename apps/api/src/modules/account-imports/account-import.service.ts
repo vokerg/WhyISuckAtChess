@@ -268,6 +268,8 @@ export function toImportRunResponse(run: StoredImportRun) {
     gamesImported: run.gamesImported,
     gamesDuplicate: run.gamesDuplicate,
     gamesUpdated: run.gamesUpdated,
+    gamesSkipped: run.gamesSkipped,
+    gamesFailed: run.gamesFailed,
     gamesSkippedOutOfScope: run.gamesSkippedOutOfScope,
     errorCode: run.errorCode,
     error: run.error,
