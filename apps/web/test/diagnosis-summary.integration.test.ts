@@ -230,6 +230,7 @@ test('import scope uses explicit bounded UTC instants, validates invalid/future 
   assert.match(importScope(to, from, 'any', now).error ?? '', /after start/);
   assert.equal(importScope('', to, 'any', now).request, null);
   assert.equal(importScope(from, 'invalid', 'any', now).request, null);
+  assert.equal(importScope('2026-02-30T07:30', to, 'any', now).request, null);
   assert.equal(importScope(from, '2027-01-01T10:00', 'any', now).request, null);
   assert.match(localDateTimeValue(new Date(from)), /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/);
 });
