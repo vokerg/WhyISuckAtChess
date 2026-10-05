@@ -129,6 +129,8 @@
         <div><dt>Imported</dt><dd>{{ run.gamesImported }}</dd></div>
         <div><dt>Existing</dt><dd>{{ run.gamesDuplicate }}</dd></div>
         <div><dt>Updated</dt><dd>{{ run.gamesUpdated }}</dd></div>
+        <div><dt>Skipped</dt><dd>{{ run.gamesSkipped }}</dd></div>
+        <div><dt>Failed games</dt><dd>{{ run.gamesFailed }}</dd></div>
         <div><dt>Out of scope</dt><dd>{{ run.gamesSkippedOutOfScope }}</dd></div>
       </dl>
       @if (run.lastProgressAt) {
