@@ -27,6 +27,9 @@ export function importScope(
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
     return { request: null, error: 'Enter valid dates and times.' };
   }
+  if (localDateTimeValue(start) !== from || localDateTimeValue(end) !== to) {
+    return { request: null, error: 'Enter valid local dates and times.' };
+  }
   if (end <= start) return { request: null, error: 'End must be after start.' };
   if (start > at || end > at) return { request: null, error: 'Import end cannot be in the future.' };
   return {
