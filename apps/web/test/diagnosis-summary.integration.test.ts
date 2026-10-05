@@ -224,7 +224,7 @@ test('import scope uses explicit bounded UTC instants, validates invalid/future 
   assert.equal(importScope('', to, 'any', now).request, null);
   assert.equal(importScope(from, 'invalid', 'any', now).request, null);
   assert.equal(importScope(from, '2027-01-01T10:00', 'any', now).request, null);
-  assert.match(localDateTimeValue(new Date(from)), /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/);
+  assert.match(localDateTimeValue(new Date(from)), /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/);
 });
 
 test('OAuth query strings cannot assert connection and credential states remain distinct', () => {
