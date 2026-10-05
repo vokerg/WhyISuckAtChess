@@ -58,3 +58,5 @@ export type LichessImportRequest = z.infer<typeof LichessImportRequestSchema>;
 
 export * from './imported-games.schemas';
 export * from './diagnosis.schemas';
+
+export * from './lichess-import.schemas';
