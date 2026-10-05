@@ -16,6 +16,8 @@ import {
   readLichessNdjson,
 } from './providers/lichess/lichess-account-import';
 
+export { ActiveImportRunError } from './account-import.repository.prisma';
+
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const COMMIT_BATCH_SIZE = 50;
 const STALE_RUN_MS = 15 * 60 * 1000;
