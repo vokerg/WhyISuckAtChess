@@ -8,7 +8,7 @@ import {
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
 import { DOCUMENT } from '@angular/common';
-import { createEnvironmentInjector, Injector, runInInjectionContext } from '@angular/core';
+import { createEnvironmentInjector, Injector, runInInjectionContext, type EnvironmentInjector } from '@angular/core';
 import { of, Subject, throwError } from 'rxjs';
 import { LichessOnboardingApiService } from '../src/app/features/lichess/data-access/lichess-onboarding-api.service';
 import { LichessOnboardingStore } from '../src/app/features/lichess/state/lichess-onboarding.store';
@@ -288,7 +288,7 @@ function onboardingHarness(api: object) {
   const environment = createEnvironmentInjector([
     { provide: DOCUMENT, useValue: { defaultView: { confirm: () => true, location: { assign: () => undefined } } } },
     { provide: LichessOnboardingApiService, useValue: api },
-  ], Injector.NULL);
+  ], Injector.NULL as EnvironmentInjector);
   const store = runInInjectionContext(environment, () => new LichessOnboardingStore());
   return { store, destroy: () => environment.destroy() };
 }
