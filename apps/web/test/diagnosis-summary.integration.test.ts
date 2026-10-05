@@ -240,7 +240,7 @@ test('OAuth query strings cannot assert connection and credential states remain 
   assert.match(callbackDescription('error') ?? '', /failed/);
   assert.match(callbackDescription('conflict') ?? '', /another application user/);
   assert.equal(callbackDescription('unexpected'), null);
-  for (const state of ['expired', 'revoked', 'undecryptable']) {
+  for (const state of ['expired', 'revoked', 'undecryptable'] as const) {
     assert.match(credentialDescription(state), /reconnect/i);
   }
   assert.match(credentialDescription('missing'), /No Lichess identity/);
@@ -248,8 +248,8 @@ test('OAuth query strings cannot assert connection and credential states remain 
 });
 
 test('import progress status and errors distinguish auth, provider and application authorization', () => {
-  for (const state of ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED']) assert.equal(isActiveImport(state), true);
-  for (const state of ['COMPLETED', 'CANCELLED', 'FAILED']) assert.equal(isActiveImport(state), false);
+  for (const state of ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED'] as const) assert.equal(isActiveImport(state), true);
+  for (const state of ['COMPLETED', 'CANCELLED', 'FAILED'] as const) assert.equal(isActiveImport(state), false);
   assert.match(safeImportError('RATE_LIMITED'), /retry automatically/);
   assert.match(safeImportError('AUTH_REVOKED'), /Reconnect/);
   assert.match(safeImportError('PROVIDER_HTTP_ERROR'), /provider/);
