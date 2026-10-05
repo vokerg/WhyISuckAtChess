@@ -4,6 +4,7 @@
     <p class="eyebrow">Evidence library</p>
     <h1>Imported games</h1>
     <p>Start with the games themselves. Every replay keeps source provenance, clocks, and timing coverage visible.</p>
+    <a class="diagnosis-link" routerLink="/settings/lichess">Connect / import Lichess</a>
   </header>
 
   @if (error(); as message) {
@@ -13,7 +14,7 @@
   @if (loading() && games().length === 0) {
     <p class="state">Loading imported games…</p>
   } @else if (games().length === 0 && !error()) {
-    <p class="state">No imported games yet. Connect Lichess and import a game history to begin.</p>
+    <p class="state">No imported games yet. <a routerLink="/settings/lichess">Connect Lichess and explicitly import game history</a> to begin.</p>
   } @else {
     <section class="game-grid" aria-label="Imported games">
       @for (game of games(); track game.id) {
