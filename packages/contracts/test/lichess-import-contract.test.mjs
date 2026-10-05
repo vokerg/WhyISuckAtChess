@@ -17,7 +17,7 @@ const example = {
   requestedTo: '2026-09-30T00:00:00.000Z',
   windowsTotal: 1, windowsCompleted: 0,
   gamesSeen: 30, gamesMatchedScope: 25,
-  gamesImported: 20, gamesDuplicate: 3, gamesUpdated: 2, gamesSkippedOutOfScope: 5,
+  gamesImported: 20, gamesDuplicate: 3, gamesUpdated: 2, gamesSkipped: 0, gamesFailed: 0, gamesSkippedOutOfScope: 5,
   errorCode: null, error: null, lastProgressAt: '2026-09-20T11:22:00.000Z',
   rateLimitUntil: null, startedAt: '2026-09-20T11:20:00.000Z', completedAt: null,
 };
