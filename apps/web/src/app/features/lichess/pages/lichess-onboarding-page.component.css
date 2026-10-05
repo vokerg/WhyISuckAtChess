@@ -1,0 +1,43 @@
+:host { display: block; }
+.onboarding-page {
+  width: min(1100px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+  display: grid;
+  gap: 1rem;
+  color: #3d281b;
+}
+.heading, .panel {
+  background: rgba(255, 252, 247, 0.94);
+  border: 1px solid rgba(61, 40, 27, 0.15);
+  border-radius: 16px;
+  padding: clamp(1rem, 3vw, 1.7rem);
+}
+.heading h1 { font-size: clamp(1.8rem, 4vw, 2.7rem); margin: 0; }
+h2 { margin: 0 0 0.8rem; }
+p { line-height: 1.55; }
+.eyebrow { margin: 0 0 0.4rem; color: #935817; font-size: 0.75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.heading p:not(.eyebrow), .detail { color: #765f4e; }
+nav, .actions, .panel-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.panel-heading { justify-content: space-between; }
+a { color: #7d4b18; font-weight: 750; text-underline-offset: .16em; }
+button, input, select { font: inherit; }
+button { padding: .65rem 1rem; cursor: pointer; background: #744410; color: white; border: 1px solid #744410; border-radius: 8px; font-weight: 700; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid #a76a23; outline-offset: 3px; }
+button.secondary { background: transparent; color: #744410; }
+button.danger { border-color: #a13a29; color: #a13a29; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 1rem; margin: 1rem 0; }
+label { display: grid; gap: .5rem; font-weight: 650; }
+input, select { min-width: 0; padding: .65rem; border-radius: 8px; border: 1px solid #af9a88; background: white; color: #382519; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit,minmax(115px,1fr)); gap: .6rem; }
+.stats div { padding: .8rem; border: 1px solid rgba(61,40,27,.12); border-radius: 10px; min-width: 0; }
+.stats dt { color: #765f4e; } .stats dd { margin: .35rem 0 0; font-size: 1.35rem; font-weight: 800; }
+.notice, .error { padding: 1rem; border-radius: 10px; margin: 0; }
+.notice { background: #f4e8d2; color: #624211; }
+.error { background: #fff2ed; border: 1px solid #a13a29; color: #842b20; }
+.credential, .status-line { font-size: 1.07rem; }
+.credential[data-state="usable"] { color: #246342; }
+.credential[data-state="expired"], .credential[data-state="revoked"],
+.credential[data-state="undecryptable"] { color: #a13a29; }
+@media(max-width: 540px) { .panel-heading { align-items: start; } .actions { align-items: stretch; } }
