@@ -353,3 +353,52 @@ test('polling cannot overlap and stale responses cannot restore a cancelled run'
     assert.equal(store.run()?.status, 'CANCELLED', 'old poll is generation-fenced');
   } finally { destroy(); }
 });
+
+test('failed conflict recovery never claims an existing run was attached', async () => {
+  let reads = 0;
+  const api = {
+    connection: () => of(connected),
+    latest: () => ++reads === 1 ? of(null) : throwError(() => new Error('network')),
+    create: () => throwError(() => ({ status: 409, error: { code: 'ACTIVE_IMPORT' } })),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    await store.startImport();
+    assert.equal(store.run(), null);
+    assert.equal(store.notice(), null);
+    assert.match(store.error() ?? '', /could not be recovered/);
+    assert.match(store.pollingError() ?? '', /Could not recover import progress/);
+  } finally { destroy(); }
+});
+
+test('successful disconnect cannot leave a stale usable credential if verification fails', async () => {
+  let reads = 0;
+  const api = {
+    connection: () => ++reads === 1 ? of(connected) : throwError(() => new Error('network')),
+    latest: () => of(null),
+    disconnect: () => of(undefined),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    assert.equal(store.usable, true);
+    await store.disconnect();
+    assert.equal(store.usable, false);
+    assert.equal(store.connection(), null);
+    assert.match(store.notice() ?? '', /disconnect completed/);
+    assert.match(store.error() ?? '', /Could not refresh/);
+  } finally { destroy(); }
+});
+
+test('destroyed page rejects delayed connection response', async () => {
+  const pending = new Subject<LichessConnectionStatus>();
+  const api = { connection: () => pending.asObservable(), latest: () => of(null) };
+  const { store, destroy } = onboardingHarness(api);
+  const load = store.load();
+  destroy();
+  pending.next(connected);
+  pending.complete();
+  await load;
+  assert.equal(store.connection(), null);
+});
