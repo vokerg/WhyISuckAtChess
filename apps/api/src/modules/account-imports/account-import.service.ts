@@ -64,6 +64,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
   };
 
   const getRun = (appUserId: number, runId: number) => repository.getRun(appUserId, runId);
+  const getLatestRun = (appUserId: number) => repository.getLatestRun(appUserId);
   const cancelRun = (appUserId: number, runId: number) => repository.requestCancel(appUserId, runId, now());
 
   const settleLeaseLoss = async (
@@ -230,7 +231,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
     return current?.status === 'CANCEL_REQUESTED' || current?.cancelRequestedAt !== null;
   }
 
-  return { requestImport, getRun, cancelRun, executeRun, runOnce };
+  return { requestImport, getRun, getLatestRun, cancelRun, executeRun, runOnce };
 }
 
 export type LichessAccountImportService = ReturnType<typeof createLichessAccountImportService>;
@@ -255,6 +256,8 @@ export function toImportRunResponse(run: StoredImportRun) {
     id: run.id,
     provider: run.provider,
     status: run.status,
+    lichessUserIdSnapshot: run.lichessUserIdSnapshot,
+    lichessUsernameSnapshot: run.lichessUsernameSnapshot,
     scope: run.scopeJson,
     requestedFrom: run.requestedFrom.toISOString(),
     requestedTo: run.requestedTo.toISOString(),
@@ -268,6 +271,8 @@ export function toImportRunResponse(run: StoredImportRun) {
     gamesSkippedOutOfScope: run.gamesSkippedOutOfScope,
     errorCode: run.errorCode,
     error: run.error,
+    lastProgressAt: run.lastProgressAt?.toISOString() ?? null,
+    rateLimitUntil: run.rateLimitUntil?.toISOString() ?? null,
     startedAt: run.startedAt?.toISOString() ?? null,
     completedAt: run.completedAt?.toISOString() ?? null,
   };
