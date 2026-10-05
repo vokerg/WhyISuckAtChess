@@ -45,6 +45,7 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
   app.get('/api/me/imports/lichess/latest', async (request, reply) => {
     const auth = requireAuth(request, reply);
     if (!auth) return;
+    reply.header('Cache-Control', 'private, no-store');
     const run = await service.getLatestRun(auth.userId);
     return { importRun: run ? toImportRunResponse(run) : null };
   });
@@ -54,6 +55,7 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
     if (!auth) return;
     const runId = Number(request.params.runId);
     if (!Number.isSafeInteger(runId) || runId < 1) return reply.code(400).send({ message: 'Invalid import run id.' });
+    reply.header('Cache-Control', 'private, no-store');
     const run = await service.getRun(auth.userId, runId);
     if (!run) return reply.code(404).send({ message: 'Import run not found.' });
     return { importRun: toImportRunResponse(run) };
