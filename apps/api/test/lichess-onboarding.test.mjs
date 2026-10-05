@@ -17,7 +17,7 @@ function storedRun(overrides = {}) {
     lichessUserIdSnapshot: 'lichess-id', lichessUsernameSnapshot: 'Owner',
     requestedFrom: start, requestedTo: end, windowsTotal: 1, windowsCompleted: 0,
     gamesSeen: 1, gamesMatchedScope: 1, gamesImported: 0,
-    gamesDuplicate: 0, gamesUpdated: 0, gamesSkippedOutOfScope: 0,
+    gamesDuplicate: 0, gamesUpdated: 0, gamesSkipped: 0, gamesFailed: 0, gamesSkippedOutOfScope: 0,
     errorCode: null, error: null, lastProgressAt: null, rateLimitUntil: null,
     startedAt: start, completedAt: null,
     ...overrides,
