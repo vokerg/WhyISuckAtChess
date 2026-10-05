@@ -235,7 +235,7 @@ export class LichessOnboardingStore {
       }
     } finally {
       this.polling = false;
-      if (this.isCurrent(generation)) this.schedulePoll();
+      this.schedulePoll();
     }
   }
 
