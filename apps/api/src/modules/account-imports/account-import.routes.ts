@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../../auth/request-auth';
 import { LichessImportRequestSchema } from '@why-i-suck-at-chess/contracts';
 import { LichessCredentialUnavailableError } from '../lichess/lichess-connection.service';
-import { ActiveImportRunError } from './account-import.repository.prisma';
+import { ActiveImportRunError } from './account-import.service';
 import type { LichessAccountImportService } from './account-import.service';
 import { toImportRunResponse } from './account-import.service';
 
