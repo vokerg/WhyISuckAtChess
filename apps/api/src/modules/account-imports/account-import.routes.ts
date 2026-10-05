@@ -53,6 +53,7 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
   app.get<{ Params: { runId: string } }>('/api/me/imports/:runId', async (request, reply) => {
     const auth = requireAuth(request, reply);
     if (!auth) return;
+    if (!/^[1-9]\d*$/.test(request.params.runId)) return reply.code(400).send({ message: 'Invalid import run id.' });
     const runId = Number(request.params.runId);
     if (!Number.isSafeInteger(runId) || runId < 1) return reply.code(400).send({ message: 'Invalid import run id.' });
     reply.header('Cache-Control', 'private, no-store');
@@ -64,6 +65,7 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
   app.post<{ Params: { runId: string } }>('/api/me/imports/:runId/cancel', async (request, reply) => {
     const auth = requireAuth(request, reply);
     if (!auth) return;
+    if (!/^[1-9]\d*$/.test(request.params.runId)) return reply.code(400).send({ message: 'Invalid import run id.' });
     const runId = Number(request.params.runId);
     if (!Number.isSafeInteger(runId) || runId < 1) return reply.code(400).send({ message: 'Invalid import run id.' });
     const run = await service.cancelRun(auth.userId, runId);
