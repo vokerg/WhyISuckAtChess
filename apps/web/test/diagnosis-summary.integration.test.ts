@@ -236,7 +236,7 @@ test('import scope uses explicit bounded UTC instants, validates invalid/future 
 });
 
 test('OAuth query strings cannot assert connection and credential states remain distinct', () => {
-  assert.match(callbackDescription('1') ?? '', /verified by the server/);
+  assert.match(callbackDescription('1') ?? '', /not proof/);
   assert.match(callbackDescription('cancelled') ?? '', /cancelled/);
   assert.match(callbackDescription('error') ?? '', /failed/);
   assert.match(callbackDescription('conflict') ?? '', /another application user/);
