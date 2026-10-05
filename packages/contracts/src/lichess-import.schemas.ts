@@ -32,6 +32,8 @@ export const lichessImportRunSchema = z.object({
   gamesImported: z.number().int().nonnegative(),
   gamesDuplicate: z.number().int().nonnegative(),
   gamesUpdated: z.number().int().nonnegative(),
+  gamesSkipped: z.number().int().nonnegative(),
+  gamesFailed: z.number().int().nonnegative(),
   gamesSkippedOutOfScope: z.number().int().nonnegative(),
   errorCode: z.string().nullable(),
   error: z.string().nullable(),
