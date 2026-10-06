@@ -91,6 +91,9 @@ try {
     });
 
     if (path === '/api/me/lichess-connection' && method === 'GET') return respond(200, connection);
+    if (path === '/api/me/lichess-connection/start' && method === 'POST') {
+      return respond(200, { url: 'https://lichess.org/oauth?response_type=code&client_id=fixture' });
+    }
     if (path === '/api/me/lichess-connection' && method === 'DELETE') {
       disconnects++;
       connection = missing;
@@ -116,6 +119,17 @@ try {
     return respond(404, { message: 'Not part of deterministic browser fixture.' });
   });
 
+  // Fake provider authorization redirects to the app; only the subsequent API
+  // connection response establishes authority, never the callback query alone.
+  await context.route('https://lichess.org/oauth**', async (route) => {
+    connection = usable;
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<script>location.replace("' + origin + '/settings/lichess?lichessConnected=1")</script>',
+    });
+  });
+
   // Callback query parameters are notices, never authentication authority.
   await page.goto(origin + '/settings/lichess?lichessConnected=1');
   await page.getByText(/Authorization return noted/).waitFor();
@@ -128,9 +142,13 @@ try {
   await page.goto(origin + '/diagnosis');
   await page.getByRole('link', { name: 'Connect / import Lichess' }).waitFor();
 
+  // The first user-driven connection step starts OAuth and returns through the
+  // mocked provider to the authoritative backend connection read.
+  await page.getByRole('link', { name: 'Connect / import Lichess' }).click();
+  await page.getByRole('button', { name: 'Connect Lichess' }).click();
+  await page.getByText('OwnedLichessPlayer').first().waitFor();
+
   // Explicit import of the server-owned identity; the UI sends UTC instants.
-  connection = usable;
-  await page.goto(origin + '/settings/lichess');
   await page.getByText('OwnedLichessPlayer').first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'Start bounded import' }).isEnabled(), true);
   const from = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
