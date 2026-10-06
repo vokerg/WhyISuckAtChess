@@ -59,7 +59,7 @@ async function awaitServer(proc) {
   throw new Error('Angular development server did not become ready.');
 }
 
-const server = spawn('npm', ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4200'], {
+const server = spawn('npm', ['run', 'dev', '--workspace=apps/web', '--', '--host', '127.0.0.1', '--port', '4200'], {
   stdio: ['ignore', 'pipe', 'pipe'],
   detached: true,
 });
