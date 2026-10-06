@@ -59,7 +59,7 @@ jobs:
       - name: Test
         run: npm test
 
-browser-acceptance:
+  browser-acceptance:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
