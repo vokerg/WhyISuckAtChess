@@ -49,7 +49,7 @@ async function awaitServer(proc) {
   for (let attempt = 0; attempt < 120; attempt++) {
     if (proc.exitCode !== null) throw new Error('Angular development server exited early.');
     try {
-      const response = await fetch(origin + '/settings/lichess');
+      const response = await fetch(origin + '/', { headers: { Accept: 'text/html' } });
       if (response.ok) return;
     } catch {
       // Still starting.
