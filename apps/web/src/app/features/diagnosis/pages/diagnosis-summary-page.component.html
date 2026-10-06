@@ -8,7 +8,10 @@
         not a fresh interpretation calculated in the browser.
       </p>
     </div>
-    <a class="secondary-link" routerLink="/games">Browse imported games</a>
+    <nav class="entry-actions" aria-label="Diagnosis navigation">
+      <a class="secondary-link" routerLink="/games">Browse imported games</a>
+      <a class="secondary-link" routerLink="/settings/lichess">Connect / import Lichess</a>
+    </nav>
   </header>
 
   @if (error(); as message) {
@@ -32,7 +35,10 @@
         <p class="state-kicker">Diagnosis unavailable</p>
         <h2>There is no complete current answer to show yet</h2>
         <p>{{ unavailableMessageFor(current.reason) }}</p>
-        <a routerLink="/games">Inspect the game evidence that is already available</a>
+        <div class="entry-actions">
+          <a routerLink="/games">Inspect existing game evidence</a>
+          <a routerLink="/settings/lichess">Connect Lichess or import more games</a>
+        </div>
       </section>
     } @else {
       <section class="summary-strip" aria-label="Diagnosis summary metadata">
@@ -61,6 +67,7 @@
           <p class="state-kicker">No ranked weaknesses</p>
           <h2>The current diagnosis has no top-level findings</h2>
           <p>This is different from missing or stale data: the persisted diagnosis is available, but its ranked list is empty.</p>
+          <a routerLink="/settings/lichess">Connect or import games</a>
         </section>
       } @else {
         <ol class="finding-list" aria-label="Ranked diagnosis findings">

@@ -7,6 +7,24 @@ import {
   type DiagnosisSummaryRepresentativeEvidence,
 } from '@why-i-suck-at-chess/contracts';
 import { routes } from '../src/app/app.routes';
+import { DOCUMENT } from '@angular/common';
+import { createEnvironmentInjector, Injector, runInInjectionContext, type EnvironmentInjector } from '@angular/core';
+import { of, Subject, throwError } from 'rxjs';
+import { LichessOnboardingApiService } from '../src/app/features/lichess/data-access/lichess-onboarding-api.service';
+import { LichessOnboardingStore } from '../src/app/features/lichess/state/lichess-onboarding.store';
+import type { LichessConnectionStatus, LichessImportRun } from '@why-i-suck-at-chess/contracts';
+
+import {
+  apiErrorCode,
+  apiErrorMessage,
+  callbackDescription,
+  credentialDescription,
+  importScope,
+  isActiveImport,
+  localDateTimeValue,
+  safeImportError,
+} from '../src/app/features/lichess/helpers/lichess-onboarding-view-model';
+
 import { diagnosisEvidenceGuideEntries } from '../src/app/features/diagnosis/components/diagnosis-evidence-guide.component';
 import {
   diagnosisDrillDownUnavailableMessage,
@@ -189,4 +207,198 @@ test('drill-down contract keeps unranked supporting findings and bounded evidenc
       }),
     }],
   }));
+});
+
+test('Lichess onboarding is routed without replacing the diagnosis default or game replay', () => {
+  assert.equal(routes.find((r) => r.path === '')?.redirectTo, 'diagnosis');
+  assert.ok(routes.find((r) => r.path === 'settings/lichess')?.component);
+  assert.ok(routes.find((r) => r.path === 'games/:gameId')?.component);
+});
+
+test('import scope uses explicit bounded UTC instants, validates invalid/future requests', () => {
+  const now = new Date('2026-10-05T09:30:00.000Z');
+  const from = '2026-09-05T07:30';
+  const to = '2026-10-05T07:30';
+  const all = importScope(from, to, 'any', now);
+  assert.ok(all.request);
+  assert.equal(all.error, null);
+  assert.equal(all.request.from, new Date(from).toISOString());
+  assert.equal(all.request.to, new Date(to).toISOString());
+  assert.equal('rated' in all.request, false);
+  assert.equal(importScope(from, to, 'rated', now).request?.rated, true);
+  assert.equal(importScope(from, to, 'casual', now).request?.rated, false);
+  assert.match(importScope(to, from, 'any', now).error ?? '', /after start/);
+  assert.equal(importScope('', to, 'any', now).request, null);
+  assert.equal(importScope(from, 'invalid', 'any', now).request, null);
+  assert.equal(importScope('2026-02-30T07:30', to, 'any', now).request, null);
+  assert.equal(importScope(from, '2027-01-01T10:00', 'any', now).request, null);
+  assert.match(localDateTimeValue(new Date(from)), /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/);
+});
+
+test('OAuth query strings cannot assert connection and credential states remain distinct', () => {
+  assert.match(callbackDescription('1') ?? '', /not proof/);
+  assert.match(callbackDescription('cancelled') ?? '', /cancelled/);
+  assert.match(callbackDescription('error') ?? '', /failed/);
+  assert.match(callbackDescription('conflict') ?? '', /another application user/);
+  assert.equal(callbackDescription('unexpected'), null);
+  for (const state of ['expired', 'revoked', 'undecryptable'] as const) {
+    assert.match(credentialDescription(state), /reconnect/i);
+  }
+  assert.match(credentialDescription('missing'), /No Lichess identity/);
+  assert.match(credentialDescription('usable'), /Usable/);
+});
+
+test('import progress status and errors distinguish auth, provider and application authorization', () => {
+  for (const state of ['QUEUED', 'RUNNING', 'CANCEL_REQUESTED'] as const) assert.equal(isActiveImport(state), true);
+  for (const state of ['COMPLETED', 'CANCELLED', 'FAILED'] as const) assert.equal(isActiveImport(state), false);
+  assert.match(safeImportError('RATE_LIMITED'), /retry automatically/);
+  assert.match(safeImportError('AUTH_REVOKED'), /Reconnect/);
+  assert.match(safeImportError('PROVIDER_HTTP_ERROR'), /provider/);
+  assert.equal(apiErrorCode({ error: { code: 'ACTIVE_IMPORT' } }), 'ACTIVE_IMPORT');
+  assert.equal(apiErrorCode({ error: { code: 7 } }), null);
+  assert.match(apiErrorMessage({ status: 401 }, 'failed'), /Application authentication/);
+  assert.equal(apiErrorMessage({ status: 500 }, 'failed'), 'failed');
+});
+
+function onboardingRun(status: LichessImportRun['status']): LichessImportRun {
+  return {
+    id: 7, provider: 'LICHESS', status,
+    lichessUserIdSnapshot: 'lichess-owner', lichessUsernameSnapshot: 'Owner',
+    scope: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+    requestedFrom: '2026-09-01T00:00:00.000Z',
+    requestedTo: '2026-09-30T00:00:00.000Z',
+    windowsTotal: 1, windowsCompleted: 0, gamesSeen: 0, gamesMatchedScope: 0,
+    gamesImported: 0, gamesDuplicate: 0, gamesUpdated: 0, gamesSkipped: 0,
+    gamesFailed: 0, gamesSkippedOutOfScope: 0, errorCode: null, error: null,
+    lastProgressAt: null, rateLimitUntil: null, startedAt: null, completedAt: null,
+  };
+}
+
+const connected: LichessConnectionStatus = {
+  connected: true, credentialState: 'usable', reconnectRequired: false,
+  account: {
+    lichessUserId: 'lichess-owner',
+    username: 'Owner',
+    scopes: [],
+    connectedAt: '2026-09-01T00:00:00.000Z',
+    expiresAt: null,
+  },
+};
+
+function onboardingHarness(api: object) {
+  const environment = createEnvironmentInjector([
+    { provide: DOCUMENT, useValue: { defaultView: { confirm: () => true, location: { assign: () => undefined } } } },
+    { provide: LichessOnboardingApiService, useValue: api },
+  ], Injector.NULL as EnvironmentInjector);
+  const store = runInInjectionContext(environment, () => new LichessOnboardingStore());
+  return { store, destroy: () => environment.destroy() };
+}
+
+test('Lichess store recovers an active run and attaches to conflicts instead of issuing duplicates', async () => {
+  let requested = 0;
+  const api = {
+    connection: () => of(connected),
+    latest: () => of(onboardingRun('QUEUED')),
+    create: () => { requested++; return of(onboardingRun('QUEUED')); },
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    assert.equal(store.usable, true);
+    assert.equal(store.run()?.id, 7);
+    await store.startImport();
+    assert.equal(requested, 0, 'do not duplicate an already active run');
+    assert.equal(store.run()?.status, 'QUEUED');
+  } finally { destroy(); }
+
+  const conflictApi = {
+    connection: () => of(connected),
+    latest: (() => {
+      let calls = 0;
+      return () => of(++calls === 1 ? null : onboardingRun('QUEUED'));
+    })(),
+    create: () => throwError(() => ({ status: 409, error: { code: 'ACTIVE_IMPORT' } })),
+  };
+  const conflict = onboardingHarness(conflictApi);
+  try {
+    await conflict.store.load();
+    assert.equal(conflict.store.run(), null);
+    await conflict.store.startImport();
+    assert.equal(conflict.store.run()?.id, 7, 'recovers server run after 409');
+    assert.match(conflict.store.notice() ?? '', /Recovered/);
+  } finally { conflict.destroy(); }
+});
+
+test('polling cannot overlap and stale responses cannot restore a cancelled run', async () => {
+  let requests = 0;
+  const pending = new Subject<LichessImportRun>();
+  const api = {
+    connection: () => of(connected),
+    latest: () => of(onboardingRun('RUNNING')),
+    run: () => { requests++; return pending.asObservable(); },
+    cancel: () => of(onboardingRun('CANCELLED')),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    await new Promise((resolve) => setTimeout(resolve, 2650));
+    assert.equal(requests, 1);
+    await new Promise((resolve) => setTimeout(resolve, 2700));
+    assert.equal(requests, 1, 'second poll cannot overlap pending request');
+    await store.cancelImport();
+    assert.equal(store.run()?.status, 'CANCELLED');
+    pending.next(onboardingRun('RUNNING'));
+    pending.complete();
+    await Promise.resolve();
+    assert.equal(store.run()?.status, 'CANCELLED', 'old poll is generation-fenced');
+  } finally { destroy(); }
+});
+
+test('failed conflict recovery never claims an existing run was attached', async () => {
+  let reads = 0;
+  const api = {
+    connection: () => of(connected),
+    latest: () => ++reads === 1 ? of(null) : throwError(() => new Error('network')),
+    create: () => throwError(() => ({ status: 409, error: { code: 'ACTIVE_IMPORT' } })),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    await store.startImport();
+    assert.equal(store.run(), null);
+    assert.equal(store.notice(), null);
+    assert.match(store.error() ?? '', /could not be recovered/);
+    assert.match(store.pollingError() ?? '', /Could not recover import progress/);
+  } finally { destroy(); }
+});
+
+test('successful disconnect cannot leave a stale usable credential if verification fails', async () => {
+  let reads = 0;
+  const api = {
+    connection: () => ++reads === 1 ? of(connected) : throwError(() => new Error('network')),
+    latest: () => of(null),
+    disconnect: () => of(undefined),
+  };
+  const { store, destroy } = onboardingHarness(api);
+  try {
+    await store.load();
+    assert.equal(store.usable, true);
+    await store.disconnect();
+    assert.equal(store.usable, false);
+    assert.equal(store.connection(), null);
+    assert.match(store.notice() ?? '', /disconnect completed/);
+    assert.match(store.error() ?? '', /Could not refresh/);
+  } finally { destroy(); }
+});
+
+test('destroyed page rejects delayed connection response', async () => {
+  const pending = new Subject<LichessConnectionStatus>();
+  const api = { connection: () => pending.asObservable(), latest: () => of(null) };
+  const { store, destroy } = onboardingHarness(api);
+  const load = store.load();
+  destroy();
+  pending.next(connected);
+  pending.complete();
+  await load;
+  assert.equal(store.connection(), null);
 });

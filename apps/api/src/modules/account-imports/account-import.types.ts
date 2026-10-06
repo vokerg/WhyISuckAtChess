@@ -90,6 +90,7 @@ export interface ImportCommitResult {
 export interface AccountImportRepository {
   createRun(input: CreateImportRunInput): Promise<StoredImportRun>;
   getRun(appUserId: number, runId: number): Promise<StoredImportRun | null>;
+  getLatestRun(appUserId: number): Promise<StoredImportRun | null>;
   claimNextRun(now: Date, staleAfter: Date): Promise<StoredImportRun | null>;
   heartbeat(runId: number, claimedAt: Date, now: Date): Promise<void>;
   deferRun(runId: number, claimedAt: Date, retryAt: Date, code: string, message: string, now: Date): Promise<void>;

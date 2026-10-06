@@ -1,0 +1,171 @@
+<main class="onboarding-page">
+  <header class="heading">
+    <p class="eyebrow">Get started</p>
+    <h1>Connect and import from Lichess</h1>
+    <p>Use your own Lichess identity. Connecting never imports automatically: you choose the history window and start the import explicitly.</p>
+    <nav aria-label="Chess evidence navigation">
+      <a routerLink="/diagnosis">Ranked diagnosis</a>
+      <a routerLink="/games">Imported games</a>
+    </nav>
+  </header>
+
+  @if (callbackNotice; as callback) {
+    <p class="notice" role="status">{{ callback }}</p>
+  }
+  @if (store.notice(); as notice) {
+    <p class="notice" role="status">{{ notice }}</p>
+  }
+  @if (store.error(); as error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+
+  <section class="panel" aria-labelledby="connection-title">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Step 1</p>
+        <h2 id="connection-title">Your Lichess connection</h2>
+      </div>
+      <button type="button" class="secondary" (click)="store.load()" [disabled]="store.loading() || store.busy()">Refresh</button>
+    </div>
+
+    @if (store.loading()) {
+      <p role="status">Checking the authoritative connection and recent import…</p>
+    } @else if (store.connection(); as connection) {
+      @if (connection.connected && connection.account; as account) {
+        <p>Connected identity: <strong>{{ account.username }}</strong></p>
+        <p class="detail">Connected at <time [attr.datetime]="account.connectedAt">{{ account.connectedAt }}</time>
+          @if (account.expiresAt) { · Token expiry {{ account.expiresAt }} }
+        </p>
+        <p class="credential" [attr.data-state]="connection.credentialState">
+          Credential: <strong>{{ connection.credentialState }}</strong> —
+          {{ credentialDescription(connection.credentialState) }}
+        </p>
+        <div class="actions">
+          <button type="button" (click)="store.connect()" [disabled]="store.busy()">Reconnect Lichess</button>
+          <button type="button" class="secondary danger" (click)="store.disconnect()" [disabled]="store.busy()">
+            Disconnect Lichess
+          </button>
+        </div>
+      } @else {
+        <p class="credential" data-state="missing">{{ credentialDescription('missing') }}</p>
+        <button type="button" (click)="store.connect()" [disabled]="store.busy()">Connect Lichess</button>
+      }
+      <p class="detail">Application authentication is separate from Lichess authorization. Disconnect revokes the connection; it does not delete already imported games or evidence.</p>
+    } @else {
+      <p class="detail">Connection state could not be verified. Refresh to retry; this is not proof of a missing connection.</p>
+    }
+  </section>
+
+  <section class="panel" aria-labelledby="import-title">
+    <p class="eyebrow">Step 2</p>
+    <h2 id="import-title">Import game history</h2>
+    <p>The default is the most recent 30 days. You may change the requested window. Only standard bullet, blitz and rapid games are eligible; imported clocks and source data stay unchanged.</p>
+    @if (store.connection()?.account; as account) {
+      <p>Requested account: <strong>{{ account.username }}</strong> (the server verifies ownership).</p>
+    }
+
+    <div class="form-grid">
+      <label>
+        <span>From (local time)</span>
+        <input type="datetime-local" [value]="store.fromInput()"
+          (input)="store.fromInput.set($any($event.target).value)"
+          [disabled]="!store.usable || store.busy() || store.loading()" />
+      </label>
+      <label>
+        <span>To (local time, exclusive)</span>
+        <input type="datetime-local" [value]="store.toInput()"
+          (input)="store.toInput.set($any($event.target).value)"
+          [disabled]="!store.usable || store.busy() || store.loading()" />
+      </label>
+      <label>
+        <span>Rated scope</span>
+        <select [value]="store.ratedMode()" (change)="setRatedMode($any($event.target).value)"
+          [disabled]="!store.usable || store.busy() || store.loading()">
+          <option value="any">Rated and casual</option>
+          <option value="rated">Rated only</option>
+          <option value="casual">Casual only</option>
+        </select>
+      </label>
+    </div>
+    @if (store.scope.request; as scope) {
+      <p class="detail" aria-label="UTC import scope">
+        UTC range: <strong>{{ scope.from }}</strong> to <strong>{{ scope.to }}</strong>
+        (exclusive), {{ store.ratedMode() === 'any' ? 'all ratings' : store.ratedMode() }}
+      </p>
+    } @else {
+      <p class="error" role="alert">{{ store.scope.error }}</p>
+    }
+    <button type="button" (click)="store.startImport()"
+      [disabled]="!store.usable || store.busy() || store.loading() || !store.scope.request || (store.run() && isActiveImport(store.run()!.status))">
+      {{ store.busy() ? 'Working…' : 'Start bounded import' }}
+    </button>
+    @if (!store.usable) {
+      <p class="detail">Connect or reconnect Lichess with a usable credential before importing.</p>
+    }
+  </section>
+
+  <section class="panel" aria-labelledby="progress-title">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Step 3</p>
+        <h2 id="progress-title">Persisted import progress</h2>
+      </div>
+      <button type="button" class="secondary" (click)="store.load()" [disabled]="store.loading() || store.busy()">Reload</button>
+    </div>
+
+    @if (store.pollingError(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+    @if (store.run(); as run) {
+      <p class="status-line">Run #{{ run.id }} — <strong>{{ run.status }}</strong></p>
+      <p class="detail">Identity at request: <strong>{{ run.lichessUsernameSnapshot }}</strong>
+        · UTC window: {{ run.requestedFrom }} to {{ run.requestedTo }}
+        · {{ run.scope.rated === undefined ? 'rated and casual' : (run.scope.rated ? 'rated' : 'casual') }}
+      </p>
+      <dl class="stats">
+        <div><dt>Windows</dt><dd>{{ run.windowsCompleted }} / {{ run.windowsTotal }}</dd></div>
+        <div><dt>Seen</dt><dd>{{ run.gamesSeen }}</dd></div>
+        <div><dt>In scope</dt><dd>{{ run.gamesMatchedScope }}</dd></div>
+        <div><dt>Imported</dt><dd>{{ run.gamesImported }}</dd></div>
+        <div><dt>Existing</dt><dd>{{ run.gamesDuplicate }}</dd></div>
+        <div><dt>Updated</dt><dd>{{ run.gamesUpdated }}</dd></div>
+        <div><dt>Skipped</dt><dd>{{ run.gamesSkipped }}</dd></div>
+        <div><dt>Failed games</dt><dd>{{ run.gamesFailed }}</dd></div>
+        <div><dt>Out of scope</dt><dd>{{ run.gamesSkippedOutOfScope }}</dd></div>
+      </dl>
+      @if (run.lastProgressAt) {
+        <p class="detail">Last backend progress: {{ run.lastProgressAt }}</p>
+      }
+      @if (run.status === 'CANCEL_REQUESTED') {
+        <p role="status">Cancellation requested. The worker will stop at its next safe checkpoint.</p>
+      }
+      @if (run.rateLimitUntil && run.status === 'QUEUED') {
+        <p role="status">Retry not before {{ run.rateLimitUntil }}.</p>
+      }
+      @if (run.errorCode && (run.status === 'FAILED' || run.status === 'QUEUED')) {
+        <p class="detail" role="status">{{ safeImportError(run.errorCode) }} ({{ run.errorCode }})</p>
+      }
+      @if (run.status === 'COMPLETED') {
+        <p role="status">
+          Import completed with {{ run.gamesImported }} new games.
+          Completion does not mean Stockfish/evidence processing or a current ranked diagnosis is ready.
+          Zero imported games is a valid outcome.
+        </p>
+        <div class="actions">
+          <a routerLink="/games">Browse imported games</a>
+          <a routerLink="/diagnosis">Check diagnosis availability</a>
+        </div>
+      } @else if (run.status === 'FAILED' || run.status === 'CANCELLED') {
+        <p role="status">This import ended. A new request may reuse already imported games safely.</p>
+        <a routerLink="/games">View existing games</a>
+      }
+      @if (isActiveImport(run.status)) {
+        <p class="detail">Active progress refreshes from the server about every 2.5 seconds while this page is open.</p>
+        <button type="button" class="secondary danger" (click)="store.cancelImport()"
+          [disabled]="store.busy() || store.loading() || run.status === 'CANCEL_REQUESTED'">Request cancellation</button>
+      }
+    } @else if (!store.loading() && !store.pollingError()) {
+      <p>No previous Lichess imports for this application user.</p>
+    }
+  </section>
+</main>
