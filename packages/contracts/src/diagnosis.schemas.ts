@@ -190,6 +190,10 @@ const timeControlCollectionMetaSchema = z.object({
   truncated: z.boolean(),
 }).strict();
 
+const timeControlCaveatCollectionSchema = timeControlCollectionMetaSchema.extend({
+  items: z.array(z.string().min(1)).max(20),
+}).strict();
+
 const timeControlRatingDisclosureSchema = z.object({
   status: z.enum(['AVAILABLE', 'UNAVAILABLE']),
   reason: z.string().min(1).nullable(),
@@ -247,7 +251,7 @@ const exactTimeControlComparisonSectionSchema = z.object({
   }).strict(),
   comparisonCount: timeControlCollectionMetaSchema,
   comparisons: z.array(exactTimeControlComparisonItemSchema).max(25),
-  caveats: z.array(z.string().min(1)).max(20),
+  caveats: timeControlCaveatCollectionSchema,
 }).strict();
 
 const incrementExactControlSchema = z.object({
@@ -318,7 +322,7 @@ const incrementEffectSectionSchema = z.object({
   }).strict(),
   stratumCount: timeControlCollectionMetaSchema,
   strata: z.array(incrementStratumSchema).max(25),
-  caveats: z.array(z.string().min(1)).max(20),
+  caveats: timeControlCaveatCollectionSchema,
 }).strict();
 
 export const timeControlComparisonResponseSchema = z.object({
