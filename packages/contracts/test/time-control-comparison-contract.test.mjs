@@ -90,7 +90,12 @@ function response() {
           materialCompositionWarning: false,
         },
       }],
-      caveats: ['Observational comparison only.'],
+      caveats: {
+        total: 1,
+        returned: 1,
+        truncated: false,
+        items: ['Observational comparison only.'],
+      },
     },
     incrementEffect: {
       diagnosisId: 'TIME-006',
@@ -133,7 +138,12 @@ function response() {
           materialCompositionWarning: false,
         },
       }],
-      caveats: ['Deltas are increment minus no-increment.'],
+      caveats: {
+        total: 1,
+        returned: 1,
+        truncated: false,
+        items: ['Deltas are increment minus no-increment.'],
+      },
     },
   };
 }
