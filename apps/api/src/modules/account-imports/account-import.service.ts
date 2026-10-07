@@ -43,7 +43,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
   const requestImport = async (appUserId: number, request: CreateLichessImportRequest = {}) => {
     const credential = await options.connectionService.getCredentialForUser(appUserId);
     const to = request.to ?? now();
-    const from = request.from ?? new Date(to.getTime() - 30 * WINDOW_MS);
+    const from = request.from ?? new Date(to.getTime() - WINDOW_MS);
     if (to <= from) throw new Error('Import end must be after import start.');
 
     const scope: LichessImportScope = {

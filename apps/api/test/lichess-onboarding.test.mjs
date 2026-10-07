@@ -6,7 +6,7 @@ import {
   ActiveImportRunError,
 } from '../dist/modules/account-imports/account-import.repository.prisma.js';
 import { LichessCredentialUnavailableError } from '../dist/modules/lichess/lichess-connection.service.js';
-import { toImportRunResponse } from '../dist/modules/account-imports/account-import.service.js';
+import { createLichessAccountImportService, toImportRunResponse } from '../dist/modules/account-imports/account-import.service.js';
 
 const start = new Date('2026-09-01T00:00:00Z');
 const end = new Date('2026-09-30T00:00:00Z');
@@ -83,6 +83,58 @@ test('API latest and run/cancel use authenticated app user; unsafe and foreign r
     const cancelled = await app.inject({ method: 'POST', url: '/api/me/imports/5/cancel' });
     assert.equal(cancelled.statusCode, 200);
     assert.equal(cancelled.json().importRun.status, 'CANCEL_REQUESTED');
+  } finally { await app.close(); }
+});
+
+test('API import with no dates requests exactly 30 days and one window; explicit wider range is preserved', async () => {
+  const fixedNow = new Date('2026-10-01T12:34:56.789Z');
+  const created = [];
+  const service = createLichessAccountImportService({
+    now: () => fixedNow,
+    repository: {
+      async createRun(input) {
+        created.push(input);
+        return storedRun({
+          status: 'QUEUED',
+          requestedFrom: input.requestedFrom,
+          requestedTo: input.requestedTo,
+          windowsTotal: input.windowsTotal,
+        });
+      },
+    },
+    connectionService: {
+      async getCredentialForUser(appUserId) {
+        assert.equal(appUserId, 99);
+        return { lichessUserId: 'lichess-id', username: 'Owner' };
+      },
+    },
+  });
+  const app = await appWithService(service);
+  try {
+    const response = await app.inject({
+      method: 'POST', url: '/api/me/imports/lichess', payload: {},
+    });
+    assert.equal(response.statusCode, 202);
+    assert.equal(created.length, 1);
+    assert.equal(created[0].requestedFrom.toISOString(), '2026-09-01T12:34:56.789Z');
+    assert.equal(created[0].requestedTo.toISOString(), fixedNow.toISOString());
+    assert.equal(created[0].windowsTotal, 1);
+    assert.equal(response.json().importRun.requestedFrom, '2026-09-01T12:34:56.789Z');
+    assert.equal(response.json().importRun.requestedTo, fixedNow.toISOString());
+    assert.equal(response.json().importRun.windowsTotal, 1);
+
+    const wider = await app.inject({
+      method: 'POST', url: '/api/me/imports/lichess',
+      payload: {
+        from: '2026-07-01T12:34:56.789Z',
+        to: '2026-10-01T12:34:56.789Z',
+      },
+    });
+    assert.equal(wider.statusCode, 202);
+    assert.equal(created.length, 2);
+    assert.equal(created[1].requestedFrom.toISOString(), '2026-07-01T12:34:56.789Z');
+    assert.equal(created[1].requestedTo.toISOString(), '2026-10-01T12:34:56.789Z');
+    assert.equal(created[1].windowsTotal, 4);
   } finally { await app.close(); }
 });
 
