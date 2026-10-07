@@ -235,8 +235,24 @@ test('comparison service composes accepted aggregates and caps product collectio
     response.incrementEffect.strata[0].increment.exactControls.truncated,
     true,
   );
-  assert.equal(response.exactControl.caveats.length, 20);
-  assert.equal(response.incrementEffect.caveats.length, 20);
+  assert.deepEqual(
+    {
+      total: response.exactControl.caveats.total,
+      returned: response.exactControl.caveats.returned,
+      truncated: response.exactControl.caveats.truncated,
+    },
+    { total: 22, returned: 20, truncated: true },
+  );
+  assert.deepEqual(
+    {
+      total: response.incrementEffect.caveats.total,
+      returned: response.incrementEffect.caveats.returned,
+      truncated: response.incrementEffect.caveats.truncated,
+    },
+    { total: 22, returned: 20, truncated: true },
+  );
+  assert.equal(response.exactControl.caveats.items.length, 20);
+  assert.equal(response.incrementEffect.caveats.items.length, 20);
   assert.equal(
     response.exactControl.comparisons[0].ratingComposition.materialCompositionWarning,
     true,
@@ -263,7 +279,12 @@ test('HTTP time-control comparison route forwards authenticated owner and valida
       },
       comparisonCount: { total: 0, returned: 0, truncated: false },
       comparisons: [],
-      caveats: ['No exact-time-control comparison is available.'],
+      caveats: {
+        total: 1,
+        returned: 1,
+        truncated: false,
+        items: ['No exact-time-control comparison is available.'],
+      },
     },
     incrementEffect: {
       diagnosisId: 'TIME-006',
@@ -284,7 +305,12 @@ test('HTTP time-control comparison route forwards authenticated owner and valida
       },
       stratumCount: { total: 0, returned: 0, truncated: false },
       strata: [],
-      caveats: ['No increment comparison is available.'],
+      caveats: {
+        total: 1,
+        returned: 1,
+        truncated: false,
+        items: ['No increment comparison is available.'],
+      },
     },
   };
 
