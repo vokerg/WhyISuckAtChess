@@ -29,6 +29,10 @@ import {
   diagnosisSummaryService as defaultDiagnosisSummaryService,
   type DiagnosisSummaryService,
 } from './modules/diagnosis/diagnosis-summary.service';
+import {
+  timeControlComparisonService as defaultTimeControlComparisonService,
+  type TimeControlComparisonService,
+} from './modules/diagnosis/time-control-comparison.service';
 import prisma from './prisma';
 
 export interface PrismaLifecycle {
@@ -43,6 +47,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
   importedGamesService?: ImportedGamesQueryService;
   diagnosisSummaryService?: DiagnosisSummaryService;
   diagnosisDrillDownService?: DiagnosisDrillDownService;
+  timeControlComparisonService?: TimeControlComparisonService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -78,6 +83,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     app,
     options.diagnosisSummaryService ?? defaultDiagnosisSummaryService,
     options.diagnosisDrillDownService ?? defaultDiagnosisDrillDownService,
+    options.timeControlComparisonService ?? defaultTimeControlComparisonService,
   );
 
   return app;

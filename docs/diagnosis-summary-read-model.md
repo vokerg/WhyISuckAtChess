@@ -117,3 +117,12 @@ Representative references remain a maximum of three examples, not a reconstructe
 Issue #108 connects representative references to a *position*, not just a game. Both the ranked summary and drill-down parent/child cards link owned imported-game evidence to `/games/:gameId?ply=<sourcePlyStart>` when the persisted start ply is a positive safe integer and its optional end does not precede it. A reference without a usable ply still links to the game; a reference without an imported-game ID is not linked. A range selects its first recorded ply, without claiming that all range events are shown at that one move.
 
 The replay route parses only canonical positive safe integer ply query values, waits for its owned replay response, then selects that ply only when it exists in the indexed game. Missing, malformed, or out-of-range targets display the starting position rather than substituting another move. A query-only change updates the current selection without fetching the game again; stale results from an earlier game route are ignored. This browser-only navigation adds no diagnosis recomputation, source-data mutation or access to unsanitized evidence blobs.
+
+
+## Phase 6 time-control comparison boundary
+
+Issue #116 adds the first dedicated comparison read model at `GET /api/diagnosis/time-controls`; its canonical contract is documented in `docs/time-control-comparison-read-model.md`.
+
+Unlike the persisted hierarchy summary/drill-down endpoints, this boundary composes the already-accepted Phase 4B `TIME-005` and `TIME-006` aggregate services. It does not read diagnosis persistence, recalculate ranking, or infer a new finding. Exact-control identity, matched initial-time increment strata, separate result/engine/timing coverage and evidence grades, and `RATING-002` composition disclosure remain authoritative from their owning aggregate services.
+
+The response is independently capped for product consumption and reports truncation metadata. A later Angular comparison page or grounded explanation layer must consume this bounded projection rather than importing aggregate repositories or reimplementing comparison policy.
