@@ -150,3 +150,18 @@ Issue #104 extends the consumer boundary with authenticated `GET /api/diagnosis/
 - internal coverage/source-version/ranking/support JSON blobs and AI output stay behind the module boundary.
 
 A later Angular drill-down consumer can use this contract without importing Prisma or duplicating Phase 5 policy.
+
+
+## Phase 6 time-control comparison read model
+
+Issue #116 adds authenticated `GET /api/diagnosis/time-controls` as a consumer-only composition boundary over the accepted `TIME-005` and `TIME-006` aggregate services; see `docs/time-control-comparison-read-model.md`.
+
+- the route is owned by the current application user and accepts only optional half-open `from` / `to` instants;
+- `time-control-comparison.service.ts` calls the existing exact-control and increment-effect authorities rather than querying Prisma or reproducing comparison policy;
+- exact controls such as 3+0 and 3+2 remain explicit, and increment deltas retain the authoritative increment-minus-no-increment direction inside matched initial-time strata;
+- result, engine-quality, and timing coverage/evidence remain separate;
+- `RATING-002` is projected only as a material-composition disclosure and never adjusts the measured effect;
+- response collections are capped independently of aggregate candidate limits and expose total/returned/truncated metadata;
+- internal game IDs, source rows, persistence blobs, diagnosis ranking internals, provider credentials, and AI output do not cross this contract.
+
+Later Angular or explanation consumers may present this accepted evidence but must not become timing-analysis authority.
