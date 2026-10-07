@@ -151,6 +151,14 @@ export function createTimeControlComparisonService(
         0,
         TIME_CONTROL_COMPARISON_ITEM_LIMIT,
       );
+      const exactCaveats = exact.caveats.slice(
+        0,
+        TIME_CONTROL_COMPARISON_CAVEAT_LIMIT,
+      );
+      const incrementCaveats = increment.caveats.slice(
+        0,
+        TIME_CONTROL_COMPARISON_CAVEAT_LIMIT,
+      );
 
       return {
         scope: {
@@ -186,7 +194,10 @@ export function createTimeControlComparisonService(
             evidenceStrength: comparison.evidenceStrength,
             ratingComposition: ratingDisclosure(comparison.ratingComposition),
           })),
-          caveats: exact.caveats.slice(0, TIME_CONTROL_COMPARISON_CAVEAT_LIMIT),
+          caveats: {
+            ...collectionMeta(exact.caveats.length, exactCaveats.length),
+            items: exactCaveats,
+          },
         },
         incrementEffect: {
           diagnosisId: increment.diagnosisId,
@@ -217,10 +228,10 @@ export function createTimeControlComparisonService(
             evidenceStrength: stratum.evidenceStrength,
             ratingComposition: ratingDisclosure(stratum.ratingComposition),
           })),
-          caveats: increment.caveats.slice(
-            0,
-            TIME_CONTROL_COMPARISON_CAVEAT_LIMIT,
-          ),
+          caveats: {
+            ...collectionMeta(increment.caveats.length, incrementCaveats.length),
+            items: incrementCaveats,
+          },
         },
       };
     },
