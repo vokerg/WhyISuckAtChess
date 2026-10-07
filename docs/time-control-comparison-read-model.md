@@ -1,7 +1,8 @@
 # Phase 6 time-control comparison read model
 
-**Status:** consumer boundary for issue #116  
+**Status:** consumer boundary for issues #116 and #118  
 **HTTP:** `GET /api/diagnosis/time-controls`  
+**Web:** `/diagnosis/time-controls`  
 **Source authority:** accepted Phase 4B `TIME-005` exact-control and `TIME-006` increment-effect aggregates
 
 ## Purpose
@@ -87,11 +88,30 @@ The response excludes internal game IDs, raw aggregate source rows, Prisma recor
 
 **Future seam:** an Angular comparison page or grounded explanation layer can consume this endpoint without importing Phase 4 persistence or policy code.
 
+## Angular consumer
+
+Issue #118 adds the first read-only browser surface at `/diagnosis/time-controls`.
+
+The page:
+
+- parses the backend payload through the shared strict contract;
+- keeps exact controls such as 3+0 and 3+2 visibly distinct;
+- presents `TIME-005` deltas only as **target minus comparator**;
+- presents `TIME-006` deltas only as **increment minus no-increment** within one matched initial-time stratum;
+- keeps result, engine-quality, and timing coverage/evidence separate;
+- renders missing measurements as unavailable rather than zero;
+- surfaces `RATING-002` material-composition warnings, backend caveats, and collection truncation;
+- links from the ranked diagnosis summary without changing diagnosis rank or policy.
+
+The first consumer intentionally requests the endpoint without date bounds and therefore presents the backend's all-available-history scope. Date-range editing remains a later presentation enhancement; adding it must continue to pass only validated UTC/offset-aware bounds to this existing endpoint.
+
+No comparison, comparator choice, evidence grade, timing reconstruction, or causal interpretation is calculated in Angular.
+
 ## Phase boundary
 
-This issue adds the backend consumer contract only. It does not add:
+Issue #116 adds the backend consumer contract and issue #118 adds its first Angular consumer. Together they still do not add:
 
-- an Angular time-control page;
+- date-range editing UI;
 - AI-generated explanation;
 - new calibration/statistical significance;
 - a new aggregate or persisted diagnosis;
