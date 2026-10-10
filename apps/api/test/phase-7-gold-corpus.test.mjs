@@ -160,7 +160,7 @@ function timingSourceGame(game) {
         timingDerivationVersion: TIMING_DERIVATION_VERSION,
         timingDerivationStatus: previousSameSide === null ? 'UNAVAILABLE' : 'AVAILABLE',
         timingReliabilityFlags: [],
-        phase: game.verifiedPhaseByPly[String(ply.plyNumber)] ?? null,
+        phase: game.fixturePhaseByPly[String(ply.plyNumber)] ?? null,
       };
     });
   return {
