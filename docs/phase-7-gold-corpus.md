@@ -45,7 +45,7 @@ A null result/rating/clock must stay null. A missing/stale engine snapshot must 
 
 From a clean checkout, using the repository's documented Node/npm versions and installed workspace dependencies:
 
-\`\`\`sh
+```sh
 npm ci
 npm run build:domain
 npm run build:contracts
@@ -54,7 +54,7 @@ node --test apps/api/test/phase-7-gold-corpus.test.mjs
 npm run typecheck
 npm run lint
 npm test
-\`\`\`
+```
 
 The focused test is part of the existing <code>apps/api/test/*.test.mjs</code> test glob, and therefore runs during the normal API test suite/CI path. It requires no database, credentials, live provider, or real Stockfish process.
 
@@ -83,4 +83,4 @@ Follow-ups for #122/#124/#125: add legally sourced and redistributable anonymize
 
 ## 6. CRT reference and Why-specific delta
 
-The pattern reused here is the project's accepted Phase 3/4/5 fixture-driven and versioned deterministic checks (see <code>apps/api/test/tactical-motif-evidence.test.mjs</code>, <code>time-pressure-exposure.test.mjs</code>, and <code>phase-5-acceptance.test.mjs</code>), themselves adapted from the CRT chess-analysis/engine-test design. Unlike a profile-only regression, Why's corpus distinguishes source clocks, legal board facts, artificial engine snapshots, supported diagnosis states, and human-review uncertainty as separately reviewable evidence layers. It intentionally adds **no production classifier, scheduler, policy tweak, synthetic clocks to imports, or AI-provided truth**.
+The specific CRT test references checked before this PR are `apps/api/test/tactical-detections/tactical-detection-policy.test.mjs` (hard-negative tactical adjudication) and `apps/api/test/analysis/imported-game-analysis-execution.test.mjs` (deterministic injected analysis execution). The pattern reused here is the project's accepted Phase 3/4/5 fixture-driven and versioned deterministic checks (see <code>apps/api/test/tactical-motif-evidence.test.mjs</code>, <code>time-pressure-exposure.test.mjs</code>, and <code>phase-5-acceptance.test.mjs</code>), themselves adapted from the CRT chess-analysis/engine-test design. Unlike a profile-only regression, Why's corpus distinguishes source clocks, legal board facts, artificial engine snapshots, supported diagnosis states, and human-review uncertainty as separately reviewable evidence layers. It intentionally adds **no production classifier, scheduler, policy tweak, synthetic clocks to imports, or AI-provided truth**.
