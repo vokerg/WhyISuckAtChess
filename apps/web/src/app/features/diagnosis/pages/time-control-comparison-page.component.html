@@ -1,0 +1,317 @@
+<main class="comparison-page">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Time-control evidence</p>
+      <h1>Where the clock changes your results</h1>
+      <p class="hero-copy">
+        These are deterministic comparisons already calculated by the backend. The browser preserves
+        exact controls, matched increment strata, evidence grades, coverage and caveats; it does not
+        choose comparators or infer causation.
+      </p>
+    </div>
+    <nav class="entry-actions" aria-label="Diagnosis navigation">
+      <a class="secondary-link" routerLink="/diagnosis">Back to ranked weaknesses</a>
+      <a class="secondary-link" routerLink="/games">Browse imported games</a>
+    </nav>
+  </header>
+
+  @if (error(); as message) {
+    <section class="state-card error" role="alert">
+      <div>
+        <p class="state-kicker">Request failed</p>
+        <h2>Time-control comparisons could not be loaded</h2>
+        <p>{{ message }}</p>
+      </div>
+      <button type="button" (click)="load()">Try again</button>
+    </section>
+  } @else if (loading()) {
+    <section class="state-card" aria-live="polite">
+      <p class="state-kicker">Loading</p>
+      <h2>Reading accepted timing evidence…</h2>
+      <p>No comparison policy is recalculated in the browser.</p>
+    </section>
+  } @else if (comparison(); as current) {
+    <section class="scope-strip" aria-label="Comparison scope">
+      <div>
+        <span>Source window</span>
+        <strong>{{ scopeFor(current.scope) }}</strong>
+      </div>
+      <div>
+        <span>Exact-control policy</span>
+        <strong>{{ current.exactControl.policyVersion }}</strong>
+      </div>
+      <div>
+        <span>Increment policy</span>
+        <strong>{{ current.incrementEffect.policyVersion }}</strong>
+      </div>
+    </section>
+
+    <section class="comparison-section" aria-labelledby="exact-control-heading">
+      <header class="section-heading">
+        <div>
+          <p class="diagnosis-id">{{ current.exactControl.diagnosisId }}</p>
+          <h2 id="exact-control-heading">Exact time-control comparisons</h2>
+          <p>
+            Each row compares the backend-selected target with a same-initial-time comparator.
+            Deltas are <strong>target − comparator</strong>.
+          </p>
+        </div>
+        <span class="coverage-chip" [attr.data-status]="current.exactControl.coverage.status">
+          {{ coverageLabel(current.exactControl.coverage.status) }}
+        </span>
+      </header>
+
+      @if (current.exactControl.coverage.reason; as reason) {
+        <p class="coverage-reason"><strong>Coverage note:</strong> {{ reason }}</p>
+      }
+
+      <dl class="coverage-grid">
+        <div><dt>Candidate games</dt><dd>{{ current.exactControl.coverage.candidateGames }}</dd></div>
+        <div><dt>Eligible games</dt><dd>{{ current.exactControl.coverage.eligibleGames }}</dd></div>
+        <div><dt>Exact controls</dt><dd>{{ current.exactControl.coverage.exactControls }}</dd></div>
+        <div><dt>With comparator</dt><dd>{{ current.exactControl.coverage.controlsWithComparator }}</dd></div>
+        <div><dt>Result coverage</dt><dd>{{ percent(current.exactControl.coverage.resultCoveragePercent) }}</dd></div>
+        <div><dt>Analysis coverage</dt><dd>{{ percent(current.exactControl.coverage.analysisCoveragePercent) }}</dd></div>
+      </dl>
+
+      <p class="collection-note">
+        {{ collectionLabel(current.exactControl.comparisonCount, 'comparisons') }}
+      </p>
+
+      @if (current.exactControl.comparisons.length === 0) {
+        <section class="state-card compact">
+          <div>
+            <p class="state-kicker">No returned comparisons</p>
+            <h3>No exact control currently has a returned comparison</h3>
+            <p>Coverage and caveats above remain authoritative; missing comparisons are not treated as equal performance.</p>
+          </div>
+        </section>
+      } @else {
+        <div class="comparison-list">
+          @for (item of current.exactControl.comparisons; track trackExact($index, item)) {
+            <article class="comparison-card">
+              <header class="card-heading">
+                <div>
+                  <p class="diagnosis-id">{{ item.status }}</p>
+                  <h3>
+                    {{ exactLabel(item.target.initialSeconds, item.target.incrementSeconds) }}
+                    @if (item.comparator; as comparator) {
+                      <span>vs {{ exactLabel(comparator.initialSeconds, comparator.incrementSeconds) }}</span>
+                    }
+                  </h3>
+                </div>
+                <div class="evidence-group">
+                  <span>Result {{ item.evidenceStrength.result }}</span>
+                  <span>Quality {{ item.evidenceStrength.quality }}</span>
+                </div>
+              </header>
+
+              @if (item.reason; as reason) {
+                <p class="coverage-reason"><strong>Comparison note:</strong> {{ reason }}</p>
+              }
+
+              <div class="arm-grid">
+                <section class="arm">
+                  <h4>Target · {{ exactLabel(item.target.initialSeconds, item.target.incrementSeconds) }}</h4>
+                  <dl class="metric-grid">
+                    <div><dt>Eligible games</dt><dd>{{ item.target.eligibleGames }}</dd></div>
+                    <div><dt>Result-covered</dt><dd>{{ item.target.resultCoveredGames }}</dd></div>
+                    <div><dt>Score</dt><dd>{{ percent(item.target.scorePercent) }}</dd></div>
+                    <div><dt>Analysed</dt><dd>{{ item.target.analysedGames }}</dd></div>
+                    <div><dt>Avg score loss</dt><dd>{{ number(item.target.averageScoreLossCp, ' cp') }}</dd></div>
+                    <div><dt>Major-error rate</dt><dd>{{ percent(item.target.majorErrorRatePercent) }}</dd></div>
+                    <div><dt>Blunder rate</dt><dd>{{ percent(item.target.blunderRatePercent) }}</dd></div>
+                    <div><dt>Evidence</dt><dd>Result {{ item.target.resultEvidenceStrength }} · quality {{ item.target.qualityEvidenceStrength }}</dd></div>
+                  </dl>
+                </section>
+
+                @if (item.comparator; as comparator) {
+                  <section class="arm">
+                    <h4>Comparator · {{ exactLabel(comparator.initialSeconds, comparator.incrementSeconds) }}</h4>
+                    <dl class="metric-grid">
+                      <div><dt>Eligible games</dt><dd>{{ comparator.eligibleGames }}</dd></div>
+                      <div><dt>Result-covered</dt><dd>{{ comparator.resultCoveredGames }}</dd></div>
+                      <div><dt>Score</dt><dd>{{ percent(comparator.scorePercent) }}</dd></div>
+                      <div><dt>Analysed</dt><dd>{{ comparator.analysedGames }}</dd></div>
+                      <div><dt>Avg score loss</dt><dd>{{ number(comparator.averageScoreLossCp, ' cp') }}</dd></div>
+                      <div><dt>Major-error rate</dt><dd>{{ percent(comparator.majorErrorRatePercent) }}</dd></div>
+                      <div><dt>Blunder rate</dt><dd>{{ percent(comparator.blunderRatePercent) }}</dd></div>
+                      <div><dt>Evidence</dt><dd>Result {{ comparator.resultEvidenceStrength }} · quality {{ comparator.qualityEvidenceStrength }}</dd></div>
+                    </dl>
+                  </section>
+                } @else {
+                  <section class="arm unavailable">
+                    <h4>No comparator returned</h4>
+                    <p>The backend did not return a valid same-initial-time comparator for this target.</p>
+                  </section>
+                }
+              </div>
+
+              <section class="delta-panel" aria-label="Target minus comparator deltas">
+                <h4>Measured deltas · target − comparator</h4>
+                <dl class="delta-grid">
+                  <div><dt>Score</dt><dd>{{ delta(item.deltas.scorePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Avg score loss</dt><dd>{{ delta(item.deltas.averageScoreLossCp, 'cp') }}</dd></div>
+                  <div><dt>Major-error rate</dt><dd>{{ delta(item.deltas.majorErrorRatePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Blunder rate</dt><dd>{{ delta(item.deltas.blunderRatePercentagePoints, 'pp') }}</dd></div>
+                </dl>
+              </section>
+
+              <p class="composition-note" [class.warning]="item.ratingComposition.materialCompositionWarning === true">
+                <strong>Opponent strength:</strong> {{ compositionLabel(item.ratingComposition) }}
+              </p>
+            </article>
+          }
+        </div>
+      }
+
+      @if (current.exactControl.caveats.items.length > 0) {
+        <aside class="caveats">
+          <h3>Exact-control caveats</h3>
+          <ul>
+            @for (caveat of current.exactControl.caveats.items; track caveat) {
+              <li>{{ caveat }}</li>
+            }
+          </ul>
+          <p>{{ collectionLabel(current.exactControl.caveats, 'caveats') }}</p>
+        </aside>
+      }
+    </section>
+
+    <section class="comparison-section" aria-labelledby="increment-heading">
+      <header class="section-heading">
+        <div>
+          <p class="diagnosis-id">{{ current.incrementEffect.diagnosisId }}</p>
+          <h2 id="increment-heading">Increment versus no increment</h2>
+          <p>
+            Each stratum holds initial time constant. Deltas are
+            <strong>increment − no increment</strong>; they are observational measurements, not causal claims.
+          </p>
+        </div>
+        <span class="coverage-chip" [attr.data-status]="current.incrementEffect.coverage.status">
+          {{ coverageLabel(current.incrementEffect.coverage.status) }}
+        </span>
+      </header>
+
+      @if (current.incrementEffect.coverage.reason; as reason) {
+        <p class="coverage-reason"><strong>Coverage note:</strong> {{ reason }}</p>
+      }
+
+      <dl class="coverage-grid">
+        <div><dt>Candidate games</dt><dd>{{ current.incrementEffect.coverage.candidateGames }}</dd></div>
+        <div><dt>Eligible games</dt><dd>{{ current.incrementEffect.coverage.eligibleGames }}</dd></div>
+        <div><dt>Matched games</dt><dd>{{ current.incrementEffect.coverage.matchedGames }}</dd></div>
+        <div><dt>Unmatched games</dt><dd>{{ current.incrementEffect.coverage.unmatchedGames }}</dd></div>
+        <div><dt>Matched strata</dt><dd>{{ current.incrementEffect.coverage.matchedInitialTimeStrata }}</dd></div>
+        <div><dt>Result coverage</dt><dd>{{ percent(current.incrementEffect.coverage.resultCoveragePercent) }}</dd></div>
+        <div><dt>Analysis coverage</dt><dd>{{ percent(current.incrementEffect.coverage.analysisCoveragePercent) }}</dd></div>
+        <div><dt>Timing coverage</dt><dd>{{ percent(current.incrementEffect.coverage.timingCoveragePercent) }}</dd></div>
+      </dl>
+
+      <p class="collection-note">
+        {{ collectionLabel(current.incrementEffect.stratumCount, 'strata') }}
+      </p>
+
+      @if (current.incrementEffect.strata.length === 0) {
+        <section class="state-card compact">
+          <div>
+            <p class="state-kicker">No returned strata</p>
+            <h3>No matched increment comparison is currently available</h3>
+            <p>Missing timing or analysis coverage is not interpreted as neutral performance.</p>
+          </div>
+        </section>
+      } @else {
+        <div class="comparison-list">
+          @for (stratum of current.incrementEffect.strata; track trackStratum($index, stratum)) {
+            <article class="comparison-card">
+              <header class="card-heading">
+                <div>
+                  <p class="diagnosis-id">Initial time {{ initialLabel(stratum.initialSeconds) }}</p>
+                  <h3>Matched {{ initialLabel(stratum.initialSeconds) }} population</h3>
+                </div>
+                <div class="evidence-group">
+                  <span>Result {{ stratum.evidenceStrength.result }}</span>
+                  <span>Quality {{ stratum.evidenceStrength.quality }}</span>
+                  <span>Timing {{ stratum.evidenceStrength.timing }}</span>
+                </div>
+              </header>
+
+              <div class="arm-grid">
+                <section class="arm">
+                  <h4>No increment</h4>
+                  <p class="control-list">{{ incrementControls(stratum.noIncrement, stratum.initialSeconds) }}</p>
+                  <dl class="metric-grid">
+                    <div><dt>Games</dt><dd>{{ stratum.noIncrement.games }}</dd></div>
+                    <div><dt>Result-covered</dt><dd>{{ stratum.noIncrement.resultCoveredGames }}</dd></div>
+                    <div><dt>Score</dt><dd>{{ percent(stratum.noIncrement.scorePercent) }}</dd></div>
+                    <div><dt>Analysed</dt><dd>{{ stratum.noIncrement.analysedGames }}</dd></div>
+                    <div><dt>Avg score loss</dt><dd>{{ number(stratum.noIncrement.averageScoreLossCp, ' cp') }}</dd></div>
+                    <div><dt>Major-error rate</dt><dd>{{ percent(stratum.noIncrement.majorErrorRatePercent) }}</dd></div>
+                    <div><dt>Blunder rate</dt><dd>{{ percent(stratum.noIncrement.blunderRatePercent) }}</dd></div>
+                    <div><dt>Timing coverage</dt><dd>{{ percent(stratum.noIncrement.pressure.timingCoveragePercent) }}</dd></div>
+                    <div><dt>Pressure moves</dt><dd>{{ percent(stratum.noIncrement.pressure.pressureMoveRatePercent) }}</dd></div>
+                    <div><dt>Pressure entries</dt><dd>{{ percent(stratum.noIncrement.pressure.pressureEntryRatePercent) }}</dd></div>
+                    <div><dt>Evidence</dt><dd>Result {{ stratum.noIncrement.evidenceStrength.result }} · quality {{ stratum.noIncrement.evidenceStrength.quality }} · timing {{ stratum.noIncrement.evidenceStrength.timing }}</dd></div>
+                  </dl>
+                </section>
+
+                <section class="arm">
+                  <h4>With increment</h4>
+                  <p class="control-list">{{ incrementControls(stratum.increment, stratum.initialSeconds) }}</p>
+                  <dl class="metric-grid">
+                    <div><dt>Games</dt><dd>{{ stratum.increment.games }}</dd></div>
+                    <div><dt>Result-covered</dt><dd>{{ stratum.increment.resultCoveredGames }}</dd></div>
+                    <div><dt>Score</dt><dd>{{ percent(stratum.increment.scorePercent) }}</dd></div>
+                    <div><dt>Analysed</dt><dd>{{ stratum.increment.analysedGames }}</dd></div>
+                    <div><dt>Avg score loss</dt><dd>{{ number(stratum.increment.averageScoreLossCp, ' cp') }}</dd></div>
+                    <div><dt>Major-error rate</dt><dd>{{ percent(stratum.increment.majorErrorRatePercent) }}</dd></div>
+                    <div><dt>Blunder rate</dt><dd>{{ percent(stratum.increment.blunderRatePercent) }}</dd></div>
+                    <div><dt>Timing coverage</dt><dd>{{ percent(stratum.increment.pressure.timingCoveragePercent) }}</dd></div>
+                    <div><dt>Pressure moves</dt><dd>{{ percent(stratum.increment.pressure.pressureMoveRatePercent) }}</dd></div>
+                    <div><dt>Pressure entries</dt><dd>{{ percent(stratum.increment.pressure.pressureEntryRatePercent) }}</dd></div>
+                    <div><dt>Evidence</dt><dd>Result {{ stratum.increment.evidenceStrength.result }} · quality {{ stratum.increment.evidenceStrength.quality }} · timing {{ stratum.increment.evidenceStrength.timing }}</dd></div>
+                  </dl>
+                </section>
+              </div>
+
+              <section class="delta-panel" aria-label="Increment minus no-increment deltas">
+                <h4>Measured deltas · increment − no increment</h4>
+                <dl class="delta-grid">
+                  <div><dt>Score</dt><dd>{{ delta(stratum.deltas.scorePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Avg score loss</dt><dd>{{ delta(stratum.deltas.averageScoreLossCp, 'cp') }}</dd></div>
+                  <div><dt>Major-error rate</dt><dd>{{ delta(stratum.deltas.majorErrorRatePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Blunder rate</dt><dd>{{ delta(stratum.deltas.blunderRatePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Pressure-move rate</dt><dd>{{ delta(stratum.deltas.pressureMoveRatePercentagePoints, 'pp') }}</dd></div>
+                  <div><dt>Pressure-entry rate</dt><dd>{{ delta(stratum.deltas.pressureEntryRatePercentagePoints, 'pp') }}</dd></div>
+                </dl>
+              </section>
+
+              <p class="composition-note" [class.warning]="stratum.ratingComposition.materialCompositionWarning === true">
+                <strong>Opponent strength:</strong> {{ compositionLabel(stratum.ratingComposition) }}
+              </p>
+            </article>
+          }
+        </div>
+      }
+
+      @if (current.incrementEffect.caveats.items.length > 0) {
+        <aside class="caveats">
+          <h3>Increment-effect caveats</h3>
+          <ul>
+            @for (caveat of current.incrementEffect.caveats.items; track caveat) {
+              <li>{{ caveat }}</li>
+            }
+          </ul>
+          <p>{{ collectionLabel(current.incrementEffect.caveats, 'caveats') }}</p>
+        </aside>
+      }
+    </section>
+
+    <footer class="version-note">
+      Time behavior {{ current.exactControl.timeBehaviorPolicyVersion }} ·
+      exact control {{ current.exactControl.policyVersion }} ·
+      increment {{ current.incrementEffect.policyVersion }} ·
+      timing derivation v{{ current.incrementEffect.timingDerivationVersion }}
+    </footer>
+  }
+</main>

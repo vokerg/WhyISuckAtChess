@@ -41,6 +41,15 @@ import {
   diagnosisTitle,
   diagnosisUnavailableMessage,
 } from '../src/app/features/diagnosis/helpers/diagnosis-summary-view-model';
+import {
+  collectionMetaLabel,
+  coverageStatusLabel,
+  exactTimeControlLabel,
+  percentageLabel,
+  ratingCompositionLabel,
+  scopeLabel,
+  signedDeltaLabel,
+} from '../src/app/features/diagnosis/helpers/time-control-comparison-view-model';
 
 function finding(overrides: Partial<DiagnosisSummaryItem> = {}): DiagnosisSummaryItem {
   return {
@@ -401,4 +410,55 @@ test('destroyed page rejects delayed connection response', async () => {
   pending.complete();
   await load;
   assert.equal(store.connection(), null);
+});
+
+
+test('time-control comparison route is static and takes precedence over finding drill-down', () => {
+  const staticIndex = routes.findIndex((route) => route.path === 'diagnosis/time-controls');
+  const findingIndex = routes.findIndex((route) => route.path === 'diagnosis/:findingId');
+  assert.ok(staticIndex >= 0);
+  assert.ok(findingIndex >= 0);
+  assert.ok(staticIndex < findingIndex);
+  assert.ok(routes[staticIndex]?.component);
+});
+
+test('time-control presentation preserves exact identity, direction and unavailable values', () => {
+  assert.equal(exactTimeControlLabel(180, 0), '3+0');
+  assert.equal(exactTimeControlLabel(180, 2), '3+2');
+  assert.equal(exactTimeControlLabel(30, 0), '30s+0');
+  assert.equal(percentageLabel(87.5), '87.5%');
+  assert.equal(percentageLabel(null), '—');
+  assert.equal(signedDeltaLabel(19, 'pp'), '+19 pp');
+  assert.equal(signedDeltaLabel(-34, 'cp'), '−34 cp');
+  assert.equal(signedDeltaLabel(0, 'pp'), '0 pp');
+  assert.equal(signedDeltaLabel(null, 'pp'), '—');
+  assert.equal(coverageStatusLabel('PARTIAL'), 'Partial coverage');
+});
+
+test('time-control scope, composition warnings and caps remain explicit presentation metadata', () => {
+  assert.equal(scopeLabel({ from: null, to: null }), 'All available imported history');
+  assert.match(
+    scopeLabel({ from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' }),
+    /≤ game start </,
+  );
+  assert.match(
+    ratingCompositionLabel({
+      status: 'AVAILABLE',
+      reason: null,
+      materialCompositionWarning: true,
+    }),
+    /interpret the raw comparison with caution/i,
+  );
+  assert.match(
+    ratingCompositionLabel({
+      status: 'UNAVAILABLE',
+      reason: 'insufficient-rating-coverage',
+      materialCompositionWarning: null,
+    }),
+    /insufficient-rating-coverage/,
+  );
+  assert.equal(
+    collectionMetaLabel({ total: 31, returned: 25, truncated: true }, 'comparisons'),
+    '25 of 31 comparisons shown (response capped)',
+  );
 });
