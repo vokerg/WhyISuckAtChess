@@ -368,7 +368,7 @@
               400
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "MIDDLEGAME"
             }
@@ -433,7 +433,7 @@
               17800
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "OPENING"
             }
@@ -498,7 +498,7 @@
               null
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {}
+            "fixturePhaseByPly": {}
           }
         ]
       },
@@ -558,7 +558,7 @@
               12000
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "OPENING"
             }
@@ -589,7 +589,7 @@
               12000
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "OPENING"
             }
@@ -654,7 +654,7 @@
               16500
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "OPENING"
             }
@@ -685,7 +685,7 @@
               17800
             ],
             "timingDerivationVersion": 1,
-            "verifiedPhaseByPly": {
+            "fixturePhaseByPly": {
               "5": "OPENING",
               "7": "OPENING"
             }
