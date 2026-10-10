@@ -1,0 +1,772 @@
+{
+  "schemaVersion": "phase-7-gold-corpus-v1",
+  "createdFrom": "WhyISuckAtChess Phase 3/4/5 accepted deterministic regression fixtures",
+  "dataRights": "Original synthetic fixtures only; no real Lichess games, names, identifiers, tokens or measured engine output",
+  "domainReviewStatus": "PENDING",
+  "cases": [
+    {
+      "id": "tact-missed-existing-fork",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "POSITIVE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/3q1r2/8/4N3/8/8/8/4K3 w - -",
+        "playedSan": "Ke2",
+        "playedUci": "e1e2",
+        "afterFen": "4k3/3q1r2/8/4N3/8/8/4K3/8 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "bullet",
+        "initialSeconds": 60,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "COMPLETE",
+        "depth": 18,
+        "scoreLossCp": 320,
+        "beforeBestMoveUci": "e5d7",
+        "afterBestMoveUci": "e8e7"
+      },
+      "expected": {
+        "coverage": "COMPLETE",
+        "reason": null,
+        "required": [
+          {
+            "type": "MISSED_TACTICAL_MOTIF",
+            "motif": "FORK",
+            "motifState": "EXISTING"
+          }
+        ],
+        "forbidden": []
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Queen and rook are forked by the pre-existing knight; the expected detector result is from the accepted regression fixture."
+      }
+    },
+    {
+      "id": "tact-created-fork",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "POSITIVE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/8/3q1r2/8/8/2N5/8/4K3 w - -",
+        "playedSan": "Ke2",
+        "playedUci": "e1e2",
+        "afterFen": "4k3/8/3q1r2/8/8/2N5/4K3/8 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "COMPLETE",
+        "depth": 18,
+        "scoreLossCp": 260,
+        "beforeBestMoveUci": "c3e4",
+        "afterBestMoveUci": "e8e7"
+      },
+      "expected": {
+        "coverage": "COMPLETE",
+        "reason": null,
+        "required": [
+          {
+            "type": "MISSED_TACTICAL_MOTIF",
+            "motif": "FORK",
+            "motifState": "CREATED_BY_BEST_MOVE"
+          }
+        ],
+        "forbidden": []
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Best move would create knight attack on queen and rook; engine move is a fixture annotation, not a measured Stockfish result."
+      }
+    },
+    {
+      "id": "tact-allowed-pin",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "POSITIVE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/8/8/8/1b6/2P5/3N4/4K3 w - -",
+        "playedSan": "c4",
+        "playedUci": "c3c4",
+        "afterFen": "4k3/8/8/8/1bP5/8/3N4/4K3 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "COMPLETE",
+        "depth": 18,
+        "scoreLossCp": 220,
+        "beforeBestMoveUci": "d2f3",
+        "afterBestMoveUci": "b4d2"
+      },
+      "expected": {
+        "coverage": "COMPLETE",
+        "reason": null,
+        "required": [
+          {
+            "type": "ALLOWED_TACTICAL_MOTIF",
+            "motif": "PIN",
+            "motifState": "NEWLY_ALLOWED"
+          }
+        ],
+        "forbidden": []
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Pawn advance uncovers bishop attack on knight pinned in front of white king."
+      }
+    },
+    {
+      "id": "tact-low-loss-counterexample",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "NEGATIVE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/8/3q1r2/8/8/2N5/8/4K3 w - -",
+        "playedSan": "Ke2",
+        "playedUci": "e1e2",
+        "afterFen": "4k3/8/3q1r2/8/8/2N5/4K3/8 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "COMPLETE",
+        "depth": 18,
+        "scoreLossCp": 20,
+        "beforeBestMoveUci": "c3e4",
+        "afterBestMoveUci": "e8e7"
+      },
+      "expected": {
+        "coverage": "COMPLETE",
+        "reason": null,
+        "required": [],
+        "forbidden": [
+          {
+            "type": "MISSED_TACTICAL_MOTIF",
+            "motif": "FORK",
+            "motifState": "CREATED_BY_BEST_MOVE"
+          }
+        ]
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Geometry alone must not trigger a severe finding below the detector's supported loss threshold."
+      }
+    },
+    {
+      "id": "tact-incidental-fork",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "AMBIGUOUS",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "k7/3Q1R2/8/4n3/8/6P1/8/K7 w - -",
+        "playedSan": "g4",
+        "playedUci": "g3g4",
+        "afterFen": "k7/3Q1R2/8/4n3/6P1/8/8/K7 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "COMPLETE",
+        "depth": 18,
+        "scoreLossCp": 220,
+        "beforeBestMoveUci": "d7d8",
+        "afterBestMoveUci": "e5d7"
+      },
+      "expected": {
+        "coverage": "COMPLETE",
+        "reason": null,
+        "required": [],
+        "forbidden": [
+          {
+            "type": "ALLOWED_TACTICAL_MOTIF",
+            "motif": "FORK",
+            "motifState": "NEWLY_ALLOWED"
+          }
+        ]
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Negative geometry control from existing test; a human reviewer must still adjudicate alternate candidate explanations."
+      }
+    },
+    {
+      "id": "tact-missing-engine",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "UNAVAILABLE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/3q1r2/8/4N3/8/8/8/4K3 w - -",
+        "playedSan": "Ke2",
+        "playedUci": "e1e2",
+        "afterFen": "4k3/3q1r2/8/4N3/8/8/4K3/8 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "NONE",
+        "depth": 18,
+        "scoreLossCp": null,
+        "beforeBestMoveUci": null,
+        "afterBestMoveUci": null
+      },
+      "expected": {
+        "coverage": "UNAVAILABLE",
+        "reason": "complete-engine-analysis-unavailable",
+        "required": [],
+        "forbidden": []
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Missing analysis is unknown, not a confirmed absence of a tactical issue."
+      }
+    },
+    {
+      "id": "tact-incomplete-after-analysis",
+      "family": "TACTICAL_MOTIF",
+      "caseKind": "INCOMPLETE",
+      "source": {
+        "kind": "SYNTHETIC_POSITION",
+        "beforeFen": "4k3/3q1r2/8/4N3/8/8/8/4K3 w - -",
+        "playedSan": "Ke2",
+        "playedUci": "e1e2",
+        "afterFen": "4k3/3q1r2/8/4N3/8/8/4K3/8 b - -"
+      },
+      "gameContext": {
+        "variant": "standard",
+        "speedCategory": "blitz",
+        "initialSeconds": 180,
+        "incrementSeconds": 0,
+        "userColor": "WHITE",
+        "rated": null,
+        "result": null,
+        "userRating": null,
+        "opponentRating": null
+      },
+      "engine": {
+        "provenance": "DETERMINISTIC_TEST_DOUBLE",
+        "version": "test-snapshot-v1",
+        "state": "AFTER_MISSING",
+        "depth": 18,
+        "scoreLossCp": 300,
+        "beforeBestMoveUci": "e5d7",
+        "afterBestMoveUci": null
+      },
+      "expected": {
+        "coverage": "INCOMPLETE",
+        "reason": "required-engine-evidence-missing",
+        "required": [],
+        "forbidden": []
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Stale/incomplete analysis must count as coverage loss rather than NOT_DETECTED."
+      }
+    },
+    {
+      "id": "time-bullet-boundaries",
+      "family": "TIME_PRESSURE_EXPOSURE",
+      "caseKind": "POSITIVE",
+      "source": {
+        "kind": "SYNTHETIC_GAMES",
+        "games": [
+          {
+            "fixtureGameId": 1,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "bullet",
+            "initialSeconds": 60,
+            "incrementSeconds": 0,
+            "exactTimeControlKey": "60+0",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1500,
+            "opponentRating": 1510,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "COMPLETE",
+            "afterMoveClocksCentiseconds": [
+              5900,
+              5900,
+              3000,
+              3000,
+              1000,
+              900,
+              500,
+              400
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "MIDDLEGAME"
+            }
+          }
+        ]
+      },
+      "policyVersions": {
+        "timeBehavior": "time-behavior-v1",
+        "timingDerivation": 1
+      },
+      "expected": {
+        "status": "COMPLETE",
+        "reason": null,
+        "candidateGames": 1,
+        "eligibleGames": 1,
+        "coveredGames": 1,
+        "pressureMoves": 2,
+        "eligibleUserDecisions": 3,
+        "firstPressurePly": 5,
+        "criticalMoves": 1,
+        "contextKeys": [
+          "60+0"
+        ],
+        "excludedUnreliable": 0
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "White before-move clocks are derived exclusively from earlier synthetic same-side source clocks; first 30s at ply 5, 10s at ply 7."
+      }
+    },
+    {
+      "id": "time-increment-normal",
+      "family": "TIME_PRESSURE_EXPOSURE",
+      "caseKind": "NEGATIVE",
+      "source": {
+        "kind": "SYNTHETIC_GAMES",
+        "games": [
+          {
+            "fixtureGameId": 2,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "blitz",
+            "initialSeconds": 180,
+            "incrementSeconds": 2,
+            "exactTimeControlKey": "180+2",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1400,
+            "opponentRating": 1400,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "COMPLETE",
+            "afterMoveClocksCentiseconds": [
+              18100,
+              18100,
+              18000,
+              18000,
+              17900,
+              17900,
+              17800,
+              17800
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "OPENING"
+            }
+          }
+        ]
+      },
+      "policyVersions": {
+        "timeBehavior": "time-behavior-v1",
+        "timingDerivation": 1
+      },
+      "expected": {
+        "status": "COMPLETE",
+        "reason": null,
+        "candidateGames": 1,
+        "eligibleGames": 1,
+        "coveredGames": 1,
+        "pressureMoves": 0,
+        "eligibleUserDecisions": 3,
+        "firstPressurePly": null,
+        "criticalMoves": 0,
+        "contextKeys": [
+          "180+2"
+        ],
+        "excludedUnreliable": 0
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "No pressure event with ample before-move time; increment does not change absolute pressure thresholds."
+      }
+    },
+    {
+      "id": "time-rapid-clocks-absent",
+      "family": "TIME_PRESSURE_EXPOSURE",
+      "caseKind": "UNAVAILABLE",
+      "source": {
+        "kind": "SYNTHETIC_GAMES",
+        "games": [
+          {
+            "fixtureGameId": 3,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "rapid",
+            "initialSeconds": 600,
+            "incrementSeconds": 0,
+            "exactTimeControlKey": "600+0",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": null,
+            "opponentRating": null,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "ABSENT",
+            "afterMoveClocksCentiseconds": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {}
+          }
+        ]
+      },
+      "policyVersions": {
+        "timeBehavior": "time-behavior-v1",
+        "timingDerivation": 1
+      },
+      "expected": {
+        "status": "UNAVAILABLE",
+        "reason": "timing-evidence-unavailable",
+        "candidateGames": 1,
+        "eligibleGames": 1,
+        "coveredGames": 0,
+        "pressureMoves": 0,
+        "eligibleUserDecisions": 0,
+        "firstPressurePly": null,
+        "criticalMoves": 0,
+        "contextKeys": [],
+        "excludedUnreliable": 1
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Without clocks, timing exposure cannot be labeled a clean negative."
+      }
+    },
+    {
+      "id": "time-mixed-coverage",
+      "family": "TIME_PRESSURE_EXPOSURE",
+      "caseKind": "INCOMPLETE",
+      "source": {
+        "kind": "SYNTHETIC_GAMES",
+        "games": [
+          {
+            "fixtureGameId": 4,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "blitz",
+            "initialSeconds": 180,
+            "incrementSeconds": 0,
+            "exactTimeControlKey": "180+0",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1500,
+            "opponentRating": 1500,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "COMPLETE",
+            "afterMoveClocksCentiseconds": [
+              17900,
+              17900,
+              16000,
+              16000,
+              14000,
+              14000,
+              12000,
+              12000
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "OPENING"
+            }
+          },
+          {
+            "fixtureGameId": 5,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "blitz",
+            "initialSeconds": 180,
+            "incrementSeconds": 0,
+            "exactTimeControlKey": "180+0",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1500,
+            "opponentRating": 1710,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "PARTIAL",
+            "afterMoveClocksCentiseconds": [
+              17900,
+              17900,
+              null,
+              16000,
+              14000,
+              14000,
+              12000,
+              12000
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "OPENING"
+            }
+          }
+        ]
+      },
+      "policyVersions": {
+        "timeBehavior": "time-behavior-v1",
+        "timingDerivation": 1
+      },
+      "expected": {
+        "status": "PARTIAL",
+        "reason": "timing-coverage-incomplete",
+        "candidateGames": 2,
+        "eligibleGames": 2,
+        "coveredGames": 1,
+        "pressureMoves": 0,
+        "eligibleUserDecisions": 3,
+        "firstPressurePly": null,
+        "criticalMoves": 0,
+        "contextKeys": [
+          "180+0"
+        ],
+        "excludedUnreliable": 1
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Rating imbalance is source context, not an adjusted pressure effect; the partial game must not contribute to any rate."
+      }
+    },
+    {
+      "id": "time-control-separation",
+      "family": "TIME_PRESSURE_EXPOSURE",
+      "caseKind": "COUNTEREXAMPLE",
+      "source": {
+        "kind": "SYNTHETIC_GAMES",
+        "games": [
+          {
+            "fixtureGameId": 6,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "blitz",
+            "initialSeconds": 180,
+            "incrementSeconds": 0,
+            "exactTimeControlKey": "180+0",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1400,
+            "opponentRating": 1640,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "COMPLETE",
+            "afterMoveClocksCentiseconds": [
+              17900,
+              17900,
+              2500,
+              17500,
+              900,
+              17000,
+              500,
+              16500
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "OPENING"
+            }
+          },
+          {
+            "fixtureGameId": 7,
+            "pgn": "[Event \"Synthetic gold corpus\"]\n[Result \"*\"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *",
+            "variant": "standard",
+            "speedCategory": "blitz",
+            "initialSeconds": 180,
+            "incrementSeconds": 2,
+            "exactTimeControlKey": "180+2",
+            "userColor": "WHITE",
+            "rated": true,
+            "result": null,
+            "userRating": 1400,
+            "opponentRating": 1400,
+            "clockSource": "SYNTHETIC_POST_MOVE",
+            "clockStatus": "COMPLETE",
+            "afterMoveClocksCentiseconds": [
+              18100,
+              18100,
+              18000,
+              18000,
+              17900,
+              17900,
+              17800,
+              17800
+            ],
+            "timingDerivationVersion": 1,
+            "fixturePhaseByPly": {
+              "5": "OPENING",
+              "7": "OPENING"
+            }
+          }
+        ]
+      },
+      "policyVersions": {
+        "timeBehavior": "time-behavior-v1",
+        "timingDerivation": 1
+      },
+      "expected": {
+        "status": "COMPLETE",
+        "reason": null,
+        "candidateGames": 2,
+        "eligibleGames": 2,
+        "coveredGames": 2,
+        "pressureMoves": 2,
+        "eligibleUserDecisions": 6,
+        "firstPressurePly": 5,
+        "criticalMoves": 1,
+        "contextKeys": [
+          "180+0",
+          "180+2"
+        ],
+        "excludedUnreliable": 0
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Same initial time with different increments must remain separate strata; this is exposure not a causal increment estimate."
+      }
+    },
+    {
+      "id": "diagnosis-sparse-mechanism",
+      "family": "DIAGNOSIS_PROJECTION",
+      "caseKind": "INCOMPLETE",
+      "source": {
+        "kind": "SYNTHETIC_AGGREGATE",
+        "evidenceStrength": "INSUFFICIENT",
+        "coverageStatus": "PARTIAL",
+        "requiredCoveragePercent": 25,
+        "averageScoreLossDeltaCp": 200
+      },
+      "policyVersions": {
+        "projection": "diagnosis-candidate-projection-v1"
+      },
+      "expected": {
+        "diagnosisId": "TIME-002",
+        "observationState": "INSUFFICIENT_EVIDENCE",
+        "requiredEvidenceCoverage": 0.25
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Large simulated effect is not sufficient when coverage/strength are inadequate."
+      }
+    },
+    {
+      "id": "diagnosis-adequate-neutral",
+      "family": "DIAGNOSIS_PROJECTION",
+      "caseKind": "NEGATIVE",
+      "source": {
+        "kind": "SYNTHETIC_AGGREGATE",
+        "evidenceStrength": "LOW",
+        "coverageStatus": "COMPLETE",
+        "requiredCoveragePercent": 100,
+        "averageScoreLossDeltaCp": 0
+      },
+      "policyVersions": {
+        "projection": "diagnosis-candidate-projection-v1"
+      },
+      "expected": {
+        "diagnosisId": "TIME-002",
+        "observationState": "NOT_DETECTED_WITH_ADEQUATE_COVERAGE",
+        "requiredEvidenceCoverage": 1
+      },
+      "review": {
+        "status": "PENDING_DOMAIN_REVIEW",
+        "confidence": "UNASSESSED",
+        "note": "Adequate simulated neutral quality is distinct from insufficient samples."
+      }
+    }
+  ]
+}
