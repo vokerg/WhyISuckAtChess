@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { importedGameReplayResponseSchema } from '@why-i-suck-at-chess/contracts';
@@ -50,6 +51,7 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
   let queuedAnalysisRunId = null;
   let engineCalls = 0;
   let engineClosed = false;
+  let realEngineProcessExited = null;
 
   try {
     const user = await prisma.appUser.create({
@@ -234,6 +236,13 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
             binaryPath: process.env.STOCKFISH_PATH,
             settings: { depth: 6, multiPv: 1, threads: 1, hashMb: 16 },
             commandTimeoutMs: 15_000,
+            spawnProcess: (binaryPath) => {
+              const child = spawn(binaryPath, [], { stdio: 'pipe' });
+              realEngineProcessExited = new Promise((resolve) => {
+                child.once('exit', resolve);
+              });
+              return child;
+            },
           });
           assert.match(engine.engineName, /Stockfish/i);
           assert.match(engine.engineVersion, /^\d+/);
@@ -437,6 +446,14 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
       assert.match(analysisRun.engineName ?? '', /PipelineFake-/);
     }
     assert.equal(engineClosed, true);
+    if (REAL_STOCKFISH) {
+      assert.ok(realEngineProcessExited, 'native child must have spawned');
+      const exitObserved = await Promise.race([
+        realEngineProcessExited.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 2_000)),
+      ]);
+      assert.equal(exitObserved, true, 'native Stockfish process must exit after the worker closes it');
+    }
 
     const persistedEvidenceRuns = await prisma.evidenceRun.findMany({
       where: { importedGameId: game.id },
@@ -540,3 +557,29 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
   }
 });
 }
+
+test('real Stockfish subprocess exit rejects pending search (opt-in only)', {
+  skip: !REAL_STOCKFISH,
+}, async () => {
+  let child = null;
+  const engine = await createStockfishEngine({
+    binaryPath: process.env.STOCKFISH_PATH,
+    settings: { depth: 6, multiPv: 1, threads: 1, hashMb: 16 },
+    commandTimeoutMs: 15_000,
+    spawnProcess: (binaryPath) => {
+      child = spawn(binaryPath, [], { stdio: 'pipe' });
+      return child;
+    },
+  });
+  try {
+    assert.ok(child);
+    child.kill('SIGKILL');
+    await assert.rejects(
+      () => engine.analyzeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
+      /Stockfish exited unexpectedly/,
+    );
+  } finally {
+    await engine.close();
+  }
+  assert.equal(child.killed, true);
+});
