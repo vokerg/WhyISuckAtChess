@@ -1,0 +1,58 @@
+name: Real Stockfish pipeline acceptance
+
+# Dedicated, bounded real-binary gate. Never run heavyweight engine searches
+# as an implicit dependency of the normal npm test suite.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/api/test/pipeline-acceptance.test.mjs'
+      - 'apps/api/src/modules/engine-analysis/**'
+      - '.github/workflows/real-stockfish-acceptance.yml'
+
+jobs:
+  real-stockfish-pipeline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: why_chess_real_engine_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d why_chess_real_engine_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      CI: true
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_chess_real_engine_ci
+      RUN_REAL_STOCKFISH_ACCEPTANCE: '1'
+      STOCKFISH_PATH: /usr/games/stockfish
+      STOCKFISH_COMMAND_TIMEOUT_MS: '15000'
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install and identify native Stockfish
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends stockfish
+          test -x "$STOCKFISH_PATH"
+          dpkg-query -W -f='Stockfish Debian package: ${Package} ${Version}\n' stockfish
+          echo 'uci' | timeout 5 "$STOCKFISH_PATH" | grep -m 1 '^id name Stockfish '
+      - name: Install dependencies and migrate disposable DB
+        run: |
+          npm ci
+          npm run db:validate
+          npm run db:migrate
+      - name: Build API and shared dependencies
+        run: npm run build:api
+      - name: Run real Stockfish/DB integration (3 games, depth 6, 1 thread)
+        run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
