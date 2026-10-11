@@ -5,6 +5,7 @@ import { importedGameReplayResponseSchema } from '@why-i-suck-at-chess/contracts
 import prismaModule from '../dist/prisma.js';
 import { createLichessAccountImportService } from '../dist/modules/account-imports/account-import.service.js';
 import { createStockfishAnalysisService } from '../dist/modules/engine-analysis/engine-analysis.service.js';
+import { createStockfishEngine } from '../dist/modules/engine-analysis/stockfish.adapter.js';
 import { prismaAnalysisRepository } from '../dist/modules/engine-analysis/engine-analysis.repository.prisma.js';
 import { evidenceDetectors } from '../dist/modules/evidence/evidence.registry.js';
 import { prismaEvidenceRepository } from '../dist/modules/evidence/evidence.repository.prisma.js';
@@ -14,7 +15,16 @@ import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-
 import { runWorkerCycle } from '../dist/worker.js';
 
 const prisma = prismaModule.default ?? prismaModule;
-const CLOCKS = [2950, 2950, 2900, 2900];
+// This is an explicit opt-in integration gate: the normal API suite keeps its
+// deterministic double, while the real binary gate exercises three exact controls.
+const REAL_STOCKFISH = process.env.RUN_REAL_STOCKFISH_ACCEPTANCE === '1';
+const FIXTURES = REAL_STOCKFISH
+  ? [
+      { speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] },
+      { speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000] },
+      { speed: 'rapid', initial: 600, increment: 5, clocks: [60400, 60350, 60200, 60200] },
+    ]
+  : [{ speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] }];
 
 function deterministicAnalysis() {
   return {
@@ -28,7 +38,8 @@ function deterministicAnalysis() {
   };
 }
 
-test('DB-backed worker cycle carries a clock-complete bullet game through import, indexing, analysis, evidence, and replay', async () => {
+for (const fixture of FIXTURES) {
+test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ? 'real Stockfish' : 'engine double'}, evidence, and replay`, async () => {
   const suffix = randomUUID();
   const providerGameId = 'pipeline-' + suffix;
   const from = new Date('2026-09-10T00:00:00.000Z');
@@ -59,7 +70,7 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
       '[White "FixtureUser"]',
       '[Black "Opponent"]',
       '[Result "1-0"]',
-      '[TimeControl "30+0"]',
+      `[TimeControl "${fixture.initial}+${fixture.increment}"]`,
       '',
       '1. e4 e5 2. Nf3 Nc6 1-0',
     ].join('\n');
@@ -83,16 +94,16 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
           id: providerGameId,
           rated: true,
           variant: 'standard',
-          speed: 'bullet',
-          perf: 'bullet',
+          speed: fixture.speed,
+          perf: fixture.speed,
           createdAt: new Date('2026-09-10T12:00:00.000Z').getTime(),
           lastMoveAt: new Date('2026-09-10T12:01:00.000Z').getTime(),
           status: 'resign',
           winner: 'white',
           url: 'https://lichess.org/' + providerGameId,
           pgn,
-          clock: { initial: 30, increment: 0 },
-          clocks: CLOCKS,
+          clock: { initial: fixture.initial, increment: fixture.increment },
+          clocks: fixture.clocks,
           players: {
             white: { user: { id: credential.lichessUserId, name: credential.username }, rating: 1500 },
             black: { user: { id: 'opponent-' + suffix, name: 'Opponent' }, rating: 1510 },
@@ -214,19 +225,43 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     const analysisService = createStockfishAnalysisService({
       repository: scopedAnalysisRepository,
       analysisVersion: 'pipeline-acceptance-' + suffix,
-      settings: { depth: 8, multiPv: 1, threads: 1, hashMb: 1 },
+      settings: { depth: REAL_STOCKFISH ? 6 : 8, multiPv: 1, threads: 1, hashMb: REAL_STOCKFISH ? 16 : 1 },
       workerId: 'pipeline-worker-' + suffix,
-      engineFactory: async () => ({
-        engineName: 'PipelineFake-' + suffix,
-        engineVersion: '1',
-        async analyzeFen() {
-          engineCalls += 1;
-          return deterministicAnalysis();
-        },
-        async close() {
-          engineClosed = true;
-        },
-      }),
+      engineFactory: async () => {
+        if (REAL_STOCKFISH) {
+          // Uses the actual child-process/UCI adapter; no fake search output.
+          const engine = await createStockfishEngine({
+            binaryPath: process.env.STOCKFISH_PATH,
+            settings: { depth: 6, multiPv: 1, threads: 1, hashMb: 16 },
+            commandTimeoutMs: 15_000,
+          });
+          assert.match(engine.engineName, /Stockfish/i);
+          assert.match(engine.engineVersion, /^\d+/);
+          return {
+            engineName: engine.engineName,
+            engineVersion: engine.engineVersion,
+            async analyzeFen(fen) {
+              engineCalls += 1;
+              return engine.analyzeFen(fen);
+            },
+            async close() {
+              await engine.close();
+              engineClosed = true;
+            },
+          };
+        }
+        return {
+          engineName: 'PipelineFake-' + suffix,
+          engineVersion: '1',
+          async analyzeFen() {
+            engineCalls += 1;
+            return deterministicAnalysis();
+          },
+          async close() {
+            engineClosed = true;
+          },
+        };
+      },
     });
 
     const scopedEvidenceRepository = {
@@ -380,7 +415,7 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     assert.equal(game.plyIndexStatus, 'INDEXED');
     assert.ok(game.plyIndexedAt);
     assert.equal(game.rawClockPresence, 'PRESENT');
-    assert.equal(game.rawClockStateCount, CLOCKS.length);
+    assert.equal(game.rawClockStateCount, fixture.clocks.length);
     assert.equal(game.clockAlignmentStatus, 'COMPLETE');
     assert.equal(game.timingCoverageStatus, 'COMPLETE');
 
@@ -391,7 +426,16 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     assert.equal(analysisRun.status, 'SUCCEEDED');
     assert.equal(analysisRun.coverageStatus, 'COMPLETE');
     assert.equal(analysisRun.sourcePlyIndexedAt?.getTime(), game.plyIndexedAt.getTime());
-    assert.ok(engineCalls > 0, 'acceptance test must use the deterministic engine double');
+    assert.ok(engineCalls > 0, 'integration must execute at least one engine search');
+    if (REAL_STOCKFISH) {
+      assert.match(analysisRun.engineName ?? '', /Stockfish/i);
+      assert.match(analysisRun.engineVersion ?? '', /^\d+/);
+      assert.ok(analysisRun.cacheMisses > 0, 'real pipeline must analyze an uncached position');
+      assert.equal(analysisRun.positionsDone, analysisRun.positionsTotal);
+      assert.equal(analysisRun.pliesDone, analysisRun.pliesTotal);
+    } else {
+      assert.match(analysisRun.engineName ?? '', /PipelineFake-/);
+    }
     assert.equal(engineClosed, true);
 
     const persistedEvidenceRuns = await prisma.evidenceRun.findMany({
@@ -428,10 +472,10 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     assert.ok(replayPayload);
     const replay = importedGameReplayResponseSchema.parse(replayPayload);
     assert.equal(replay.providerGameId, providerGameId);
-    assert.equal(replay.speedCategory, 'bullet');
+    assert.equal(replay.speedCategory, fixture.speed);
     assert.equal(replay.provenance.source, 'LICHESS_API');
     assert.equal(replay.clockSource.presence, 'PRESENT');
-    assert.equal(replay.clockSource.stateCount, CLOCKS.length);
+    assert.equal(replay.clockSource.stateCount, fixture.clocks.length);
     assert.equal(replay.timing.coverageStatus, 'COMPLETE');
     assert.equal(replay.engine.status, 'COMPLETED');
     assert.equal(replay.engine.coverageStatus, 'COMPLETE');
@@ -444,7 +488,7 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     assert.equal(replay.plies.length, 4);
     assert.deepEqual(
       replay.plies.map((ply) => ply.sourceClock.afterCentiseconds),
-      CLOCKS,
+      fixture.clocks,
     );
     assert.equal(replay.plies[2].timing.status, 'AVAILABLE');
     assert.notEqual(replay.plies[2].timing.moveTimeCentiseconds, null);
@@ -495,3 +539,4 @@ test('DB-backed worker cycle carries a clock-complete bullet game through import
     await prisma.$disconnect();
   }
 });
+}
