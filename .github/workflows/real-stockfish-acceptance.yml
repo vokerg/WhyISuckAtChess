@@ -54,5 +54,5 @@ jobs:
           npm run db:migrate
       - name: Build API and shared dependencies
         run: npm run build:api
-      - name: Run real Stockfish/DB integration (3 games, depth 6, 1 thread)
+      - name: Run real Stockfish/DB integration (6 games, depth 6, 1 thread)
         run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
