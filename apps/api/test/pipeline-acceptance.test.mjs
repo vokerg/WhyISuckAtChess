@@ -24,6 +24,9 @@ const FIXTURES = REAL_STOCKFISH
       { speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] },
       { speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000] },
       { speed: 'rapid', initial: 600, increment: 5, clocks: [60400, 60350, 60200, 60200] },
+      { label: 'blitz without source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: null, clockAlignment: 'UNAVAILABLE' },
+      { label: 'blitz short source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100], clockAlignment: 'UNALIGNED' },
+      { label: 'blitz excessive source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000, 17900, 17800], clockAlignment: 'ANOMALOUS' },
     ]
   : [{ speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] }];
 
@@ -40,7 +43,9 @@ function deterministicAnalysis() {
 }
 
 for (const fixture of FIXTURES) {
-test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ? 'real Stockfish' : 'engine double'}, evidence, and replay`, async () => {
+test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through ${REAL_STOCKFISH ? 'real Stockfish' : 'engine double'}, evidence, and replay`, async () => {
+  const completeClocks = fixture.clockAlignment === undefined;
+  const rawClocks = fixture.clocks ?? [];
   const suffix = randomUUID();
   const providerGameId = 'pipeline-' + suffix;
   const from = new Date('2026-09-10T00:00:00.000Z');
@@ -105,7 +110,7 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
           url: 'https://lichess.org/' + providerGameId,
           pgn,
           clock: { initial: fixture.initial, increment: fixture.increment },
-          clocks: fixture.clocks,
+          clocks: fixture.clocks ?? undefined,
           players: {
             white: { user: { id: credential.lichessUserId, name: credential.username }, rating: 1500 },
             black: { user: { id: 'opponent-' + suffix, name: 'Opponent' }, rating: 1510 },
@@ -423,10 +428,10 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
     });
     assert.equal(game.plyIndexStatus, 'INDEXED');
     assert.ok(game.plyIndexedAt);
-    assert.equal(game.rawClockPresence, 'PRESENT');
-    assert.equal(game.rawClockStateCount, fixture.clocks.length);
-    assert.equal(game.clockAlignmentStatus, 'COMPLETE');
-    assert.equal(game.timingCoverageStatus, 'COMPLETE');
+    assert.equal(game.rawClockPresence, fixture.clocks === null ? 'ABSENT' : 'PRESENT');
+    assert.equal(game.rawClockStateCount, rawClocks.length);
+    assert.equal(game.clockAlignmentStatus, fixture.clockAlignment ?? 'COMPLETE');
+    assert.equal(game.timingCoverageStatus, completeClocks ? 'COMPLETE' : 'UNAVAILABLE');
 
     const analysisRun = await prisma.gameAnalysisRun.findFirstOrThrow({
       where: { importedGameId: game.id },
@@ -491,9 +496,9 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
     assert.equal(replay.providerGameId, providerGameId);
     assert.equal(replay.speedCategory, fixture.speed);
     assert.equal(replay.provenance.source, 'LICHESS_API');
-    assert.equal(replay.clockSource.presence, 'PRESENT');
-    assert.equal(replay.clockSource.stateCount, fixture.clocks.length);
-    assert.equal(replay.timing.coverageStatus, 'COMPLETE');
+    assert.equal(replay.clockSource.presence, fixture.clocks === null ? 'ABSENT' : 'PRESENT');
+    assert.equal(replay.clockSource.stateCount, rawClocks.length);
+    assert.equal(replay.timing.coverageStatus, completeClocks ? 'COMPLETE' : 'UNAVAILABLE');
     assert.equal(replay.engine.status, 'COMPLETED');
     assert.equal(replay.engine.coverageStatus, 'COMPLETE');
     assert.equal(replay.engine.runId, analysisRun.id);
@@ -505,10 +510,14 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
     assert.equal(replay.plies.length, 4);
     assert.deepEqual(
       replay.plies.map((ply) => ply.sourceClock.afterCentiseconds),
-      fixture.clocks,
+      completeClocks ? rawClocks : [null, null, null, null],
     );
-    assert.equal(replay.plies[2].timing.status, 'AVAILABLE');
-    assert.notEqual(replay.plies[2].timing.moveTimeCentiseconds, null);
+    assert.equal(replay.plies[2].timing.status, completeClocks ? 'AVAILABLE' : 'UNAVAILABLE');
+    if (completeClocks) {
+      assert.notEqual(replay.plies[2].timing.moveTimeCentiseconds, null);
+    } else {
+      assert.equal(replay.plies[2].timing.moveTimeCentiseconds, null, 'missing clocks cannot create move times');
+    }
 
     const phaseRun = replay.evidence.runs.find((run) => run.detectorKey === 'phase-context');
     assert.ok(phaseRun);
@@ -530,8 +539,8 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
     );
 
     for (const ply of replay.plies) {
-      assert.equal(ply.sourceClock.status, 'AVAILABLE');
-      assert.equal(ply.engine.status, 'AVAILABLE');
+      assert.equal(ply.sourceClock.status, completeClocks ? 'AVAILABLE' : 'UNAVAILABLE');
+      assert.equal(ply.engine.status, 'AVAILABLE', 'missing clocks cannot erase real engine facts');
       assert.equal(ply.engine.analysisRunId, analysisRun.id);
       assert.equal(ply.engine.beforePosition.status, 'AVAILABLE');
     }
@@ -548,7 +557,9 @@ test(`DB-backed worker cycle: ${fixture.speed} import through ${REAL_STOCKFISH ?
       [],
       'changing the indexed source projection must immediately hide stale current evidence',
     );
+    assert.notEqual(staleReplay.engine.status, 'COMPLETED', 'superseded engine run must not be advertised current');
     assert.ok(staleReplay.plies.every((ply) => ply.evidenceEventKeys.length === 0));
+    assert.ok(staleReplay.plies.every((ply) => ply.engine.status === 'UNAVAILABLE'));
   } finally {
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => undefined);
