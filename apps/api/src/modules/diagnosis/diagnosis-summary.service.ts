@@ -119,6 +119,10 @@ export function createDiagnosisSummaryService(
       const current = await repository.findCurrent(appUserId, scopeKey);
       if (!current) return unavailable(scopeKey, 'NO_CURRENT_DIAGNOSIS');
 
+      // A current finding-set flag is not enough if the owned source changed
+      // since calculation. Never expose a ranking awaiting recalculation.
+      if (current.sourceFresh !== true) return unavailable(scopeKey, 'RANKING_STALE');
+
       if (
         current.synthesisPolicyVersion !== DIAGNOSIS_SYNTHESIS_POLICY_VERSION
         || !currentPolicyVersions(current.policyVersions)
