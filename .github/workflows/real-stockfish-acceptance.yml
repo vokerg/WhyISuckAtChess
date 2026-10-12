@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - 'apps/api/test/pipeline-acceptance.test.mjs'
+      - 'apps/api/test/native-worker-restart.test.mjs'
       - 'apps/api/src/modules/engine-analysis/**'
       - '.github/workflows/real-stockfish-acceptance.yml'
 
@@ -61,3 +62,5 @@ jobs:
         run: npm run build:api
       - name: Run real Stockfish/DB integration (11 games incl. supersession and durable retries, depth 6, 1 thread)
         run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
+      - name: Run isolated native Node worker crash and lease recovery (depth 6, 1 thread)
+        run: timeout 120s node --test apps/api/test/native-worker-restart.test.mjs
