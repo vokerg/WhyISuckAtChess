@@ -33,6 +33,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_chess_real_engine_ci
       RUN_REAL_STOCKFISH_ACCEPTANCE: '1'
       STOCKFISH_PATH: /usr/games/stockfish
+      STOCKFISH_DEBIAN_PACKAGE_VERSION: '16-1build1'
       STOCKFISH_COMMAND_TIMEOUT_MS: '15000'
 
     steps:
@@ -43,9 +44,13 @@ jobs:
       - name: Install and identify native Stockfish
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends stockfish
+          # Fail closed if the identified Ubuntu 24.04 package version disappears.
+          # Record the binary digest and runner CPU for repeatable Phase 7 baselines.
+          sudo apt-get install -y --no-install-recommends "stockfish=$STOCKFISH_DEBIAN_PACKAGE_VERSION"
           test -x "$STOCKFISH_PATH"
           dpkg-query -W -f='Stockfish Debian package: ${Package} ${Version}\n' stockfish
+          sha256sum "$STOCKFISH_PATH"
+          lscpu | grep -E '^(Architecture|Model name|CPU\(s\)):'
           echo 'uci' | timeout 5 "$STOCKFISH_PATH" | grep -m 1 '^id name Stockfish '
       - name: Install dependencies and migrate disposable DB
         run: |
@@ -54,5 +59,5 @@ jobs:
           npm run db:migrate
       - name: Build API and shared dependencies
         run: npm run build:api
-      - name: Run real Stockfish/DB integration (8 games incl. crash and deadline retry, depth 6, 1 thread)
+      - name: Run real Stockfish/DB integration (10 games incl. invalid clocks and durable retries, depth 6, 1 thread)
         run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
