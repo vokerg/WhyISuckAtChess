@@ -237,6 +237,11 @@ async function assertSourceOwnership(
       && game.plyIndexedAt.getTime() === indexedAt.getTime();
   };
 
+  for (const event of eventRows) {
+    if (!hasCurrentIndex(event.run.importedGameId, event.run.sourcePlyIndexedAt)) {
+      throw new Error('Diagnosis finding references evidence from a stale indexed source.');
+    }
+  }
   for (const analysis of analysisRows) {
     if (
       analysis.status !== 'SUCCEEDED'
@@ -248,9 +253,6 @@ async function assertSourceOwnership(
   }
   for (const event of eventRows) {
     const run = event.run;
-    if (!hasCurrentIndex(run.importedGameId, run.sourcePlyIndexedAt)) {
-      throw new Error('Diagnosis finding references evidence from a stale indexed source.');
-    }
     if (run.sourceAnalysisRunId === null) {
       if (run.sourceAnalysisSnapshotId !== null) {
         throw new Error('Diagnosis finding references inconsistent evidence analysis lineage.');
