@@ -543,6 +543,31 @@ test('canonical finding persistence replaces current scope without deleting sour
       data: { sourceAnalysisSnapshotId: analysisRun.snapshotId },
     });
 
+    // Same-game IDs are not interchangeable: an event and an explicit engine
+    // reference must agree on the exact persisted analysis run identity.
+    const differentAnalysis = await prisma.gameAnalysisRun.create({
+      data: {
+        importedGameId: game.id,
+        analysisVersion: 'fixture-analysis-v1',
+        settingsHash: 'different-settings-' + suffix,
+        settingsJson: { depth: 12, multiPv: 1 },
+        sourcePlyIndexedAt: indexedAt,
+        status: 'SUCCEEDED',
+        coverageStatus: 'COMPLETE',
+      },
+    });
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id,
+        sourceFenceDraft('mixed-analysis-snapshots', {
+          evidenceEventId: event.id,
+          sourceAnalysisRunId: differentAnalysis.id,
+        }),
+        prismaDiagnosisFindingRepository,
+      ),
+      /different analysis snapshots for one event/,
+    );
+
     const stillCurrent = await prismaDiagnosisFindingRepository.getCurrentScope(
       user.id, secondDraft.scopeKey, versionTuple(secondDraft),
     );
