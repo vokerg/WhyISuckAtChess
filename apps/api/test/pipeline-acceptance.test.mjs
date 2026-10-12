@@ -647,10 +647,16 @@ test('real Stockfish subprocess exit rejects pending search (opt-in only)', {
   });
   try {
     assert.ok(child);
+    // Begin a real search before killing the subprocess. A previously killed
+    // engine now rejects new work immediately with "Stockfish engine is closed";
+    // only an in-flight search exercises the unexpected-exit rejection path.
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const pendingSearch = engine.analyzeFen(fen);
     child.kill('SIGKILL');
+    await assert.rejects(pendingSearch, /Stockfish exited unexpectedly/);
     await assert.rejects(
-      () => engine.analyzeFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'),
-      /Stockfish exited unexpectedly/,
+      () => engine.analyzeFen(fen),
+      /Stockfish engine is closed/,
     );
   } finally {
     await engine.close();
