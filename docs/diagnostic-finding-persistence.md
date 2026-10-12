@@ -124,7 +124,11 @@ A later policy/taxonomy/producer/source-version change creates a new materializa
 
 ## Ownership and source-fact safety
 
-The Prisma repository rejects cross-user source references. Evidence-event references must point to a current successful `EvidenceRun` at materialization time. When multiple source identifiers are provided on one reference, they must resolve to the same imported game.
+The Prisma repository rejects cross-user source references. Evidence-event references must point to a current successful, non-superseded `EvidenceRun` at materialization time. When multiple source identifiers are provided on one reference, they must resolve to the same imported game.
+
+As an incremental safeguard under [#129](https://github.com/vokerg/WhyISuckAtChess/issues/129), the publication transaction additionally checks the current `ImportedGame.plyIndexedAt` / `INDEXED` state against every referenced event's and analysis run's source snapshot, requires referenced analysis runs to be `SUCCEEDED` with `COMPLETE` coverage, and verifies that an event's linked analysis ID and snapshot exactly match its persisted analysis run. This includes **event-only references** whose draft omits `sourceAnalysisRunId`; a stale upstream analysis cannot bypass validation through an evidence-event ID. When both event and analysis IDs are supplied on one reference, they must identify the same analysis lineage. Rejection leaves the previously published diagnosis set untouched.
+
+**Remaining Phase 6 blocker:** these are materialization-time checks, not a production trigger, durable recalculation scheduler, scope-wide source watermark, or read-time freshness proof. Game-only references and otherwise-unreferenced source changes need the #129 lifecycle/fencing implementation. A successful persisted finding set from historical tests must not be interpreted as proof that a fresh import automatically publishes a current diagnosis.
 
 Foreign keys from diagnosis references use `SET NULL` toward authoritative source rows; deleting/superseding diagnosis artifacts therefore cannot delete imported games, evidence events, or analysis runs.
 
