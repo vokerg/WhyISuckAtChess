@@ -73,6 +73,7 @@ function findingSet(overrides = {}) {
     calculationVersion: 'finding-materialization-v1',
     policyVersions: CURRENT_POLICIES,
     calculationAsOf: new Date('2026-10-03T16:00:00.000Z'),
+    sourceFresh: true,
     findings: [
       finding({
         id: 3,
@@ -189,6 +190,59 @@ test('Prisma diagnosis summary read is ownership scoped and bounds representativ
   assert.equal(captured.select.findings.select.evidenceReferences.take, 3);
   assert.equal('coverageJson' in captured.select.findings.select, false);
   assert.equal('sourceVersionsJson' in captured.select.findings.select, false);
+});
+
+test('Prisma summary is unavailable after any newer owned import, source game, analysis or evidence update', async () => {
+  const base = findingSet();
+  const sourceKinds = ['importRun', 'importedGame', 'gameAnalysisRun', 'evidenceRun'];
+
+  for (const changedKind of [null, ...sourceKinds]) {
+    const checks = [];
+    const database = {
+      diagnosisFindingSet: {
+        async findFirst(args) {
+          assert.equal(args.where.appUserId, 73);
+          return { ...base, policyVersionsJson: base.policyVersions };
+        },
+      },
+    };
+    for (const kind of sourceKinds) {
+      database[kind] = {
+        async findFirst(args) {
+          checks.push(kind);
+          assert.deepEqual(args.select, { id: true });
+          assert.deepEqual(args.where.updatedAt, { gt: base.calculationAsOf });
+          if (kind === 'importRun' || kind === 'importedGame') {
+            assert.equal(args.where.appUserId, 73);
+          } else {
+            assert.deepEqual(args.where.importedGame, { is: { appUserId: 73 } });
+          }
+          return kind === changedKind ? { id: 9 } : null;
+        },
+      };
+    }
+
+    const repository = createPrismaDiagnosisSummaryRepository(database);
+    const response = await createDiagnosisSummaryService(repository).getSummary(73, 'overall');
+    assert.equal(response.status, changedKind === null ? 'AVAILABLE' : 'UNAVAILABLE');
+    if (changedKind !== null) {
+      assert.equal(response.reason, 'RANKING_STALE');
+    }
+    assert.deepEqual(checks.sort(), [...sourceKinds].sort());
+  }
+});
+
+test('diagnosis summary refuses unverified source freshness even with complete ranking', async () => {
+  const service = createDiagnosisSummaryService({
+    async findCurrent() {
+      return findingSet({ sourceFresh: false });
+    },
+  });
+  assert.deepEqual(await service.getSummary(42, 'overall'), {
+    status: 'UNAVAILABLE',
+    scopeKey: 'overall',
+    reason: 'RANKING_STALE',
+  });
 });
 
 test('HTTP diagnosis summary route passes authenticated ownership and validates scope', async () => {
