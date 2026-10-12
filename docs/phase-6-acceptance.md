@@ -113,3 +113,30 @@ After #129 introduces a real materialization path, the new DB-backed acceptance 
 - **No fabricated verification:** baseline CI being green and fixtures passing in earlier PRs do not establish that the real user loop succeeds.
 
 Once #129 is merged, re-run this acceptance matrix on an actual composed fixture and amend the decision with exact commands and run links before closing #120.
+
+## 7. Phase 6 blocker progress: publication ordering (2026-10-12)
+
+A narrow #129 follow-up adds a transaction-scoped publication-order fence to the existing
+`DiagnosisFindingSet` replacement path:
+
+- Replaying **the same materialization key** remains idempotent (provided its source
+  references still pass the accepted current-provenance checks).
+- A **different** key with an older or equal `calculationAsOf` is rejected before
+  superseding the current scope. Equal timestamps cannot establish which result is
+  newer; the publisher must submit a strictly newer calculation generation.
+- The read/check/replace transaction runs at PostgreSQL `Serializable` isolation.
+  Conflicting concurrent publishers may receive a serialization error and must
+  **retry the job through the future durable runner**, which must re-check current
+  source/policy versions before publishing.
+- A disposable-PostgreSQL regression asserts that a delayed/equal-time update
+  cannot overwrite a newer result, that same-key retries still work, and that
+  simultaneous same-timestamp publications leave at most one current scope.
+
+**Not solved:** A date alone is not an authoritative source snapshot fence. The
+worker still does not schedule cross-game diagnosis, capture an owned source
+watermark or materialize candidates, hierarchy and ranking. An import, reindex,
+new analysis or evidence revision may therefore leave an older *readable* current
+set until the complete #129 source-version/read-side invalidation and durable
+recalculation are implemented. The Phase 6 exit remains **BLOCKED**. The tests
+listed here require executed CI evidence on the PR head; no local PostgreSQL or
+npm execution is claimed by this connector-only change.

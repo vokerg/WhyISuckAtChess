@@ -305,6 +305,7 @@ test('canonical finding persistence replaces current scope without deleting sour
         revisedTimeFinding,
         'finding-materialization-v2',
       ),
+      calculationAsOf: new Date('2026-09-22T05:01:00.000Z'),
       findings: [revisedTimeFinding, rootCandidate],
       rootSupports: [{
         rootFindingKey: 'root-clock-tactics',
@@ -355,6 +356,33 @@ test('canonical finding persistence replaces current scope without deleting sour
       versionTuple(secondDraft),
     );
     assert.equal(current.id, second.id);
+
+    // A late worker result cannot downgrade a published newer scope. A
+    // different key at the same timestamp is not an idempotent retry.
+    for (const calculationAsOf of [
+      firstDraft.calculationAsOf,
+      secondDraft.calculationAsOf,
+    ]) {
+      const delayed = {
+        ...secondDraft,
+        materializationKey: randomUUID().replaceAll('-', ''),
+        calculationAsOf,
+      };
+      await assert.rejects(
+        () => replaceCurrentDiagnosisFindingScope(
+          user.id, delayed, prismaDiagnosisFindingRepository,
+        ),
+        /must be newer than the current calculation/,
+      );
+    }
+    const repeatedCurrent = await replaceCurrentDiagnosisFindingScope(
+      user.id, secondDraft, prismaDiagnosisFindingRepository,
+    );
+    assert.equal(repeatedCurrent.id, second.id,
+      'same key remains idempotent even though its calculation time is equal');
+    assert.equal(await prisma.diagnosisFindingSet.count({
+      where: { appUserId: user.id, scopeKey: secondDraft.scopeKey, isCurrent: true },
+    }), 1, 'rejected stale publication must preserve exactly one current set');
 
     const staleVersionRead = await prismaDiagnosisFindingRepository.getCurrentScope(
       user.id,
@@ -602,6 +630,40 @@ test('canonical finding persistence replaces current scope without deleting sour
     if (otherUserId !== null) {
       await prisma.appUser.delete({ where: { id: otherUserId } }).catch(() => {});
     }
+    await prisma.$disconnect();
+  }
+});
+
+test('concurrent same-scope materializations never both become current', async () => {
+  const suffix = randomUUID();
+  const user = await prisma.appUser.create({
+    data: { authProvider: 'TEST', authSubject: 'diagnosis-publication-race-' + suffix },
+  });
+  try {
+    const base = {
+      ...findingSet(randomUUID().replaceAll('-', ''), baseFinding()),
+      findings: [],
+      calculationAsOf: new Date('2026-09-22T05:05:00.000Z'),
+    };
+    const alternate = {
+      ...base,
+      materializationKey: randomUUID().replaceAll('-', ''),
+    };
+    const results = await Promise.allSettled([
+      replaceCurrentDiagnosisFindingScope(user.id, base, prismaDiagnosisFindingRepository),
+      replaceCurrentDiagnosisFindingScope(user.id, alternate, prismaDiagnosisFindingRepository),
+    ]);
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1,
+      'one conflicting serializable publication must be rejected');
+    const rows = await prisma.diagnosisFindingSet.findMany({
+      where: { appUserId: user.id, scopeKey: base.scopeKey, isCurrent: true },
+      select: { id: true, materializationKey: true },
+    });
+    assert.equal(rows.length, 1);
+    assert.ok([base.materializationKey, alternate.materializationKey]
+      .includes(rows[0].materializationKey));
+  } finally {
+    await prisma.appUser.delete({ where: { id: user.id } });
     await prisma.$disconnect();
   }
 });
