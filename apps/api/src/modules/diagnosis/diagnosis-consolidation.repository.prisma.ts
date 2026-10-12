@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { DIAGNOSIS_CONSOLIDATION_POLICY_VERSION } from '@why-i-suck-at-chess/chess-domain';
 import prisma from '../../prisma';
 import type { PersistedDiagnosisFindingConsolidation } from './diagnosis-finding.types';
-import { prismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
+import { createPrismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
 import type {
   DiagnosisConsolidationRepository,
   DiagnosisFindingConsolidationDraft,
@@ -85,8 +85,9 @@ async function loadConsolidations(
   return rows.map(mapConsolidation);
 }
 
-export const prismaDiagnosisConsolidationRepository: DiagnosisConsolidationRepository = {
-  ...prismaDiagnosisFindingOverlapRepository,
+export function createPrismaDiagnosisConsolidationRepository(database: typeof prisma = prisma): DiagnosisConsolidationRepository {
+  return {
+  ...createPrismaDiagnosisFindingOverlapRepository(database),
 
   async replaceCurrentConsolidations(
     appUserId,
@@ -94,7 +95,7 @@ export const prismaDiagnosisConsolidationRepository: DiagnosisConsolidationRepos
     policyVersion,
     consolidations,
   ) {
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       const findingSet = await tx.diagnosisFindingSet.findUnique({
         where: { id: findingSetId },
         select: {
@@ -137,3 +138,6 @@ export const prismaDiagnosisConsolidationRepository: DiagnosisConsolidationRepos
     });
   },
 };
+}
+
+export const prismaDiagnosisConsolidationRepository = createPrismaDiagnosisConsolidationRepository();

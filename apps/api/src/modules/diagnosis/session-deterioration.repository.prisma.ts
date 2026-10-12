@@ -1,3 +1,4 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, currentDiagnosisAnalysisSql, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
 import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
@@ -6,11 +7,12 @@ import type {
   SessionGameQuality,
 } from './session-deterioration.service';
 
-export const prismaSessionDeteriorationRepository: SessionGameQualityRepository = {
+export function createPrismaSessionDeteriorationRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): SessionGameQualityRepository {
+  return {
   async loadGameQuality(appUserId, importedGameIds) {
     if (importedGameIds.length === 0) return [];
 
-    return prisma.$queryRaw<SessionGameQuality[]>(Prisma.sql`
+    return database.$queryRaw<SessionGameQuality[]>(Prisma.sql`
       SELECT
         game."id" AS "importedGameId",
         game."exactTimeControlKey" AS "exactTimeControlKey",
@@ -48,6 +50,7 @@ export const prismaSessionDeteriorationRepository: SessionGameQualityRepository 
        AND analysis."status" = 'SUCCEEDED'
        AND analysis."coverageStatus" = 'COMPLETE'
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
+       ${currentDiagnosisAnalysisSql(identity)}
       WHERE game."appUserId" = ${appUserId}
         AND game."id" IN (${Prisma.join([...importedGameIds])})
       GROUP BY game."id", game."exactTimeControlKey"
@@ -55,3 +58,6 @@ export const prismaSessionDeteriorationRepository: SessionGameQualityRepository 
     `);
   },
 };
+}
+
+export const prismaSessionDeteriorationRepository = createPrismaSessionDeteriorationRepository();

@@ -392,9 +392,10 @@ async function createFindingSet(
   return set.id;
 }
 
-export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
+export function createPrismaDiagnosisFindingRepository(database: typeof prisma = prisma): DiagnosisFindingRepository {
+  return {
   async replaceCurrentScope(appUserId, draft) {
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       const userExists = await tx.appUser.findUnique({
         where: { id: appUserId },
         select: { id: true },
@@ -443,11 +444,13 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
           supersededAt: null,
         },
         orderBy: [{ calculationAsOf: 'desc' }, { id: 'desc' }],
-        select: { calculationAsOf: true },
+        select: { id: true, calculationAsOf: true },
       });
       if (
         currentRevision
-        && draft.calculationAsOf.getTime() <= currentRevision.calculationAsOf.getTime()
+        && (draft.calculationAsOf.getTime() < currentRevision.calculationAsOf.getTime()
+          || (draft.calculationAsOf.getTime() === currentRevision.calculationAsOf.getTime()
+            && draft.materializationKey !== 'root-synth-v1-source-' + currentRevision.id))
       ) {
         throw new Error('Diagnosis materialization must be newer than the current calculation.');
       }
@@ -471,7 +474,7 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
   },
 
   async getCurrentScope(appUserId, scopeKey, versions) {
-    const current = await prisma.diagnosisFindingSet.findFirst({
+    const current = await database.diagnosisFindingSet.findFirst({
       where: {
         appUserId,
         scopeKey,
@@ -483,6 +486,9 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
       },
       select: { id: true },
     });
-    return current ? loadSet(prisma, current.id) : null;
+    return current ? loadSet(database, current.id) : null;
   },
 };
+}
+
+export const prismaDiagnosisFindingRepository = createPrismaDiagnosisFindingRepository();

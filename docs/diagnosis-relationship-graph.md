@@ -108,3 +108,8 @@ Subsequent ownership remains:
 - #87: synthesized root-cause candidates;
 - #88: deterministic ranking;
 - #89: Phase 5 integration acceptance.
+
+
+## Per-comparison rating composition (#129)
+
+`diagnosis-relationship-graph-v2` supports distinct registered RATING-002 findings whose `dimensions.comparisonFindingKey` identifies the matched comparison they qualify. Only that comparison receives the confounder edge. Legacy single unscoped confounders remain supported; ambiguous unscoped duplicates fail closed. The worker projects each actual composition result through the existing registry, without merging effects or inventing a comparator.

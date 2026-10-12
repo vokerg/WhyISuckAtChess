@@ -47,6 +47,22 @@ export class DiagnosisSummaryPageComponent implements OnInit {
     return summary?.status === 'AVAILABLE' ? summary : null;
   });
 
+  protected readonly refreshMessage = computed(() => {
+    const refresh = this.summary()?.refresh;
+    if (!refresh) return null;
+    const messages = {
+      NO_SOURCE: 'Connect Lichess and import games to build evidence.',
+      NO_GAMES: 'The import has not provided any games for diagnosis yet.',
+      PROCESSING: 'Your imported games are still being indexed or analysed.',
+      QUEUED: 'Your diagnosis is queued for calculation.',
+      RUNNING: 'Your diagnosis is being calculated.',
+      FAILED: 'Diagnosis calculation failed. Your imported games are preserved.',
+      READY: 'Diagnosis processing is complete.',
+      STALE: 'Your game evidence changed. A fresh diagnosis is needed.',
+    };
+    return messages[refresh.state];
+  });
+
   protected readonly findingHrefFor = diagnosisFindingHref;
   protected readonly titleFor = diagnosisTitle;
   protected readonly claimFor = diagnosisClaimLabel;

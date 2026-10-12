@@ -79,7 +79,7 @@ Use `diagnosisGameEventIdentityKey(...)`.
 
 The #83 adapters now attach these identities where the source contract is sufficient:
 
-- opening recurrence supporting plies use the opening evidence kind + `opening-v1`;
+- opening recurrence supporting plies use the opening evidence kind + `opening-v2`;
 - complete `TIME-004` chain games use a game-level identity owned by the early-time-overuse aggregate.
 
 Other #83 aggregates that expose only denominators/representative metrics and no complete game/event set remain explicitly non-calculable for event overlap.

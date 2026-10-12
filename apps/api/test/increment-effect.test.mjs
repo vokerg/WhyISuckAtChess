@@ -11,7 +11,7 @@ import {
   getIncrementEffect,
 } from '../dist/modules/diagnosis/increment-effect.service.js';
 import {
-  prismaIncrementEffectRepository,
+  createPrismaIncrementEffectRepository,
 } from '../dist/modules/diagnosis/increment-effect.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
@@ -21,6 +21,7 @@ import {
 } from '../dist/modules/timing/timing-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaIncrementEffectRepository = createPrismaIncrementEffectRepository(prisma, null);
 const PGN = '[Event "increment effect fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function analysis(runId = 1) {

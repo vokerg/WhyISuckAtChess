@@ -69,8 +69,18 @@ export const diagnosisSummaryUnavailableReasonSchema = z.enum([
   'RANKING_STALE',
 ]);
 
+export const diagnosisSummaryRefreshSchema = z.object({
+  state: z.enum(['NO_SOURCE', 'NO_GAMES', 'PROCESSING', 'QUEUED', 'RUNNING', 'FAILED', 'READY', 'STALE']),
+  sourceGames: z.number().int().nonnegative(),
+  attempts: z.number().int().nonnegative(),
+  errorCode: z.string().nullable(),
+}).strict();
+export type DiagnosisSummaryRefresh = z.output<typeof diagnosisSummaryRefreshSchema>;
+
 export const diagnosisSummaryAvailableSchema = z.object({
   status: z.literal('AVAILABLE'),
+  evidenceState: z.enum(['RANKED_FINDINGS', 'INSUFFICIENT_EVIDENCE', 'REQUIRED_EVIDENCE_UNAVAILABLE', 'NO_ELIGIBLE_FINDINGS']).optional(),
+  refresh: diagnosisSummaryRefreshSchema.optional(),
   scopeKey: z.string().min(1).max(128),
   findingSetId: z.number().int().positive(),
   calculationAsOf: z.iso.datetime({ offset: true }),
@@ -85,6 +95,7 @@ export const diagnosisSummaryAvailableSchema = z.object({
 
 export const diagnosisSummaryUnavailableSchema = z.object({
   status: z.literal('UNAVAILABLE'),
+  refresh: diagnosisSummaryRefreshSchema.optional(),
   scopeKey: z.string().min(1).max(128),
   reason: diagnosisSummaryUnavailableReasonSchema,
 }).strict();

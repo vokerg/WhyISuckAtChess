@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import prismaModule from '../dist/prisma.js';
 import {
-  prismaEvidenceRepository,
+  createPrismaEvidenceRepository,
 } from '../dist/modules/evidence/evidence.repository.prisma.js';
 import {
   createEvidenceService,
@@ -13,6 +13,7 @@ import {
 } from '../dist/modules/evidence/material-evidence.detector.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaEvidenceRepository = createPrismaEvidenceRepository(prisma, null);
 
 async function createPosition(label, normalizedFen = null) {
   return prisma.position.create({

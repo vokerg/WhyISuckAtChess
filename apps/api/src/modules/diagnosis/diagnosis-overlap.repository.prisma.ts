@@ -1,9 +1,10 @@
 import prisma from '../../prisma';
-import { prismaDiagnosisFindingRepository } from './diagnosis-finding.repository.prisma';
+import { createPrismaDiagnosisFindingRepository } from './diagnosis-finding.repository.prisma';
 import type { DiagnosisFindingOverlapRepository } from './diagnosis-overlap.service';
 
-export const prismaDiagnosisFindingOverlapRepository: DiagnosisFindingOverlapRepository = {
-  ...prismaDiagnosisFindingRepository,
+export function createPrismaDiagnosisFindingOverlapRepository(database: typeof prisma = prisma): DiagnosisFindingOverlapRepository {
+  return {
+  ...createPrismaDiagnosisFindingRepository(database),
 
   async assertCurrentSourceReferences(appUserId, snapshot) {
     if (snapshot.appUserId !== appUserId) {
@@ -17,7 +18,7 @@ export const prismaDiagnosisFindingOverlapRepository: DiagnosisFindingOverlapRep
     )))];
     if (eventIds.length === 0) return;
 
-    const rows = await prisma.evidenceEvent.findMany({
+    const rows = await database.evidenceEvent.findMany({
       where: { id: { in: eventIds } },
       select: {
         id: true,
@@ -45,7 +46,7 @@ export const prismaDiagnosisFindingOverlapRepository: DiagnosisFindingOverlapRep
     }
 
     const sourceGameIds = [...new Set(rows.map((row) => row.run.importedGameId))];
-    const ownedGames = await prisma.importedGame.count({
+    const ownedGames = await database.importedGame.count({
       where: {
         appUserId,
         id: { in: sourceGameIds },
@@ -56,3 +57,6 @@ export const prismaDiagnosisFindingOverlapRepository: DiagnosisFindingOverlapRep
     }
   },
 };
+}
+
+export const prismaDiagnosisFindingOverlapRepository = createPrismaDiagnosisFindingOverlapRepository();

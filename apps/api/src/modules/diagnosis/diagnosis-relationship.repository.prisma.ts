@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
-import { prismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
+import { createPrismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
 import type {
   DiagnosisRelationshipEdgeDraft,
   DiagnosisRelationshipRepository,
@@ -31,13 +31,14 @@ function assertUniqueRelationships(
   }
 }
 
-export const prismaDiagnosisRelationshipRepository: DiagnosisRelationshipRepository = {
-  ...prismaDiagnosisFindingOverlapRepository,
+export function createPrismaDiagnosisRelationshipRepository(database: typeof prisma = prisma): DiagnosisRelationshipRepository {
+  return {
+  ...createPrismaDiagnosisFindingOverlapRepository(database),
 
   async replaceCurrentRelationships(appUserId, findingSetId, policyVersion, relationships) {
     assertUniqueRelationships(relationships);
 
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       const findingSet = await tx.diagnosisFindingSet.findFirst({
         where: {
           id: findingSetId,
@@ -104,3 +105,6 @@ export const prismaDiagnosisRelationshipRepository: DiagnosisRelationshipReposit
     });
   },
 };
+}
+
+export const prismaDiagnosisRelationshipRepository = createPrismaDiagnosisRelationshipRepository();

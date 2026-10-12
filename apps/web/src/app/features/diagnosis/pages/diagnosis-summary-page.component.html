@@ -31,6 +31,12 @@
       <p>The page waits for the authoritative persisted ranking instead of reconstructing it locally.</p>
     </section>
   } @else if (summary(); as current) {
+    @if (refreshMessage(); as message) {
+      <section class="state-card" aria-live="polite">
+        <p>{{ message }}</p>
+        <button type="button" (click)="load()">Refresh status</button>
+      </section>
+    }
     @if (current.status === 'UNAVAILABLE') {
       <section class="state-card">
         <p class="state-kicker">Diagnosis unavailable</p>
@@ -67,7 +73,11 @@
         <section class="state-card">
           <p class="state-kicker">No ranked weaknesses</p>
           <h2>The current diagnosis has no top-level findings</h2>
-          <p>This is different from missing or stale data: the persisted diagnosis is available, but its ranked list is empty.</p>
+          @if (current.evidenceState === 'INSUFFICIENT_EVIDENCE' || current.evidenceState === 'REQUIRED_EVIDENCE_UNAVAILABLE') {
+            <p>There is not enough current evidence to rank a weakness. This does not establish that no problem exists.</p>
+          } @else {
+            <p>No finding qualifies for ranking in this scope. Inspect the game evidence and coverage before drawing conclusions.</p>
+          }
           <a routerLink="/settings/lichess">Connect or import games</a>
         </section>
       } @else {

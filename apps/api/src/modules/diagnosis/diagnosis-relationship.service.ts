@@ -16,7 +16,7 @@ import {
   type DiagnosisFindingOverlapResult,
 } from './diagnosis-overlap.service';
 
-export const DIAGNOSIS_RELATIONSHIP_GRAPH_VERSION = 'diagnosis-relationship-graph-v1' as const;
+export const DIAGNOSIS_RELATIONSHIP_GRAPH_VERSION = 'diagnosis-relationship-graph-v2' as const;
 
 export interface DiagnosisRelationshipEdgeDraft {
   sourceFindingId: number;
@@ -324,13 +324,18 @@ export function buildDiagnosisRelationshipGraph(
   }
 
   const ratingConfounders = activeFindings.filter((finding) => finding.diagnosisId === 'RATING-002');
-  if (ratingConfounders.length > 1) {
+  const legacyConfounders = ratingConfounders.filter((finding) =>
+    !isRecord(finding.dimensions) || typeof finding.dimensions.comparisonFindingKey !== 'string');
+  if (legacyConfounders.length > 1) {
     throw new Error('Relationship graph cannot choose between multiple active RATING-002 confounders.');
   }
-  const confounder = ratingConfounders[0] ?? null;
-  if (confounder) {
-    for (const finding of activeFindings) {
-      if (finding.id === confounder.id || !hasExplicitRatingConfounder(finding)) continue;
+  for (const finding of activeFindings) {
+    if (!hasExplicitRatingConfounder(finding) || finding.diagnosisId === 'RATING-002') continue;
+    const scoped = ratingConfounders.filter((confounder) => isRecord(confounder.dimensions)
+      && confounder.dimensions.comparisonFindingKey === finding.findingKey);
+    if (scoped.length > 1) throw new Error('Multiple rating confounders target the same comparison.');
+    const confounder = scoped[0] ?? legacyConfounders[0];
+    if (!confounder) continue;
       addEdge(edges, {
         sourceFindingId: finding.id,
         targetFindingId: confounder.id,
@@ -345,7 +350,6 @@ export function buildDiagnosisRelationshipGraph(
           confounderEvidenceStrength: confounder.evidenceStrength,
         },
       });
-    }
   }
 
   return [...edges.values()].sort((left, right) => edgeKey(left).localeCompare(edgeKey(right)));

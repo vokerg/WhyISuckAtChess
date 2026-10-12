@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createDiagnosisWorkerService } from './modules/diagnosis/diagnosis-worker.service';
 import prisma from './prisma';
 import { lichessConnectionService } from './modules/lichess/lichess-connection.service';
 import { createLichessAccountImportService } from './modules/account-imports/account-import.service';
@@ -16,6 +17,7 @@ export interface WorkerCycleDependencies {
   plyIndexService: WorkerCycleExecutor;
   analysisService: WorkerCycleExecutor;
   evidenceService?: WorkerCycleExecutor;
+  diagnosisService?: WorkerCycleExecutor;
 }
 
 export async function runWorkerCycle(
@@ -27,14 +29,17 @@ export async function runWorkerCycle(
   const evidenceRan = dependencies.evidenceService
     ? await dependencies.evidenceService.runOnce()
     : false;
-  return importRan || indexRan || analysisRan || evidenceRan;
+  const diagnosisRan = dependencies.diagnosisService
+    ? await dependencies.diagnosisService.runOnce() : false;
+  return importRan || indexRan || analysisRan || evidenceRan || diagnosisRan;
 }
 
 export async function runWorkerUntilStopped(): Promise<void> {
   const importService = createLichessAccountImportService({ connectionService: lichessConnectionService });
   const analysisService = createStockfishAnalysisService();
   const evidenceService = createEvidenceService({ detectors: evidenceDetectors });
-  console.info('Persistent worker started; Lichess import, ply indexing, Stockfish analysis, and deterministic evidence executors are registered.');
+  const diagnosisService = createDiagnosisWorkerService();
+  console.info('Persistent worker started; Lichess import, ply indexing, Stockfish analysis, deterministic evidence, and diagnosis publication executors are registered.');
 
   let stopping = false;
   const stop = (signal: NodeJS.Signals) => {
@@ -50,6 +55,7 @@ export async function runWorkerUntilStopped(): Promise<void> {
       plyIndexService: ImportedGamePlyIndexService,
       analysisService,
       evidenceService,
+      diagnosisService,
     });
     if (!ran) {
       await new Promise((resolve) => setTimeout(resolve, 1000));

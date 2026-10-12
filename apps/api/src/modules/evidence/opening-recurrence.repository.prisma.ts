@@ -1,3 +1,4 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, currentDiagnosisAnalysisSql, type DiagnosisAnalysisIdentity } from '../diagnosis/diagnosis-analysis-source';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
@@ -40,8 +41,10 @@ function numberValue(value: Prisma.JsonValue | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+export function createPrismaOpeningRecurrenceRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): OpeningRecurrenceRepository {
+
 async function countEligibleGames(appUserId: number): Promise<number> {
-  const rows = await prisma.$queryRaw<CountRow[]>(Prisma.sql`
+  const rows = await database.$queryRaw<CountRow[]>(Prisma.sql`
     SELECT COUNT(*)::int AS "count"
     FROM "ImportedGame" AS game
     WHERE game."appUserId" = ${appUserId}
@@ -60,7 +63,7 @@ async function countEligibleGames(appUserId: number): Promise<number> {
 }
 
 async function countAnalysedEvidenceGames(appUserId: number): Promise<number> {
-  const rows = await prisma.$queryRaw<CountRow[]>(Prisma.sql`
+  const rows = await database.$queryRaw<CountRow[]>(Prisma.sql`
     SELECT COUNT(DISTINCT run."importedGameId")::int AS "count"
     FROM "EvidenceRun" AS run
     JOIN "ImportedGame" AS game
@@ -86,6 +89,7 @@ async function countAnalysedEvidenceGames(appUserId: number): Promise<number> {
       AND game."plyIndexedAt" = run."sourcePlyIndexedAt"
       AND analysis."snapshotId" = run."sourceAnalysisSnapshotId"
       AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
+       ${currentDiagnosisAnalysisSql(identity)}
       AND analysis."status" = 'SUCCEEDED'
       AND analysis."coverageStatus" = 'COMPLETE'
       AND NOT EXISTS (
@@ -99,13 +103,13 @@ async function countAnalysedEvidenceGames(appUserId: number): Promise<number> {
 }
 
 async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceSample[]> {
-  const rows = await prisma.$queryRaw<SampleRow[]>(Prisma.sql`
+  const rows = await database.$queryRaw<SampleRow[]>(Prisma.sql`
     SELECT
       game."id" AS "importedGameId",
       event."id" AS "evidenceEventId",
       run."sourceAnalysisRunId" AS "sourceAnalysisRunId",
       game."providerGameId" AS "providerGameId",
-      game."userColor" AS "userColor",
+      UPPER(game."userColor") AS "userColor",
       event."evidenceType" AS "evidenceType",
       event."sourcePlyStart" AS "sourcePlyStart",
       event."sourcePositionId" AS "sourcePositionId",
@@ -137,6 +141,7 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
       AND game."plyIndexedAt" = run."sourcePlyIndexedAt"
       AND analysis."snapshotId" = run."sourceAnalysisSnapshotId"
       AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
+       ${currentDiagnosisAnalysisSql(identity)}
       AND analysis."status" = 'SUCCEEDED'
       AND analysis."coverageStatus" = 'COMPLETE'
       AND event."availability" = 'PRESENT'
@@ -214,8 +219,12 @@ async function loadCurrentSamples(appUserId: number): Promise<OpeningRecurrenceS
   return samples;
 }
 
-export const prismaOpeningRecurrenceRepository: OpeningRecurrenceRepository = {
+
+  return {
   countEligibleGames,
   countAnalysedEvidenceGames,
   loadCurrentSamples,
 };
+}
+
+export const prismaOpeningRecurrenceRepository = createPrismaOpeningRecurrenceRepository();

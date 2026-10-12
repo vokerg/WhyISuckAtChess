@@ -1,3 +1,4 @@
+import { OPENING_EVIDENCE_DETECTOR_VERSION } from '../evidence/opening-evidence.detector';
 import {
   DIAGNOSIS_BOUNDEDNESS_POLICY,
   diagnosisGameEventIdentityKey,
@@ -323,7 +324,7 @@ function openingReferences(
           importedGameId: game.importedGameId,
           triggerPly: game.plyNumber,
           sourceKind: sourceEventKind,
-          sourceVersion: 'opening-v1',
+          sourceVersion: OPENING_EVIDENCE_DETECTOR_VERSION,
         })
       : null,
     provenance: {
@@ -369,7 +370,7 @@ function openingAbsentCandidate(
     },
     sourceVersions: {
       candidateProjection: DIAGNOSIS_CANDIDATE_PROJECTION_VERSION,
-      openingEvidence: 'opening-v1',
+      openingEvidence: OPENING_EVIDENCE_DETECTOR_VERSION,
     },
   });
 }
@@ -444,7 +445,7 @@ function projectOpeningRecurrence(source: OpeningRecurrenceEvidenceResult): Diag
           ),
       sourceVersions: {
         candidateProjection: DIAGNOSIS_CANDIDATE_PROJECTION_VERSION,
-        openingEvidence: 'opening-v1',
+        openingEvidence: OPENING_EVIDENCE_DETECTOR_VERSION,
       },
       evidenceReferences: refs,
     }));

@@ -16,7 +16,7 @@ import type {
 } from './evidence.types';
 
 export const TACTICAL_MOTIF_EVIDENCE_DETECTOR_KEY = 'tactical-motif';
-export const TACTICAL_MOTIF_EVIDENCE_DETECTOR_VERSION = 'tactical-motif-v1';
+export const TACTICAL_MOTIF_EVIDENCE_DETECTOR_VERSION = 'tactical-motif-v2';
 
 const TACTICAL_MOTIF_MIN_SCORE_LOSS_CP = 80;
 const MAX_TACTICAL_MOTIF_FINDINGS = 192;

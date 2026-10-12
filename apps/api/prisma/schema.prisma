@@ -8,6 +8,7 @@ datasource db {
 }
 
 model AppUser {
+  diagnosisMaterializationJobs DiagnosisMaterializationJob[]
   id                Int                 @id @default(autoincrement())
   authProvider      String              @db.VarChar(32)
   authSubject       String              @db.VarChar(255)
@@ -381,6 +382,26 @@ model AccountImportCoverage {
   @@index([appUserId, coveredThrough])
 }
 
+model DiagnosisMaterializationJob {
+  id                Int      @id @default(autoincrement())
+  appUserId         Int
+  appUser           AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  scopeKey          String   @default("overall") @db.VarChar(128)
+  sourceKey         String   @db.VarChar(64)
+  status            String   @default("QUEUED") @db.VarChar(24)
+  attempts          Int      @default(0)
+  runAfter          DateTime @default(now())
+  claimToken        String?  @db.VarChar(64)
+  heartbeatAt       DateTime?
+  errorCode         String?  @db.VarChar(64)
+  findingSetId      Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([appUserId, scopeKey])
+  @@index([status, runAfter])
+}
+
 model DiagnosisFindingSet {
   id                     Int                           @id @default(autoincrement())
   appUserId              Int
@@ -551,5 +572,5 @@ model DiagnosisFindingRanking {
   supportJson           Json
   createdAt             DateTime            @default(now())
 
-  @@index([findingSetId, topLevelRanked, rankPosition])
+  @@index([findingSetId, topLevelRanked, rankPosition], map: "DiagnosisFindingRanking_findingSetId_topLevelRanked_rankPositio")
 }

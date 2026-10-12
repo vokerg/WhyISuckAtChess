@@ -1,3 +1,4 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, loadCurrentDiagnosisAnalysisIds, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
 import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
@@ -128,15 +129,16 @@ function currentCompleteAnalysis(
   };
 }
 
-export const prismaPlayedTooFastRepository: PlayedTooFastRepository = {
+export function createPrismaPlayedTooFastRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): PlayedTooFastRepository {
+  return {
   async countCandidates(appUserId, scope) {
-    return prisma.importedGame.count({
+    return database.importedGame.count({
       where: buildWhere(appUserId, scope),
     });
   },
 
   async loadCandidates(appUserId, scope) {
-    const rows = await prisma.importedGame.findMany({
+    const rows = await database.importedGame.findMany({
       where: buildWhere(appUserId, scope),
       orderBy: [
         { startedAt: { sort: 'asc', nulls: 'last' } },
@@ -206,6 +208,7 @@ export const prismaPlayedTooFastRepository: PlayedTooFastRepository = {
       },
     });
 
+    const currentIds = await loadCurrentDiagnosisAnalysisIds(database, appUserId, rows.map((row) => row.id), identity);
     return rows.map<PlayedTooFastSourceGame>((row) => {
       const currentPhaseRun = row.evidenceRuns.length === 1
         && row.plyIndexedAt
@@ -234,10 +237,13 @@ export const prismaPlayedTooFastRepository: PlayedTooFastRepository = {
           analysis: currentCompleteAnalysis(
             row.plyIndexedAt,
             row.plyIndexStatus,
-            ply.engineAnalysisRun,
+            ply.engineAnalysisRun && (!currentIds || currentIds.get(row.id) === ply.engineAnalysisRun.id) ? ply.engineAnalysisRun : null,
           ),
         })),
       };
     });
   },
 };
+}
+
+export const prismaPlayedTooFastRepository = createPrismaPlayedTooFastRepository();

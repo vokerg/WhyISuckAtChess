@@ -8,7 +8,7 @@ import type {
 } from './evidence.types';
 
 export const OPENING_EVIDENCE_DETECTOR_KEY = 'opening-context';
-export const OPENING_EVIDENCE_DETECTOR_VERSION = 'opening-v1';
+export const OPENING_EVIDENCE_DETECTOR_VERSION = 'opening-v2';
 export const OPENING_EVIDENCE_MAX_PLY = 20;
 export const OPENING_BAD_POSITION_MAX_USER_CP = -80;
 

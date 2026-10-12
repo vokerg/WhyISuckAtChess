@@ -2,7 +2,7 @@
 
 **Status:** Phase 3 implementation policy  
 **Scope:** issue #30  
-**Detector:** `tactical-motif@tactical-motif-v1`
+**Detector:** `tactical-motif@tactical-motif-v2`
 
 ## Purpose
 

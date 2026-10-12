@@ -329,7 +329,7 @@ test('current-scope materialization rejects stale scopes and persists only curre
   assert.equal(sourceChecks, 1);
   assert.ok(persisted);
   assert.equal(result.findingSetId, 99);
-  assert.equal(result.graphVersion, 'diagnosis-relationship-graph-v1');
+  assert.equal(result.graphVersion, 'diagnosis-relationship-graph-v2');
   assert.ok(result.relationships.every((edge) => [21, 22].includes(edge.sourceFindingId)));
   assert.ok(result.relationships.every((edge) => [21, 22].includes(edge.targetFindingId)));
 
@@ -347,4 +347,14 @@ test('current-scope materialization rejects stale scopes and persists only curre
     ),
     /unavailable for relationship synthesis/,
   );
+});
+
+
+test('rating composition confounders stay attached to their own comparison', () => {
+  const a = finding(1, 'TIME-005', { coverage: { ratingComposition: { result: { comparison: { materialCompositionWarning: true } } } } });
+  const b = finding(2, 'TIME-006', { coverage: { ratingComposition: { result: { comparison: { materialCompositionWarning: true } } } } });
+  const ra = finding(3, 'RATING-002', { dimensions: { comparisonFindingKey: a.findingKey } });
+  const rb = finding(4, 'RATING-002', { dimensions: { comparisonFindingKey: b.findingKey } });
+  const graph = buildDiagnosisRelationshipGraph([a,b,ra,rb], []);
+  assert.deepEqual(graph.filter((edge) => edge.relationshipType === 'CONFOUNDED_BY').map((edge) => [edge.sourceFindingId,edge.targetFindingId]).sort(), [[1,3],[2,4]]);
 });

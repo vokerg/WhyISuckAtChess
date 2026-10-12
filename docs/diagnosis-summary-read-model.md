@@ -126,3 +126,8 @@ Issue #116 adds the first dedicated comparison read model at `GET /api/diagnosis
 Unlike the persisted hierarchy summary/drill-down endpoints, this boundary composes the already-accepted Phase 4B `TIME-005` and `TIME-006` aggregate services. It does not read diagnosis persistence, recalculate ranking, or infer a new finding. Exact-control identity, matched initial-time increment strata, separate result/engine/timing coverage and evidence grades, and `RATING-002` composition disclosure remain authoritative from their owning aggregate services.
 
 The response is independently capped for product consumption and reports truncation metadata. A later Angular comparison page or grounded explanation layer must consume this bounded projection rather than importing aggregate repositories or reimplementing comparison policy.
+
+
+## Production readiness and freshness (#129)
+
+The durable worker now materializes `overall` after current source evidence is ready. The summary remains read only and compares a persisted scope source key with current owned source/policy identity. Additive optional `refresh` and `evidenceState` fields expose source absence, processing, queue/failure, and insufficient/no-eligible evidence. See [the canonical lifecycle contract](diagnosis-worker-lifecycle.md).

@@ -1,3 +1,5 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, loadCurrentDiagnosisAnalysisIds, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
+import { canonicalPlayerResult } from '../imported-games/source-normalization';
 import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
@@ -60,15 +62,16 @@ function currentCompleteAnalysis(
   };
 }
 
-export const prismaIncrementEffectRepository: IncrementEffectRepository = {
+export function createPrismaIncrementEffectRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): IncrementEffectRepository {
+  return {
   async countCandidates(appUserId, scope) {
-    return prisma.importedGame.count({
+    return database.importedGame.count({
       where: buildWhere(appUserId, scope),
     });
   },
 
   async loadCandidates(appUserId, scope) {
-    const rows = await prisma.importedGame.findMany({
+    const rows = await database.importedGame.findMany({
       where: buildWhere(appUserId, scope),
       orderBy: [
         { startedAt: { sort: 'asc', nulls: 'last' } },
@@ -115,6 +118,7 @@ export const prismaIncrementEffectRepository: IncrementEffectRepository = {
       },
     });
 
+    const currentIds = await loadCurrentDiagnosisAnalysisIds(database, appUserId, rows.map((row) => row.id), identity);
     return rows.map<IncrementEffectSourceGame>((row) => ({
       importedGameId: row.id,
       variant: row.variant,
@@ -122,7 +126,7 @@ export const prismaIncrementEffectRepository: IncrementEffectRepository = {
       exactTimeControlKey: row.exactTimeControlKey,
       timeControlInitial: row.timeControlInitial,
       timeControlIncrement: row.timeControlIncrement,
-      resultForUser: row.resultForUser,
+      resultForUser: canonicalPlayerResult(row.resultForUser),
       timingDerivationVersion: row.timingDerivationVersion,
       userMoves: row.plies.map((ply) => ({
         plyNumber: ply.plyNumber,
@@ -136,9 +140,12 @@ export const prismaIncrementEffectRepository: IncrementEffectRepository = {
         analysis: currentCompleteAnalysis(
           row.plyIndexedAt,
           row.plyIndexStatus,
-          ply.engineAnalysisRun,
+          ply.engineAnalysisRun && (!currentIds || currentIds.get(row.id) === ply.engineAnalysisRun.id) ? ply.engineAnalysisRun : null,
         ),
       })),
     }));
   },
 };
+}
+
+export const prismaIncrementEffectRepository = createPrismaIncrementEffectRepository();

@@ -11,7 +11,7 @@ import {
   getPlayedTooFast,
 } from '../dist/modules/diagnosis/played-too-fast.service.js';
 import {
-  prismaPlayedTooFastRepository,
+  createPrismaPlayedTooFastRepository,
 } from '../dist/modules/diagnosis/played-too-fast.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
@@ -22,6 +22,7 @@ import {
 } from '../dist/modules/timing/timing-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaPlayedTooFastRepository = createPrismaPlayedTooFastRepository(prisma, null);
 const PGN = '[Event "played too fast fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function analysis(runId) {

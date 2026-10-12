@@ -10,7 +10,7 @@ import {
   getEarlyTimeOveruse,
 } from '../dist/modules/diagnosis/early-time-overuse.service.js';
 import {
-  prismaEarlyTimeOveruseRepository,
+  createPrismaEarlyTimeOveruseRepository,
 } from '../dist/modules/diagnosis/early-time-overuse.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
@@ -22,6 +22,7 @@ import {
 } from '../dist/modules/timing/timing-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaEarlyTimeOveruseRepository = createPrismaEarlyTimeOveruseRepository(prisma, null);
 const PGN = '[Event "early time overuse fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function analysis(runId) {

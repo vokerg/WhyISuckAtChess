@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { DIAGNOSIS_RANKING_POLICY_VERSION } from '@why-i-suck-at-chess/chess-domain';
 import prisma from '../../prisma';
-import { prismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
+import { createPrismaDiagnosisFindingOverlapRepository } from './diagnosis-overlap.repository.prisma';
 import type {
   DiagnosisFindingRankingDraft,
   DiagnosisRankingRepository,
@@ -131,8 +131,9 @@ async function loadRankings(
   return rows.map(mapRanking);
 }
 
-export const prismaDiagnosisRankingRepository: DiagnosisRankingRepository = {
-  ...prismaDiagnosisFindingOverlapRepository,
+export function createPrismaDiagnosisRankingRepository(database: typeof prisma = prisma): DiagnosisRankingRepository {
+  return {
+  ...createPrismaDiagnosisFindingOverlapRepository(database),
 
   async replaceCurrentRankings(
     appUserId,
@@ -140,7 +141,7 @@ export const prismaDiagnosisRankingRepository: DiagnosisRankingRepository = {
     rankingPolicyVersion,
     rankings,
   ) {
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       const findingSet = await tx.diagnosisFindingSet.findUnique({
         where: { id: findingSetId },
         select: {
@@ -191,3 +192,6 @@ export const prismaDiagnosisRankingRepository: DiagnosisRankingRepository = {
     });
   },
 };
+}
+
+export const prismaDiagnosisRankingRepository = createPrismaDiagnosisRankingRepository();

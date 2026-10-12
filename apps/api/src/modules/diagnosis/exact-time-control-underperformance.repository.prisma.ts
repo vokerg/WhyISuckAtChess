@@ -1,3 +1,4 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, currentDiagnosisAnalysisSql, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
 import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
@@ -33,15 +34,16 @@ function queryConditions(
   return Prisma.join(conditions, ' AND ');
 }
 
-export const prismaExactTimeControlRepository: ExactTimeControlRepository = {
+export function createPrismaExactTimeControlRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): ExactTimeControlRepository {
+  return {
   async countCandidates(appUserId, scope) {
-    return prisma.importedGame.count({
+    return database.importedGame.count({
       where: buildWhere(appUserId, scope),
     });
   },
 
   async loadCandidates(appUserId, scope) {
-    return prisma.$queryRaw<ExactTimeControlSourceGame[]>(Prisma.sql`
+    return database.$queryRaw<ExactTimeControlSourceGame[]>(Prisma.sql`
       SELECT
         game."id" AS "importedGameId",
         game."variant" AS "variant",
@@ -49,7 +51,7 @@ export const prismaExactTimeControlRepository: ExactTimeControlRepository = {
         game."exactTimeControlKey" AS "exactTimeControlKey",
         game."timeControlInitial" AS "timeControlInitial",
         game."timeControlIncrement" AS "timeControlIncrement",
-        game."resultForUser" AS "resultForUser",
+        UPPER(game."resultForUser") AS "resultForUser",
         COUNT(*) FILTER (
           WHERE analysis."id" IS NOT NULL
             AND ply."scoreLossCp" IS NOT NULL
@@ -89,6 +91,7 @@ export const prismaExactTimeControlRepository: ExactTimeControlRepository = {
        AND analysis."status" = 'SUCCEEDED'
        AND analysis."coverageStatus" = 'COMPLETE'
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
+       ${currentDiagnosisAnalysisSql(identity)}
       WHERE ${queryConditions(appUserId, scope)}
       GROUP BY
         game."id",
@@ -104,3 +107,6 @@ export const prismaExactTimeControlRepository: ExactTimeControlRepository = {
     `);
   },
 };
+}
+
+export const prismaExactTimeControlRepository = createPrismaExactTimeControlRepository();
