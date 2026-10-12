@@ -1,3 +1,4 @@
+import { canonicalPlayerResult } from '../imported-games/source-normalization';
 import type { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
 import {
@@ -22,11 +23,13 @@ function buildWhere(
   };
 }
 
+export function createPrismaSessionizationRepository(database: typeof prisma = prisma): SessionizationRepository {
+
 async function countCandidates(
   appUserId: number,
   scope: SessionizationScope,
 ): Promise<number> {
-  return prisma.importedGame.count({
+  return database.importedGame.count({
     where: buildWhere(appUserId, scope),
   });
 }
@@ -35,7 +38,7 @@ async function loadCandidates(
   appUserId: number,
   scope: SessionizationScope,
 ): Promise<SessionSourceGame[]> {
-  const rows = await prisma.importedGame.findMany({
+  const rows = await database.importedGame.findMany({
     where: buildWhere(appUserId, scope),
     orderBy: [
       { startedAt: { sort: 'asc', nulls: 'last' } },
@@ -54,11 +57,15 @@ async function loadCandidates(
     importedGameId: row.id,
     startedAt: row.startedAt,
     endedAt: row.endedAt,
-    resultForUser: row.resultForUser,
+    resultForUser: canonicalPlayerResult(row.resultForUser),
   }));
 }
 
-export const prismaSessionizationRepository: SessionizationRepository = {
+
+  return {
   countCandidates,
   loadCandidates,
 };
+}
+
+export const prismaSessionizationRepository = createPrismaSessionizationRepository();

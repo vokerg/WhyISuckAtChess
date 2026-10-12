@@ -1,3 +1,5 @@
+import type { DiagnosisSummaryRefresh } from '@why-i-suck-at-chess/contracts';
+import { loadDiagnosisSourceSnapshot } from './diagnosis-source.repository.prisma';
 import prisma from '../../prisma';
 
 export interface DiagnosisSummaryEvidenceReferenceRow {
@@ -52,13 +54,13 @@ export interface DiagnosisSummaryFindingSetRow {
   calculationVersion: string;
   policyVersions: unknown;
   calculationAsOf: Date;
-  // Conservative read-side invalidation until #129 provides an authoritative
-  // persisted source watermark and durable diagnosis refresh.
+  // Verified owned source/policy identity, plus conservative update-time checks.
   sourceFresh: boolean;
   findings: DiagnosisSummaryFindingRow[];
 }
 
 export interface DiagnosisSummaryRepository {
+  getRefreshState?(appUserId: number, scopeKey: string): Promise<DiagnosisSummaryRefresh | undefined>;
   findCurrent(
     appUserId: number,
     scopeKey: string,
@@ -68,12 +70,26 @@ export interface DiagnosisSummaryRepository {
 type DiagnosisSummaryDatabase = Pick<
   typeof prisma,
   'diagnosisFindingSet' | 'importRun' | 'importedGame' | 'gameAnalysisRun' | 'evidenceRun'
->;
+> & Partial<Pick<typeof prisma, '$queryRaw' | 'diagnosisMaterializationJob'>>;
+
 
 export function createPrismaDiagnosisSummaryRepository(
   database: DiagnosisSummaryDatabase = prisma,
 ): DiagnosisSummaryRepository {
   return {
+    async getRefreshState(appUserId, scopeKey) {
+      if (scopeKey !== 'overall' || !database.$queryRaw || !database.diagnosisMaterializationJob) return undefined;
+      const source = await loadDiagnosisSourceSnapshot(appUserId, database as typeof prisma);
+      const job = await database.diagnosisMaterializationJob.findUnique({ where: { appUserId_scopeKey: { appUserId, scopeKey } } });
+      const state = source.games === 0 ? (source.imports === 0 ? 'NO_SOURCE' : 'NO_GAMES')
+        : source.pending ? 'PROCESSING'
+        : !job ? 'QUEUED'
+        : job.sourceKey !== source.key ? 'STALE'
+        : job.status === 'SUCCEEDED' ? 'READY'
+        : job.status === 'RUNNING' ? 'RUNNING'
+        : job.status === 'FAILED' ? 'FAILED' : 'QUEUED';
+      return { state, sourceGames: source.games, attempts: job?.attempts ?? 0, errorCode: job?.errorCode ?? null };
+    },
     async findCurrent(appUserId, scopeKey) {
       const row = await database.diagnosisFindingSet.findFirst({
         where: {
@@ -85,6 +101,7 @@ export function createPrismaDiagnosisSummaryRepository(
         orderBy: { id: 'desc' },
         select: {
           id: true,
+          scopeJson: true,
           scopeKey: true,
           taxonomyVersion: true,
           synthesisPolicyVersion: true,
@@ -169,6 +186,10 @@ export function createPrismaDiagnosisSummaryRepository(
           select: { id: true },
         }),
       ]);
+      const scope = row.scopeJson as { sourceKey?: string } | null;
+      const fingerprintFresh = scope?.sourceKey && database.$queryRaw
+        ? (await loadDiagnosisSourceSnapshot(appUserId, database as typeof prisma)).key === scope.sourceKey
+        : !database.$queryRaw;
       return {
         id: row.id,
         scopeKey: row.scopeKey,
@@ -177,7 +198,7 @@ export function createPrismaDiagnosisSummaryRepository(
         calculationVersion: row.calculationVersion,
         policyVersions: row.policyVersionsJson,
         calculationAsOf: row.calculationAsOf,
-        sourceFresh: !importChanged && !gameChanged && !analysisChanged && !evidenceChanged,
+        sourceFresh: fingerprintFresh && !importChanged && !gameChanged && !analysisChanged && !evidenceChanged,
         findings: row.findings,
       };
     },

@@ -1,171 +1,66 @@
 # Phase 6 complete product-journey acceptance
 
-**Status: BLOCKED — not accepted.**  
-**Audit date:** 2026-10-10  
-**Entry issue:** [#120](https://github.com/vokerg/WhyISuckAtChess/issues/120)  
-**Blocking implementation issue:** [#129](https://github.com/vokerg/WhyISuckAtChess/issues/129)  
-**Code baseline inspected:** `main` at `1aada3ebb58247442251bc928eed921fd53646a7` (merged #119).  
-**Phase gate:** A user can understand major weaknesses, why the product believes them, and inspect the underlying evidence directly.
+**Recorded integration status: PASS (2026-10-12).**
+**Entry issue:** [#120](https://github.com/vokerg/WhyISuckAtChess/issues/120)
+**Implementation:** [#129](https://github.com/vokerg/WhyISuckAtChess/issues/129)
 
-This report intentionally separates **code inspection**, **existing automated test coverage**, and **end-to-end execution**. A green isolated acceptance fixture or mocked browser test is **not** a fresh-user-to-ranked-diagnosis acceptance result. No live Lichess OAuth session, real Stockfish subprocess, disposable end-to-end database/browser journey, or commands in this report were executed as part of this audit. The existing `main` [CI run 38023092520](https://github.com/vokerg/WhyISuckAtChess/actions/runs/38023092520) concluded successfully on the inspected baseline; it does not exercise the missing production diagnosis lifecycle.
+The original 2026-10-10 audit found that import/index/analysis/evidence never initiated diagnosis publication. That historical blocked report is retained in [PR #130](https://github.com/vokerg/WhyISuckAtChess/pull/130). The production worker now composes the accepted diagnosis layers and refreshes the owned `overall` scope. API reads remain read only. The canonical source/queue/transaction contract, CRT reference delta, and operational recovery runbook are in [diagnosis-worker-lifecycle.md](diagnosis-worker-lifecycle.md).
 
-## 1. CRT reference / Why delta
+## Executed integration matrix
 
-**Reference (inspected):** CRT `apps/api/src/worker.ts`, `apps/api/src/modules/account-imports/providers/lichess/lichess-account-import.executor.ts`, and `apps/api/test/account-imports/account-import.lichess-worker.test.mjs`; see also `docs/crt-delta-map.md` for the pre-existing contract map.
-
-- **Preserve:** explicit authenticated account ownership, durable worker execution, provider checkpoints, idempotence, retry/recovery, bounded imports, separated API/worker, and deterministic acceptance fixtures.
-- **Change:** downstream work must create Why's immutable, provenance-safe cross-game diagnosis findings and ranked hierarchy, not CRT account-profile aggregates.
-- **Omit:** provider expansion, CRT training/repertoire flows, frontend-side calculation, provider calls to build a diagnosis, and AI assertions.
-- **Future seam:** an owned, durable diagnosis recalculation/materialization runner can be added after current deterministic evidence without coupling diagnosis policy to transport or UI.
-
-## 2. Supported production path and hard boundary
-
-```text
-authenticated app user
-  -> GET/POST Lichess connection (authoritative backend credential)
-  -> POST /api/me/imports/lichess (explicit bounded import)
-  -> persisted ImportRun status, retry and recovery
-  -> persistent worker:
-       Lichess importer -> ply index/timing -> Stockfish -> evidence detectors
-  -X-> NO wired cross-game diagnosis trigger/publication/refresh
-       (candidate projection -> immutable finding set -> overlap/relationships
-        -> consolidation -> root synthesis -> refreshed hierarchy -> ranking)
-  -> GET /api/diagnosis/summary?scopeKey=overall (READ ONLY)
-  -> GET /api/diagnosis/findings/:findingId (READ ONLY)
-  -> GET /api/diagnosis/time-controls (separate comparison read)
-  -> GET /api/imported-games/:gameId/replay (owned evidence read)
-  -> Angular /diagnosis -> /diagnosis/:findingId -> /games/:gameId?ply=N
-```
-
-### Verified from inspected source
-
-1. `apps/api/src/app.ts` registers authenticated Lichess/import, imported-game, and diagnosis read routes. `apps/api/src/modules/diagnosis/diagnosis.routes.ts` registers only `GET` summary, detail and time-control comparison.
-2. `apps/api/src/worker.ts` registers only import, ply index, Stockfish analysis and deterministic evidence executors. `runWorkerCycle` does not run cross-game diagnosis or ranking materialization.
-3. `apps/api/src/modules/diagnosis/diagnosis-candidate.registry.ts`, `diagnosis-finding.service.ts`, `diagnosis-overlap.service.ts`, `diagnosis-relationship.service.ts`, `diagnosis-consolidation.service.ts`, `diagnosis-root-cause.service.ts` and `diagnosis-ranking.service.ts` provide accepted *reusable* primitives. The Phase 5 fixture manually composes policies, but the production API/worker does not compose them after fresh evidence.
-4. `apps/api/src/modules/diagnosis/diagnosis-summary.service.ts` returns `UNAVAILABLE / NO_CURRENT_DIAGNOSIS` without an owned current finding set; it explicitly does **not** synthesize or rank on read. `docs/diagnosis-summary-read-model.md` correctly states that stale/incomplete reads are unavailable rather than recalculated.
-5. The Angular diagnosis summary loads the owned `overall` scope, honors the server's unavailable state, and uses evidence-link helpers; it does not derive its own diagnosis. Lichess onboarding does not imply diagnosis readiness.
-
-**Consequence:** Import and engine/evidence completion alone cannot publish a first ranked diagnosis on the supported product path. Existing read models may display **pre-materialized** current findings (as test fixtures demonstrate), but neither onboarding nor the worker produces those findings for a fresh user. This is a **product-blocking missing lifecycle**, not a UI empty-state defect. See #129. Until it is fixed and the integrated path is executed, Phase 6 exit fails.
-
-## 3. Acceptance evidence matrix
-
-| Step / invariant | Observed implementation and existing evidence | Test class / audit conclusion |
+| Link / invariant | Executed evidence | Result and limits |
 | --- | --- | --- |
-| App auth and connected Lichess identity | `apps/api/test/auth-and-lichess.test.mjs`, `apps/api/test/lichess-onboarding.test.mjs`; backend connection read is authoritative | Focused API tests; live OAuth **not run** |
-| Explicit bounded import, latest run, conflicts, cancellation, ownership | `apps/api/src/modules/account-imports/account-import.routes.ts`, `apps/api/test/lichess-import.test.mjs`, onboarding tests | Focused API/DB tests; missing/expired credential not interpreted as connected |
-| User-visible onboarding and import recovery | `apps/web/e2e/lichess-onboarding-smoke.mjs` | **Real Chromium/Angular with intercepted API and mock OAuth**; does not prove live provider or DB pipeline |
-| Imported source clock/time-control fidelity | `apps/api/test/pipeline-acceptance.test.mjs`, `apps/api/test/ply-index-timing.test.mjs`, `apps/api/test/imported-games-read-model.test.mjs` | Recorded synthetic Lichess NDJSON + disposable DB fixture; source clock presence and alignment asserted |
-| Worker indexing, analysis, detector evidence, owned replay | `apps/api/test/pipeline-acceptance.test.mjs` | DB-backed four-stage executor fixture, **deterministic engine double**; **not** real Stockfish; test stops at replay/evidence |
-| Cross-game candidate projection and hierarchy | `apps/api/test/phase-5-acceptance.test.mjs`, `docs/phase-5-acceptance.md` | **Synthetic in-memory policy orchestration**; not connected to import worker or production DB diagnosis revision |
-| Automatic current finding-set publication/refresh | No production trigger in inspected `apps/api/src/worker.ts` or registered API route; no full-chain test | **FAIL / BLOCKED by #129** |
-| Owned summary, unavailable/stale/incomplete/empty states | `apps/api/test/diagnosis-read-model.test.mjs`, `docs/diagnosis-summary-read-model.md` | Focused API/read-model fixtures; pass behavior conditional on existing persisted finding revision |
-| Owned drill-down, hierarchy and support roles | `apps/api/test/diagnosis-drill-down.test.mjs`, `apps/web/test/diagnosis-summary.integration.test.ts` | Read-model and Angular fixture coverage; not a complete user journey |
-| Time-control and increment comparisons | `apps/api/test/time-control-comparison-read-model.test.mjs`, `apps/web/test/diagnosis-summary.integration.test.ts` | Accepted bounded API/frontend coverage; separate from diagnosis publication |
-| Representative game and exact replay ply | `apps/web/test/replay-evidence.integration.test.ts`, `apps/web/test/diagnosis-summary.integration.test.ts`, `apps/web/src/app/features/games/state/replay-deep-link.ts` | Fixtures validate `/games/:gameId?ply=N`; invalid/out-of-range ply fails safely; **not** an integrated owned finding-to-replay browser journey |
-| No fabricated missing facts | `docs/phase-3-acceptance.md`, `docs/phase-4b-acceptance.md`, `docs/phase-5-acceptance.md` and focused missing-analysis/clock evidence tests | Contract boundaries reviewed; real composed sparse/partial-state run pending #129 |
-| Clean migration/typecheck/lint/build/tests/architecture/browser | `.github/workflows/ci.yml`; baseline [successful CI run](https://github.com/vokerg/WhyISuckAtChess/actions/runs/38023092520) | Green **pre-audit baseline** only; no claim of fresh local execution or integrated release acceptance |
+| Owned Lichess import, source identity, exact controls, clocks and results | `apps/api/test/diagnosis-worker-acceptance.test.mjs`: 80 NDJSON-shaped recorded legal synthetic games, through the real import and indexing services | PASS; recorded provider fixture, not live OAuth/Lichess |
+| Stockfish analysis and all six detector stages | Same DB fixture invokes the real analysis service with an explicit deterministic engine double, then the registered evidence service | PASS; 80 current successful phase runs remain independent of engine identity; color-sensitive detectors recalculate at v2 |
+| Ranked diagnosis publication | Production `runWorkerCycle` invokes the durable diagnosis runner after evidence, composing the real accepted aggregate/project/overlap/relationship/consolidation/root/rank services against PostgreSQL | PASS; persisted OPEN-002 and TIME-005 findings, accepted ranking order and inspectable game/ply evidence; roots are promoted only when existing support rules permit |
+| Summary, finding detail, comparisons and owned replay | Real Fastify `app.inject` routes read the published finding set, comparison aggregates and representative game replay | PASS; cross-owner detail/replay denied; no read triggers computation |
+| Angular availability transition | Optional Chromium run of the same acceptance fixture forwards API traffic to its real Fastify server | PASS; no-source -> processing -> real persisted ranked finding list, through read-only refresh |
+| No-source/zero games/sparse/partial clocks | Separate three-game fixture with absent, short and complete clocks | PASS; unknown/insufficient states stay distinct from no detected problem; no invented clock values or ranked claims |
+| Unscheduled source work | Materialization attempts before scheduling analysis/evidence | PASS; quiet queues do not imply readiness |
+| Stale source/policy and immutable replacement | Source mutation and calculation-policy rollout | PASS; old ranking hidden immediately, new immutable current revision published, superseded revision retained |
+| Retry/crash/restart and competing claims | Injected mid-composition failure, exhausted attempts/new-source recovery, stale lease and competing workers | PASS; full transaction rollback and bounded recovery |
+| Newer source racing old publication | New source/claim/publication during an older serializable snapshot | PASS; old attempt loses with P2034; one current revision matches the new source key |
+| Immutable continuation recovery | Actual fixture leaves/hierarchy retained in a same-source continuation revision, then job requeued | PASS; final current revision reused after leaf materialization key has been superseded |
+| Detector/engine policy upgrades | Obsolete queued opening-v1 work, latest failed analysis with retained older ply projections, material refresh after failure, indexed zero-ply source | PASS; obsolete work does not permanently block readiness, stale analysis is excluded, unschedulable empty games remain uncovered |
+| Rating context ownership | Per-comparison registry projections and graph regression | PASS; composition disclosure remains attached to its own comparison, without an arbitrary overall comparator |
+| Independent review | Separate review context inspected source/policy fences, retries, transactions, ownership and bounds | PASS after fixes; no unresolved code findings; review did not claim to execute tests |
 
-## 4. Ready, incomplete and stale states
+## Validation executed locally
 
-- **Fresh account / no imported games:** `NO_CURRENT_DIAGNOSIS` is expected. No finding, statistical confidence, clock inference, or invented negative assertion is allowed.
-- **Import queued/running/completed:** `ImportRun` is independent of index, engine, evidence, aggregate, and diagnosis readiness. A `COMPLETED` import is **not** permission to present a finding.
-- **Evidence partial, unavailable clocks, or missing current complete engine analysis:** do not fill gaps or upgrade a diagnosis to adequate coverage. Individual source coverage/strength rules remain authoritative. A complete current finding revision is still required before the page can be `AVAILABLE`.
-- **Hierarchy/ranking incomplete:** summary must return `HIERARCHY_INCOMPLETE` or `RANKING_INCOMPLETE`, not a partially sorted diagnosis.
-- **Old policy / stale revision:** summary must return `RANKING_STALE`; no frontend override or hidden recalculation on GET.
-- **Available zero ranked findings:** this is distinct from unavailable and from proof of no chess problems. Accepted read-model contract can display a current empty ranked list.
-- **Ownership / replay:** diagnosis summary/detail, import status and imported-game replay are scoped to the authenticated app user. A supplied game/ply link is never a substitute for the owned replay API's authorization.
-
-The read-model states above are **implemented/tested as independent surfaces**. The live transition from freshly processed evidence through diagnosis computation into those states remains unproven and currently unwired.
-
-## 5. Reproduction / final acceptance instructions
-
-The following are commands for **a future independent #129/#120 acceptance run**, **not** commands claimed to have run for this report. Use a disposable PostgreSQL database, Node 22 and npm 10+; never point migration/bootstrap tests at real user data.
+Disposable PostgreSQL 16 databases were initialized locally with UTC timezone, separate from the existing Neon application database. Full migration deployment succeeded, including the new durable diagnosis job table. The Prisma schema explicitly maps the existing PostgreSQL-truncated ranking index name; `migrate diff` reports no difference.
 
 ```bash
-npm ci
-# DATABASE_URL must point to a disposable PostgreSQL 16 database
-npm run db:validate
-npm run db:migrate
-npm run typecheck
-npm run lint
-npm run build
-npm test
-# Requires Playwright + Chromium (see .github/workflows/ci.yml)
-node apps/web/e2e/lichess-onboarding-smoke.mjs
+DATABASE_URL=<disposable-postgres> npm run db:migrate
+DATABASE_URL=<disposable-postgres> npm run db:validate
+DATABASE_URL=<disposable-postgres> npx prisma migrate diff \
+  --from-url <disposable-postgres> \
+  --to-schema-datamodel apps/api/prisma/schema.prisma --exit-code
+DATABASE_URL=<disposable-postgres> npm run typecheck
+DATABASE_URL=<disposable-postgres> npm run lint
+DATABASE_URL=<disposable-postgres> npm run build
+DATABASE_URL=<disposable-postgres> npm test
+DATABASE_URL=<separate-disposable-postgres> RUN_DIAGNOSIS_BROWSER_ACCEPTANCE=1 \
+  node --test apps/api/test/diagnosis-worker-acceptance.test.mjs
 ```
 
-After #129 introduces a real materialization path, the new DB-backed acceptance must explicitly record and test:
+Results: **400 passed**, zero failed, one explicitly opt-in native-Stockfish test skipped in the normal suite; two composed diagnosis tests passed again with real Chromium/Angular. Typecheck, lint/architecture/hygiene, full build, schema validation and clean migration deployment passed. The Angular build retains its existing CommonJS optimization warning for the shared contracts package.
 
-1. Bootstrap a fresh owned application user and authoritative connected Lichess identity (recorded source response, **no live credentials committed**).
-2. Request a bounded import, execute real persistence through the four existing worker stages, and assert complete or explicitly partial source/engine/evidence statuses. Distinguish **recorded Lichess**, **engine double**, and **real Stockfish**. Phase 7 #123 separately owns real-engine execution.
-3. Execute the new durable diagnosis trigger, wait for its *owned completion* (not the import status), then assert one current immutable finding set, version tuple, ranking and representative game/ply references. Exercise both enough evidence for a supported finding and insufficient/no-evidence arms.
-4. Through authenticated HTTP reads, assert `AVAILABLE` with correctly ranked supported findings or an explicit legitimate `UNAVAILABLE`; check summary, drill-down, comparison and exact owned replay/game/ply.
-5. Simulate newer import/analysis/evidence revisions, older policy, overlapping worker claims and cross-owner reads; ensure old/stale work cannot publish a false current answer, replay cross-owner data, or regress to an invented `NOT_DETECTED`.
-6. Add a browser/API acceptance check with actual persisted diagnosis responses, not a static `AVAILABLE` mock.
+An additional opt-in native Stockfish pass executed all **nine tests successfully**, including bullet/blitz/rapid, missing/short/excess clocks, process crash recovery, search timeout retry and pending-search subprocess exit. It uses configured depth-6 real UCI searches and a separate recorded single-game pipeline, not the 80-game diagnosis double:
 
-## 6. Exit decision and next action
+```bash
+DATABASE_URL=<disposable-postgres> RUN_REAL_STOCKFISH_ACCEPTANCE=1 \
+  node --test apps/api/test/pipeline-acceptance.test.mjs
+```
 
-**FAIL / BLOCKED. Do not close #120 or declare Phase 6 accepted.**
+The PR adds the composed browser fixture to the existing browser CI job with its own disposable PostgreSQL service. Required CI and squash merge must complete before marking the implementation gate integrated. Live provider consent, production deployment, real-user diagnostic credibility/calibration, and throughput economics are not established by these fixtures. Phase 7 gates remain separate.
 
-- **Blocker:** #129 must connect source readiness to diagnosis materialization, versioned re-publication and ranking through recoverable, bounded, owned production work.
-- **Evidence still needed:** disposable-DB composite run, authenticated API reads, linked browser replay verification, negative/stale/retry state assertions, and independent review with executed CI results.
-- **Independent Phase 7 work:** #122, #123 and #127 may proceed in parallel, but Phase 7 pilot acceptance #128 depends on closing the user journey.
-- **No fabricated verification:** baseline CI being green and fixtures passing in earlier PRs do not establish that the real user loop succeeds.
+## Product boundary after #129
 
-Once #129 is merged, re-run this acceptance matrix on an actual composed fixture and amend the decision with exact commands and run links before closing #120.
+```text
+owned authenticated identity -> explicit Lichess import
+  -> indexed source clocks/positions -> current engine/evidence work
+  -> durable source/policy refresh -> atomic accepted diagnosis publication
+  -> read-only summary/detail/comparisons -> owned exact-ply replay
+```
 
-## 7. Phase 6 blocker progress: publication ordering (2026-10-12)
-
-A narrow #129 follow-up adds a transaction-scoped publication-order fence to the existing
-`DiagnosisFindingSet` replacement path:
-
-- Replaying **the same materialization key** remains idempotent (provided its source
-  references still pass the accepted current-provenance checks).
-- A **different** key with an older or equal `calculationAsOf` is rejected before
-  superseding the current scope. Equal timestamps cannot establish which result is
-  newer; the publisher must submit a strictly newer calculation generation.
-- The read/check/replace transaction runs at PostgreSQL `Serializable` isolation.
-  Conflicting concurrent publishers may receive a serialization error and must
-  **retry the job through the future durable runner**, which must re-check current
-  source/policy versions before publishing.
-- A disposable-PostgreSQL regression asserts that a delayed/equal-time update
-  cannot overwrite a newer result, that same-key retries still work, and that
-  simultaneous same-timestamp publications leave at most one current scope.
-
-**Not solved:** A date alone is not an authoritative source snapshot fence. The
-worker still does not schedule cross-game diagnosis, capture an owned source
-watermark or materialize candidates, hierarchy and ranking. An import, reindex,
-new analysis or evidence revision may therefore leave an older *readable* current
-set until the complete #129 source-version/read-side invalidation and durable
-recalculation are implemented. The Phase 6 exit remains **BLOCKED**. The tests
-listed here require executed CI evidence on the PR head; no local PostgreSQL or
-npm execution is claimed by this connector-only change.
-
-## 8. Phase 6 blocker progress: conservative read-side source invalidation (PR pending)
-
-The diagnosis **summary** read repository now checks whether the owned user's
-`ImportRun`, `ImportedGame` (including ply-index updates), `GameAnalysisRun`, or
-`EvidenceRun` has an `updatedAt` later than the current finding set's
-`calculationAsOf`. If any does, the ranked summary returns
-`UNAVAILABLE / RANKING_STALE` rather than presenting the old ranking as
-current. A new queued import invalidates the summary even before import
-completes, and all four checks retain owner-scoped filters. Existing
-`NO_CURRENT_DIAGNOSIS`, policy and ranking read states remain distinct.
-
-**Test scope:** `apps/api/test/diagnosis-read-model.test.mjs` has mocked
-Prisma-regression cases for a newer update in each source table, the unchanged
-case, ownership filters, and a fail-closed service check. These are **query-
-contract tests**, not a disposable-PostgreSQL source-to-publication test. CI
-execution on the exact PR head is still required; no local checkout, database
-or native engine run is claimed.
-
-**Important limitation:** `calculationAsOf` is not an authoritative source
-snapshot watermark. These table-level timestamp checks are neither an atomic
-snapshot of all sources nor a guard against future-dated calculation timestamps,
-direct evidence-event edits that bypass their parent run, or staleness visible
-through direct finding drill-down links. They deliberately do not schedule
-recomputation or establish that existing references are current. The future
-#129 worker needs a transactional/versioned scope watermark, durable trigger,
-source readiness and complete hierarchy/ranking materialization, with
-read-side freshness consistently enforced across summary and detail.
-Phase 6 #120 remains **BLOCKED**.
+Import completion remains distinct from evidence and diagnosis readiness. A large processing backlog reports PROCESSING. Empty ranked lists expose insufficient/unavailable or no-eligible evidence rather than claiming that no weakness exists. Existing timing/session producer breadth and representative-reference limitations remain explicit in the accepted registry; this change does not invent unsupported taxonomy families, root support, psychological facts, or AI conclusions.

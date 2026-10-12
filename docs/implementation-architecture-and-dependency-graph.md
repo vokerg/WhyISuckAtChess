@@ -1132,3 +1132,8 @@ Before implementing any issue in the graph:
 7. update canonical docs only when architecture/semantics genuinely change;
 8. open a PR, run available validation, resolve review findings, and squash-merge only when accepted;
 9. after shared-contract merges, verify downstream issue assumptions before continuing parallel work.
+
+
+## Production diagnosis lifecycle (#129)
+
+The durable per-player `overall` materialization cursor is registered after evidence in the persistent worker. The accepted Phase 4/5 services publish findings, optional root revisions, hierarchy and rankings inside one serializable transaction. API reads compare owned source/policy identity and expose truthful readiness. See [diagnosis-worker-lifecycle.md](diagnosis-worker-lifecycle.md) for canonical queue, source normalization, claim/retry and recovery semantics.

@@ -61,6 +61,22 @@ jobs:
 
   browser-acceptance:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: why_diagnosis_browser_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d why_diagnosis_browser_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_diagnosis_browser_ci
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -80,6 +96,12 @@ jobs:
         run: |
           npm install --no-save --no-package-lock playwright@1.56.1
           npx playwright install --with-deps chromium
+
+      - name: Bootstrap real diagnosis fixture database and API
+        run: npm run db:migrate && npm run build:api
+
+      - name: Browser diagnosis lifecycle acceptance against persisted API
+        run: RUN_DIAGNOSIS_BROWSER_ACCEPTANCE=1 node --test apps/api/test/diagnosis-worker-acceptance.test.mjs
 
       - name: Browser onboarding acceptance
         run: node apps/web/e2e/lichess-onboarding-smoke.mjs

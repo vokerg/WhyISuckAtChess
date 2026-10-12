@@ -11,7 +11,7 @@ import {
   getOpponentMoveSpeedEffect,
 } from '../dist/modules/diagnosis/opponent-move-speed-effect.service.js';
 import {
-  prismaOpponentMoveSpeedEffectRepository,
+  createPrismaOpponentMoveSpeedEffectRepository,
 } from '../dist/modules/diagnosis/opponent-move-speed-effect.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
@@ -23,6 +23,7 @@ import {
 } from '../dist/modules/timing/timing-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaOpponentMoveSpeedEffectRepository = createPrismaOpponentMoveSpeedEffectRepository(prisma, null);
 const PGN = '[Event "opponent speed fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function analysis(runId) {

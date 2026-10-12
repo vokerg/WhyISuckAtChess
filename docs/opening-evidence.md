@@ -1,9 +1,9 @@
 # Opening-phase and recurring-position evidence
 
-**Status:** Phase 3 deterministic evidence policy  
-**Scope:** issue #33  
-**Per-game detector:** `opening-context@opening-v1`  
-**Cross-game query:** bounded opening recurrence aggregation over current `opening-context` evidence  
+**Status:** Phase 3 deterministic evidence policy
+**Scope:** issue #33
+**Per-game detector:** `opening-context@opening-v2`
+**Cross-game query:** bounded opening recurrence aggregation over current `opening-context` evidence
 **Depends on:** complete current Stockfish analysis, `phase-context@phase-v1`, exact normalized position identity, and the deterministic evidence substrate
 
 ## Purpose
@@ -49,7 +49,7 @@ Why changes the representation and ownership:
 
 ## Per-game opening policy
 
-`opening-v1` has an additional hard safety ceiling of ply 20. A ply is eligible only when its **before-position boundary** is classified as `OPENING` by the current `phase-v1` logic. The ceiling limits work; it is not a second phase classifier.
+`opening-v2` has an additional hard safety ceiling of ply 20. A ply is eligible only when its **before-position boundary** is classified as `OPENING` by the current `phase-v1` logic. The ceiling limits work; it is not a second phase classifier.
 
 For every eligible user move with current complete engine evidence, the detector emits `OPENING_MOVE_QUALITY_SAMPLE` containing:
 
@@ -74,7 +74,7 @@ A policy change to the threshold, phase boundary semantics, or payload meaning r
 
 ## Cross-game recurrence policy
 
-The recurrence query operates only on **current, provenance-valid, successful, complete** `opening-context@opening-v1` runs. It rechecks:
+The recurrence query operates only on **current, provenance-valid, successful, complete** `opening-context@opening-v2` runs. It rechecks:
 
 - the run's indexed source timestamp against the current game;
 - the source analysis snapshot and indexed source;

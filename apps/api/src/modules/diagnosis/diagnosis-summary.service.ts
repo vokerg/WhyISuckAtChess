@@ -116,39 +116,48 @@ export function createDiagnosisSummaryService(
         throw new RangeError('scopeKey must contain 1-128 characters.');
       }
 
+      const refresh = await repository.getRefreshState?.(appUserId, scopeKey);
+      const unavailableWithRefresh = (key: string, reason: Extract<DiagnosisSummaryResponse, { status: 'UNAVAILABLE' }>['reason']): DiagnosisSummaryResponse => ({
+        ...unavailable(key, reason), ...(refresh ? { refresh } : {}),
+      });
       const current = await repository.findCurrent(appUserId, scopeKey);
-      if (!current) return unavailable(scopeKey, 'NO_CURRENT_DIAGNOSIS');
+      if (!current) return unavailableWithRefresh(scopeKey, 'NO_CURRENT_DIAGNOSIS');
 
       // A current finding-set flag is not enough if the owned source changed
       // since calculation. Never expose a ranking awaiting recalculation.
-      if (current.sourceFresh !== true) return unavailable(scopeKey, 'RANKING_STALE');
+      if (current.sourceFresh !== true) return unavailableWithRefresh(scopeKey, 'RANKING_STALE');
 
       if (
         current.synthesisPolicyVersion !== DIAGNOSIS_SYNTHESIS_POLICY_VERSION
         || !currentPolicyVersions(current.policyVersions)
       ) {
-        return unavailable(scopeKey, 'RANKING_STALE');
+        return unavailableWithRefresh(scopeKey, 'RANKING_STALE');
       }
 
       if (current.findings.some((finding) => (
         !finding.consolidationState
         || finding.consolidationState.policyVersion !== DIAGNOSIS_CONSOLIDATION_POLICY_VERSION
       ))) {
-        return unavailable(scopeKey, 'HIERARCHY_INCOMPLETE');
+        return unavailableWithRefresh(scopeKey, 'HIERARCHY_INCOMPLETE');
       }
 
       if (current.findings.some((finding) => (
         finding.rankingState !== null
         && finding.rankingState.rankingPolicyVersion !== DIAGNOSIS_RANKING_POLICY_VERSION
       ))) {
-        return unavailable(scopeKey, 'RANKING_STALE');
+        return unavailableWithRefresh(scopeKey, 'RANKING_STALE');
       }
 
       const topLevel = stableTopLevelRows(current.findings);
-      if (!topLevel) return unavailable(scopeKey, 'RANKING_INCOMPLETE');
+      if (!topLevel) return unavailableWithRefresh(scopeKey, 'RANKING_INCOMPLETE');
 
       return {
         status: 'AVAILABLE',
+        evidenceState: topLevel.length > 0 ? 'RANKED_FINDINGS'
+          : current.findings.every((finding) => finding.observationState === 'REQUIRED_EVIDENCE_UNAVAILABLE') ? 'REQUIRED_EVIDENCE_UNAVAILABLE'
+          : current.findings.every((finding) => finding.observationState === 'INSUFFICIENT_EVIDENCE' || finding.observationState === 'REQUIRED_EVIDENCE_UNAVAILABLE') ? 'INSUFFICIENT_EVIDENCE'
+          : 'NO_ELIGIBLE_FINDINGS',
+        ...(refresh ? { refresh } : {}),
         scopeKey: current.scopeKey,
         findingSetId: current.id,
         calculationAsOf: current.calculationAsOf.toISOString(),

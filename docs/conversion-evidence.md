@@ -1,8 +1,8 @@
 # Conversion, throw, and save evidence
 
-**Status:** Phase 3 deterministic evidence policy  
-**Scope:** issue #32  
-**Detector:** `conversion-transition@conversion-v1`  
+**Status:** Phase 3 deterministic evidence policy
+**Scope:** issue #32
+**Detector:** `conversion-transition@conversion-v2`
 **Depends on:** complete current Stockfish analysis, `phase-context@phase-v1`, and the deterministic evidence substrate
 
 ## Purpose
@@ -21,7 +21,7 @@ The detector reuses `phase-v1` by calling the existing phase detector over the s
 
 ## Evaluation state policy
 
-`conversion-v1` uses three practical engine bands from the user's perspective:
+`conversion-v2` uses three practical engine bands from the user's perspective:
 
 - **WINNING:** forced mate for the user, or centipawn evaluation `>= +700cp`.
 - **LOSING:** forced mate against the user, or centipawn evaluation `<= -700cp`.
@@ -91,7 +91,7 @@ At most 96 conversion findings are persisted for one detector run. Reaching the 
 
 ## Non-goals
 
-`conversion-v1` does not:
+`conversion-v2` does not:
 
 - determine the tactical/endgame reason for every state transition;
 - aggregate repeated events into a cross-game diagnosis;

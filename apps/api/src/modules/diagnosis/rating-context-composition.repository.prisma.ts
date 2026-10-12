@@ -4,11 +4,12 @@ import type {
   RatingContextGame,
 } from './rating-context-composition.service';
 
-export const prismaRatingContextCompositionRepository: RatingContextCompositionRepository = {
+export function createPrismaRatingContextCompositionRepository(database: typeof prisma = prisma): RatingContextCompositionRepository {
+  return {
   async loadOwnedRatingContext(appUserId, importedGameIds) {
     if (importedGameIds.length === 0) return [];
 
-    const games = await prisma.importedGame.findMany({
+    const games = await database.importedGame.findMany({
       where: {
         appUserId,
         id: { in: [...importedGameIds] },
@@ -23,14 +24,14 @@ export const prismaRatingContextCompositionRepository: RatingContextCompositionR
     });
 
     return games.map<RatingContextGame>((game) => {
-      if (game.userColor === 'WHITE') {
+      if (game.userColor?.toUpperCase() === 'WHITE') {
         return {
           importedGameId: game.id,
           userRating: game.whiteRating,
           opponentRating: game.blackRating,
         };
       }
-      if (game.userColor === 'BLACK') {
+      if (game.userColor?.toUpperCase() === 'BLACK') {
         return {
           importedGameId: game.id,
           userRating: game.blackRating,
@@ -45,3 +46,6 @@ export const prismaRatingContextCompositionRepository: RatingContextCompositionR
     });
   },
 };
+}
+
+export const prismaRatingContextCompositionRepository = createPrismaRatingContextCompositionRepository();

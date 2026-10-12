@@ -87,15 +87,16 @@ function phaseAtBoundary(ranges: readonly PhaseRange[], boundaryPly: number): Ti
   )?.phase ?? null;
 }
 
-export const prismaTimePressureExposureRepository: TimePressureExposureRepository = {
+export function createPrismaTimePressureExposureRepository(database: typeof prisma = prisma): TimePressureExposureRepository {
+  return {
   async countCandidates(appUserId, scope) {
-    return prisma.importedGame.count({
+    return database.importedGame.count({
       where: buildWhere(appUserId, scope),
     });
   },
 
   async loadCandidates(appUserId, scope) {
-    const rows = await prisma.importedGame.findMany({
+    const rows = await database.importedGame.findMany({
       where: buildWhere(appUserId, scope),
       orderBy: [
         { startedAt: { sort: 'asc', nulls: 'last' } },
@@ -177,3 +178,6 @@ export const prismaTimePressureExposureRepository: TimePressureExposureRepositor
     });
   },
 };
+}
+
+export const prismaTimePressureExposureRepository = createPrismaTimePressureExposureRepository();

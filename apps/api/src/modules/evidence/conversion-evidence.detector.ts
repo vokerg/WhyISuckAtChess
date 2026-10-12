@@ -9,7 +9,7 @@ import type {
 } from './evidence.types';
 
 export const CONVERSION_EVIDENCE_DETECTOR_KEY = 'conversion-transition';
-export const CONVERSION_EVIDENCE_DETECTOR_VERSION = 'conversion-v1';
+export const CONVERSION_EVIDENCE_DETECTOR_VERSION = 'conversion-v2';
 
 export const CONVERSION_WINNING_MIN_CP = 700;
 export const CONVERSION_LOSING_MAX_CP = -700;

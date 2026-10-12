@@ -2,7 +2,7 @@
 
 **Status:** Phase 3 implementation policy  
 **Scope:** issue #31  
-**Detector:** `defensive-threat@defensive-threat-v1`
+**Detector:** `defensive-threat@defensive-threat-v2`
 
 ## Purpose
 

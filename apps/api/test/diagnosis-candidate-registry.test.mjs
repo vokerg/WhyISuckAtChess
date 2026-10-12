@@ -100,7 +100,7 @@ test('opening recurrence projects a canonical chess mechanism with representativ
   assert.equal(finding.evidenceReferences[0].sourceAnalysisRunId, 2011);
   assert.equal(
     finding.evidenceReferences[0].eventIdentityKey,
-    'diagnosis-event-identity-v1|ply|g:11|p:7|k:OPENING_MOVE_QUALITY_SAMPLE|v:opening-v1',
+    'diagnosis-event-identity-v1|ply|g:11|p:7|k:OPENING_MOVE_QUALITY_SAMPLE|v:opening-v2',
   );
   assert.equal(finding.evidenceReferences[0].representative, true);
 

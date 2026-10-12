@@ -9,10 +9,11 @@ import {
   getSessionDeterioration,
   SESSION_DETERIORATION_POLICY_VERSION,
 } from '../dist/modules/diagnosis/session-deterioration.service.js';
-import { prismaSessionDeteriorationRepository } from '../dist/modules/diagnosis/session-deterioration.repository.prisma.js';
+import { createPrismaSessionDeteriorationRepository } from '../dist/modules/diagnosis/session-deterioration.repository.prisma.js';
 import { sessionizeGames } from '../dist/modules/sessions/sessionization.service.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaSessionDeteriorationRepository = createPrismaSessionDeteriorationRepository(prisma, null);
 
 function sourceGame(id, start, result = 'DRAW') {
   const startedAt = new Date(start);

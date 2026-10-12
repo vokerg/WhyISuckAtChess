@@ -11,7 +11,7 @@ import type {
 } from './evidence.types';
 
 export const MATERIAL_EVIDENCE_DETECTOR_KEY = 'material-state';
-export const MATERIAL_EVIDENCE_DETECTOR_VERSION = 'material-v1';
+export const MATERIAL_EVIDENCE_DETECTOR_VERSION = 'material-v2';
 
 const MATERIAL_ERROR_MIN_SCORE_LOSS_CP = 80;
 const MAX_MATERIAL_FINDINGS = 240;

@@ -18,7 +18,7 @@ import type {
 } from './evidence.types';
 
 export const DEFENSIVE_THREAT_EVIDENCE_DETECTOR_KEY = 'defensive-threat';
-export const DEFENSIVE_THREAT_EVIDENCE_DETECTOR_VERSION = 'defensive-threat-v1';
+export const DEFENSIVE_THREAT_EVIDENCE_DETECTOR_VERSION = 'defensive-threat-v2';
 
 const DEFENSIVE_THREAT_MIN_SCORE_LOSS_CP = 80;
 const MAX_DEFENSIVE_THREAT_FINDINGS = 192;

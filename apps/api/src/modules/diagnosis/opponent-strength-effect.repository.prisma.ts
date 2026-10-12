@@ -1,3 +1,4 @@
+import { CURRENT_DIAGNOSIS_ANALYSIS, currentDiagnosisAnalysisSql, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
 import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
@@ -33,31 +34,32 @@ function queryConditions(
   return Prisma.join(conditions, ' AND ');
 }
 
-export const prismaOpponentStrengthEffectRepository: OpponentStrengthEffectRepository = {
+export function createPrismaOpponentStrengthEffectRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): OpponentStrengthEffectRepository {
+  return {
   async countCandidates(appUserId, scope) {
-    return prisma.importedGame.count({
+    return database.importedGame.count({
       where: buildWhere(appUserId, scope),
     });
   },
 
   async loadCandidates(appUserId, scope) {
-    return prisma.$queryRaw<OpponentStrengthEffectSourceGame[]>(Prisma.sql`
+    return database.$queryRaw<OpponentStrengthEffectSourceGame[]>(Prisma.sql`
       SELECT
         game."id" AS "importedGameId",
         game."variant" AS "variant",
         game."speedCategory" AS "speedCategory",
         game."exactTimeControlKey" AS "exactTimeControlKey",
         CASE
-          WHEN game."userColor" = 'WHITE' THEN game."whiteRating"
-          WHEN game."userColor" = 'BLACK' THEN game."blackRating"
+          WHEN UPPER(game."userColor") = 'WHITE' THEN game."whiteRating"
+          WHEN UPPER(game."userColor") = 'BLACK' THEN game."blackRating"
           ELSE NULL
         END AS "userRating",
         CASE
-          WHEN game."userColor" = 'WHITE' THEN game."blackRating"
-          WHEN game."userColor" = 'BLACK' THEN game."whiteRating"
+          WHEN UPPER(game."userColor") = 'WHITE' THEN game."blackRating"
+          WHEN UPPER(game."userColor") = 'BLACK' THEN game."whiteRating"
           ELSE NULL
         END AS "opponentRating",
-        game."resultForUser" AS "resultForUser",
+        UPPER(game."resultForUser") AS "resultForUser",
         COUNT(*) FILTER (
           WHERE analysis."id" IS NOT NULL
             AND ply."scoreLossCp" IS NOT NULL
@@ -97,6 +99,7 @@ export const prismaOpponentStrengthEffectRepository: OpponentStrengthEffectRepos
        AND analysis."status" = 'SUCCEEDED'
        AND analysis."coverageStatus" = 'COMPLETE'
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
+       ${currentDiagnosisAnalysisSql(identity)}
       WHERE ${queryConditions(appUserId, scope)}
       GROUP BY
         game."id",
@@ -113,3 +116,6 @@ export const prismaOpponentStrengthEffectRepository: OpponentStrengthEffectRepos
     `);
   },
 };
+}
+
+export const prismaOpponentStrengthEffectRepository = createPrismaOpponentStrengthEffectRepository();

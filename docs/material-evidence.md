@@ -1,8 +1,8 @@
 # Material evidence detector
 
-**Status:** Phase 3 deterministic evidence policy  
-**Scope:** issue #28  
-**Detector:** `material-state@material-v1`  
+**Status:** Phase 3 deterministic evidence policy
+**Scope:** issue #28
+**Detector:** `material-state@material-v2`
 **Depends on:** `docs/deterministic-evidence.md`, current ply indexing, and current Stockfish analysis when engine-dependent mechanisms are evaluated
 
 ## Purpose

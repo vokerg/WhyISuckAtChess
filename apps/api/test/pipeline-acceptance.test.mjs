@@ -6,10 +6,10 @@ import { importedGameReplayResponseSchema } from '@why-i-suck-at-chess/contracts
 import prismaModule from '../dist/prisma.js';
 import { createLichessAccountImportService } from '../dist/modules/account-imports/account-import.service.js';
 import { createStockfishAnalysisService } from '../dist/modules/engine-analysis/engine-analysis.service.js';
-import { createStockfishEngine } from '../dist/modules/engine-analysis/stockfish.adapter.js';
+import { createStockfishEngine, settingsHash } from '../dist/modules/engine-analysis/stockfish.adapter.js';
 import { prismaAnalysisRepository } from '../dist/modules/engine-analysis/engine-analysis.repository.prisma.js';
 import { evidenceDetectors } from '../dist/modules/evidence/evidence.registry.js';
-import { prismaEvidenceRepository } from '../dist/modules/evidence/evidence.repository.prisma.js';
+import { createPrismaEvidenceRepository } from '../dist/modules/evidence/evidence.repository.prisma.js';
 import { createEvidenceService } from '../dist/modules/evidence/evidence.service.js';
 import { createImportedGamesQueryService } from '../dist/modules/imported-games/imported-games.service.js';
 import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-index.service.js';
@@ -49,6 +49,10 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
   const completeClocks = fixture.clockAlignment === undefined;
   const rawClocks = fixture.clocks ?? [];
   const suffix = randomUUID();
+  const prismaEvidenceRepository = createPrismaEvidenceRepository(prisma, {
+    analysisVersion: 'pipeline-acceptance-' + suffix,
+    settingsHash: settingsHash({ depth: REAL_STOCKFISH ? 6 : 8, multiPv:1, threads:1, hashMb:REAL_STOCKFISH ? 16 : 1 }),
+  });
   const providerGameId = 'pipeline-' + suffix;
   const from = new Date('2026-09-10T00:00:00.000Z');
   const to = new Date('2026-09-11T00:00:00.000Z');
@@ -477,7 +481,7 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       }
       assert.equal(await prisma.evidenceRun.count({ where: { importedGameId: targetGameId } }), 0);
 
-      const beforeRetryPayload = await createImportedGamesQueryService().getReplay(user.id, targetGameId);
+      const beforeRetryPayload = await createImportedGamesQueryService(undefined, prismaEvidenceRepository).getReplay(user.id, targetGameId);
       assert.ok(beforeRetryPayload);
       const beforeRetry = importedGameReplayResponseSchema.parse(beforeRetryPayload);
       assert.notEqual(beforeRetry.engine.status, 'COMPLETED');
@@ -591,7 +595,7 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       'current detector events must keep stable non-colliding evidence identities',
     );
 
-    const replayPayload = await createImportedGamesQueryService().getReplay(user.id, game.id);
+    const replayPayload = await createImportedGamesQueryService(undefined, prismaEvidenceRepository).getReplay(user.id, game.id);
     assert.ok(replayPayload);
     const replay = importedGameReplayResponseSchema.parse(replayPayload);
     assert.equal(replay.providerGameId, providerGameId);
@@ -634,10 +638,13 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       replay.plies.some((ply) => ply.evidenceEventKeys.includes(phaseEvent.evidenceKey)),
       'read-model plies must link back to persisted evidence events',
     );
-    assert.ok(
-      replay.evidence.runs.some((run) => run.coverage.status !== 'COMPLETE'),
-      'missing detector modalities must remain explicit coverage gaps rather than false negatives',
-    );
+    if (REAL_STOCKFISH) {
+      assert.ok(replay.evidence.runs.every((run) => run.coverage.status === 'COMPLETE'),
+        'known source identity and real complete engine evidence must not be dropped at the detector boundary');
+    } else {
+      assert.ok(replay.evidence.runs.some((run) => run.coverage.status !== 'COMPLETE'),
+        'missing engine-double modalities must remain explicit coverage gaps rather than false negatives');
+    }
 
     for (const ply of replay.plies) {
       assert.equal(ply.sourceClock.status, completeClocks ? 'AVAILABLE' : 'UNAVAILABLE');
@@ -650,7 +657,7 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       where: { id: game.id },
       data: { plyIndexedAt: new Date(game.plyIndexedAt.getTime() + 1_000) },
     });
-    const staleReplayPayload = await createImportedGamesQueryService().getReplay(user.id, game.id);
+    const staleReplayPayload = await createImportedGamesQueryService(undefined, prismaEvidenceRepository).getReplay(user.id, game.id);
     assert.ok(staleReplayPayload);
     const staleReplay = importedGameReplayResponseSchema.parse(staleReplayPayload);
     assert.deepEqual(

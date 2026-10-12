@@ -1,3 +1,6 @@
+import { evidenceDetectors } from './evidence.registry';
+import { CURRENT_DIAGNOSIS_ANALYSIS, type DiagnosisAnalysisIdentity } from '../engine-analysis/current-analysis-identity';
+import { canonicalPlayerColor } from '../imported-games/source-normalization';
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '../../prisma';
@@ -103,6 +106,7 @@ function jsonValue(value: unknown): Prisma.InputJsonValue {
 async function eligibleSource(
   tx: Prisma.TransactionClient,
   detector: EvidenceDetectorIdentity,
+  identity: DiagnosisAnalysisIdentity | null,
 ): Promise<EligibleEvidenceSource | null> {
   if (detector.requiresCompleteAnalysis) {
     const rows = await tx.$queryRaw<EligibleEvidenceSource[]>(Prisma.sql`
@@ -119,6 +123,12 @@ async function eligibleSource(
           AND run."status" = 'SUCCEEDED'
           AND run."coverageStatus" = 'COMPLETE'
           AND run."sourcePlyIndexedAt" = game."plyIndexedAt"
+          ${identity ? Prisma.sql`AND run."analysisVersion" = ${identity.analysisVersion}
+            AND run."settingsHash" = ${identity.settingsHash}
+            AND run."id" = (SELECT latest."id" FROM "GameAnalysisRun" latest
+              WHERE latest."importedGameId" = game."id" AND latest."sourcePlyIndexedAt" = game."plyIndexedAt"
+                AND latest."analysisVersion" = ${identity.analysisVersion} AND latest."settingsHash" = ${identity.settingsHash}
+              ORDER BY latest."createdAt" DESC, latest."id" DESC LIMIT 1)` : Prisma.empty}
           AND EXISTS (
             SELECT 1
             FROM "ImportedGamePly" AS ply
@@ -169,6 +179,12 @@ async function eligibleSource(
           AND run."status" = 'SUCCEEDED'
           AND run."coverageStatus" = 'COMPLETE'
           AND run."sourcePlyIndexedAt" = game."plyIndexedAt"
+          ${identity ? Prisma.sql`AND run."analysisVersion" = ${identity.analysisVersion}
+            AND run."settingsHash" = ${identity.settingsHash}
+            AND run."id" = (SELECT latest."id" FROM "GameAnalysisRun" latest
+              WHERE latest."importedGameId" = game."id" AND latest."sourcePlyIndexedAt" = game."plyIndexedAt"
+                AND latest."analysisVersion" = ${identity.analysisVersion} AND latest."settingsHash" = ${identity.settingsHash}
+              ORDER BY latest."createdAt" DESC, latest."id" DESC LIMIT 1)` : Prisma.empty}
           AND NOT EXISTS (
             SELECT 1
             FROM "ImportedGamePly" AS mismatch
@@ -246,6 +262,7 @@ async function sourceIsCurrent(
     sourceAnalysisRunId: number | null;
     sourceAnalysisSnapshotId: string | null;
   },
+  identity: DiagnosisAnalysisIdentity | null,
 ): Promise<boolean> {
   const game = await tx.importedGame.findUnique({
     where: { id: run.importedGameId },
@@ -264,6 +281,18 @@ async function sourceIsCurrent(
     return false;
   }
 
+  const needsAnalysisIdentity = run.sourceAnalysisRunId !== null || evidenceDetectors.some((detector) =>
+    detector.key === run.detectorKey && (detector.requiresCompleteAnalysis || detector.refreshOnCompleteAnalysis));
+  if (identity && needsAnalysisIdentity) {
+    const latest = await tx.gameAnalysisRun.findFirst({
+      where: { importedGameId: run.importedGameId, sourcePlyIndexedAt: run.sourcePlyIndexedAt,
+        analysisVersion: identity.analysisVersion, settingsHash: identity.settingsHash },
+      orderBy: [{createdAt:'desc'},{id:'desc'}], select:{id:true,status:true,coverageStatus:true},
+    });
+    const completeId = latest?.status === 'SUCCEEDED' && latest.coverageStatus === 'COMPLETE' ? latest.id : null;
+    if (run.sourceAnalysisSnapshotId === null) return run.sourceAnalysisRunId === null && completeId === null;
+    if (run.sourceAnalysisRunId !== completeId) return false;
+  }
   if (run.sourceAnalysisSnapshotId === null) {
     if (run.sourceAnalysisRunId !== null) return false;
 
@@ -321,6 +350,7 @@ async function sourceIsCurrent(
 async function activeClaim(
   tx: Prisma.TransactionClient,
   run: EvidenceRunClaim,
+  identity: DiagnosisAnalysisIdentity | null,
 ): Promise<boolean> {
   const stored = await tx.evidenceRun.findFirst({
     where: {
@@ -340,7 +370,7 @@ async function activeClaim(
       sourceAnalysisSnapshotId: true,
     },
   });
-  return stored !== null && sourceIsCurrent(tx, stored);
+  return stored !== null && sourceIsCurrent(tx, stored, identity);
 }
 
 function findingData(
@@ -361,11 +391,12 @@ function findingData(
   };
 }
 
-export const prismaEvidenceRepository: EvidenceRepository = {
+export function createPrismaEvidenceRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): EvidenceRepository {
+  return {
   async enqueueEligibleRun(detector) {
     try {
-      return await prisma.$transaction(async (tx) => {
-        const source = await eligibleSource(tx, detector);
+      return await database.$transaction(async (tx) => {
+        const source = await eligibleSource(tx, detector, identity);
         if (!source) return null;
         const workKey = workKeyForSource(detector, source);
         const existing = await tx.evidenceRun.findUnique({
@@ -394,7 +425,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   },
 
   async recoverStaleRuns(staleBefore) {
-    const staleRuns = await prisma.evidenceRun.findMany({
+    const staleRuns = await database.evidenceRun.findMany({
       where: {
         status: 'RUNNING',
         OR: [
@@ -413,7 +444,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
     let recovered = 0;
     for (const stale of staleRuns) {
       const terminal = stale.attempts >= stale.maxAttempts;
-      const updated = await prisma.evidenceRun.updateMany({
+      const updated = await database.evidenceRun.updateMany({
         where: {
           id: stale.id,
           status: 'RUNNING',
@@ -453,7 +484,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   async claimNext(workerId, detectors) {
     if (detectors.length === 0) return null;
 
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       for (let skipped = 0; skipped < 10; skipped += 1) {
         const now = new Date();
         const candidate = await tx.evidenceRun.findFirst({
@@ -470,7 +501,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
         });
         if (!candidate) return null;
 
-        if (!await sourceIsCurrent(tx, candidate)) {
+        if (!await sourceIsCurrent(tx, candidate, identity)) {
           await tx.evidenceRun.updateMany({
             where: { id: candidate.id, status: candidate.status },
             data: {
@@ -533,8 +564,8 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   },
 
   async loadSnapshot(run) {
-    return prisma.$transaction(async (tx) => {
-      if (!await activeClaim(tx, run)) {
+    return database.$transaction(async (tx) => {
+      if (!await activeClaim(tx, run, identity)) {
         throw new Error('Evidence source projection changed while work was in flight');
       }
 
@@ -667,7 +698,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
           appUserId: game.appUserId,
           provider: game.provider,
           providerGameId: game.providerGameId,
-          userColor: game.userColor,
+          userColor: canonicalPlayerColor(game.userColor),
           resultForUser: game.resultForUser,
           speedCategory: game.speedCategory,
           variant: game.variant,
@@ -729,7 +760,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
 
   async completeRun(run, result) {
     try {
-      return await prisma.$transaction(async (tx) => {
+      return await database.$transaction(async (tx) => {
         // Serialize evidence publication for a game and freeze its source ply rows
         // while provenance is checked and the current pointer is switched.
         await tx.$queryRaw(Prisma.sql`
@@ -745,7 +776,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
           ORDER BY "plyNumber"
           FOR UPDATE
         `);
-        if (!await activeClaim(tx, run)) return false;
+        if (!await activeClaim(tx, run, identity)) return false;
 
         await tx.evidenceEvent.deleteMany({ where: { runId: run.id } });
         if (result.findings.length > 0) {
@@ -813,7 +844,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   },
 
   async markFailure(run, error) {
-    await prisma.$transaction(async (tx) => {
+    await database.$transaction(async (tx) => {
       const stored = await tx.evidenceRun.findFirst({
         where: {
           id: run.id,
@@ -825,7 +856,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
       if (!stored) return;
 
       const now = new Date();
-      if (!await sourceIsCurrent(tx, stored)) {
+      if (!await sourceIsCurrent(tx, stored, identity)) {
         await tx.evidenceRun.updateMany({
           where: {
             id: run.id,
@@ -882,7 +913,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
   },
 
   async listCurrentEvidenceForGame(importedGameId) {
-    return prisma.$transaction(async (tx) => {
+    return database.$transaction(async (tx) => {
       const game = await tx.importedGame.findUnique({
         where: { id: importedGameId },
         select: { plyIndexStatus: true, plyIndexedAt: true },
@@ -906,7 +937,7 @@ export const prismaEvidenceRepository: EvidenceRepository = {
 
       const current: CurrentEvidenceRun[] = [];
       for (const run of runs) {
-        if (!await sourceIsCurrent(tx, run)) continue;
+        if (!await sourceIsCurrent(tx, run, identity)) continue;
         current.push({
           id: run.id,
           detectorKey: run.detectorKey,
@@ -935,3 +966,6 @@ export const prismaEvidenceRepository: EvidenceRepository = {
     });
   },
 };
+}
+
+export const prismaEvidenceRepository = createPrismaEvidenceRepository();

@@ -129,7 +129,7 @@ function relationship(id, source, target, relationshipType, overrides = {}) {
     relationshipType,
     policyVersion: 'diagnosis-synthesis-v1',
     support: overrides.support ?? {
-      graphVersion: 'diagnosis-relationship-graph-v1',
+      graphVersion: 'diagnosis-relationship-graph-v2',
       ruleKey: 'fixture',
     },
   };
@@ -137,7 +137,7 @@ function relationship(id, source, target, relationshipType, overrides = {}) {
 
 function materialOverlapSupport() {
   return {
-    graphVersion: 'diagnosis-relationship-graph-v1',
+    graphVersion: 'diagnosis-relationship-graph-v2',
     ruleKey: 'fixture-material-overlap',
     overlap: {
       eventIdentityVersion: 'diagnosis-event-identity-v1',

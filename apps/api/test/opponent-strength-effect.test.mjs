@@ -12,13 +12,14 @@ import {
   getOpponentStrengthEffect,
 } from '../dist/modules/diagnosis/opponent-strength-effect.service.js';
 import {
-  prismaOpponentStrengthEffectRepository,
+  createPrismaOpponentStrengthEffectRepository,
 } from '../dist/modules/diagnosis/opponent-strength-effect.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
 } from '../dist/modules/timing/time-behavior-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaOpponentStrengthEffectRepository = createPrismaOpponentStrengthEffectRepository(prisma, null);
 const PGN = '[Event "opponent strength fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function game(

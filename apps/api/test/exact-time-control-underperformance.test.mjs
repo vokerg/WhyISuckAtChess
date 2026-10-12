@@ -11,13 +11,14 @@ import {
   getExactTimeControlUnderperformance,
 } from '../dist/modules/diagnosis/exact-time-control-underperformance.service.js';
 import {
-  prismaExactTimeControlRepository,
+  createPrismaExactTimeControlRepository,
 } from '../dist/modules/diagnosis/exact-time-control-underperformance.repository.prisma.js';
 import {
   TIME_BEHAVIOR_POLICY_VERSION,
 } from '../dist/modules/timing/time-behavior-policy.js';
 
 const prisma = prismaModule.default ?? prismaModule;
+const prismaExactTimeControlRepository = createPrismaExactTimeControlRepository(prisma, null);
 const PGN = '[Event "exact control fixture"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *';
 
 function game(
