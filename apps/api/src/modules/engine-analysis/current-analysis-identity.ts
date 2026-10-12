@@ -4,4 +4,3 @@ export interface DiagnosisAnalysisIdentity { analysisVersion: string; settingsHa
 export const CURRENT_DIAGNOSIS_ANALYSIS: DiagnosisAnalysisIdentity = {
   analysisVersion: STOCKFISH_ANALYSIS_VERSION, settingsHash: settingsHash(DEFAULT_STOCKFISH_SETTINGS),
 };
-
