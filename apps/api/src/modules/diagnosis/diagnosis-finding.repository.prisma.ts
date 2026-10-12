@@ -140,9 +140,6 @@ async function assertSourceOwnership(
   const eventIds = [...new Set(references.flatMap((reference) => (
     reference.evidenceEventId ? [reference.evidenceEventId] : []
   )))];
-  const analysisRunIds = [...new Set(references.flatMap((reference) => (
-    reference.sourceAnalysisRunId ? [reference.sourceAnalysisRunId] : []
-  )))];
 
   const eventRows = eventIds.length === 0
     ? []
@@ -155,6 +152,10 @@ async function assertSourceOwnership(
               importedGameId: true,
               status: true,
               isCurrent: true,
+              supersededAt: true,
+              sourcePlyIndexedAt: true,
+              sourceAnalysisRunId: true,
+              sourceAnalysisSnapshotId: true,
             },
           },
         },
@@ -162,11 +163,23 @@ async function assertSourceOwnership(
   if (eventRows.length !== eventIds.length) {
     throw new Error('Diagnosis finding references a missing evidence event.');
   }
-  const eventGame = new Map(eventRows.map((row) => [row.id, row.run.importedGameId]));
-  if (eventRows.some((row) => row.run.status !== 'SUCCEEDED' || !row.run.isCurrent)) {
+  const eventsById = new Map(eventRows.map((row) => [row.id, row.run]));
+  if (eventRows.some((row) => (
+    row.run.status !== 'SUCCEEDED' || !row.run.isCurrent || row.run.supersededAt !== null
+  ))) {
     throw new Error('Diagnosis finding references evidence that is not current and succeeded.');
   }
 
+  // An event's analysis parent must be validated even if the candidate only
+  // supplied an evidenceEventId, without an explicit sourceAnalysisRunId.
+  const analysisRunIds = [...new Set([
+    ...references.flatMap((reference) => (
+      reference.sourceAnalysisRunId ? [reference.sourceAnalysisRunId] : []
+    )),
+    ...eventRows.flatMap((event) => (
+      event.run.sourceAnalysisRunId === null ? [] : [event.run.sourceAnalysisRunId]
+    )),
+  ])];
   const analysisRows = analysisRunIds.length === 0
     ? []
     : await tx.gameAnalysisRun.findMany({
@@ -174,15 +187,20 @@ async function assertSourceOwnership(
         select: {
           id: true,
           importedGameId: true,
+          snapshotId: true,
+          sourcePlyIndexedAt: true,
+          status: true,
+          coverageStatus: true,
         },
       });
   if (analysisRows.length !== analysisRunIds.length) {
     throw new Error('Diagnosis finding references a missing analysis run.');
   }
+  const analysisById = new Map(analysisRows.map((row) => [row.id, row]));
   const analysisGame = new Map(analysisRows.map((row) => [row.id, row.importedGameId]));
 
   const allGameIds = new Set<number>(directGameIds);
-  for (const importedGameId of eventGame.values()) allGameIds.add(importedGameId);
+  for (const run of eventsById.values()) allGameIds.add(run.importedGameId);
   for (const importedGameId of analysisGame.values()) allGameIds.add(importedGameId);
 
   if (allGameIds.size > 0) {
@@ -197,12 +215,65 @@ async function assertSourceOwnership(
     }
   }
 
+  // Verify authoritative indexed-source identity, not only ownership or
+  // isCurrent flags. A late analysis/evidence worker may still have rows
+  // marked successful from an older ply-index snapshot.
+  const sourceGameIds = [...new Set([
+    ...eventRows.map((row) => row.run.importedGameId),
+    ...analysisRows.map((row) => row.importedGameId),
+  ])];
+  const sourceGames = sourceGameIds.length === 0
+    ? []
+    : await tx.importedGame.findMany({
+        where: { appUserId, id: { in: sourceGameIds } },
+        select: { id: true, plyIndexStatus: true, plyIndexedAt: true },
+      });
+  const indexedGames = new Map(sourceGames.map((game) => [game.id, game]));
+  const hasCurrentIndex = (importedGameId: number, indexedAt: Date | null): boolean => {
+    const game = indexedGames.get(importedGameId);
+    return game?.plyIndexStatus === 'INDEXED'
+      && indexedAt !== null
+      && game.plyIndexedAt !== null
+      && game.plyIndexedAt.getTime() === indexedAt.getTime();
+  };
+
+  for (const analysis of analysisRows) {
+    if (
+      analysis.status !== 'SUCCEEDED'
+      || analysis.coverageStatus !== 'COMPLETE'
+      || !hasCurrentIndex(analysis.importedGameId, analysis.sourcePlyIndexedAt)
+    ) {
+      throw new Error('Diagnosis finding references analysis that is not complete on the current indexed source.');
+    }
+  }
+  for (const event of eventRows) {
+    const run = event.run;
+    if (!hasCurrentIndex(run.importedGameId, run.sourcePlyIndexedAt)) {
+      throw new Error('Diagnosis finding references evidence from a stale indexed source.');
+    }
+    if (run.sourceAnalysisRunId === null) {
+      if (run.sourceAnalysisSnapshotId !== null) {
+        throw new Error('Diagnosis finding references inconsistent evidence analysis lineage.');
+      }
+    } else {
+      const analysis = analysisById.get(run.sourceAnalysisRunId);
+      if (
+        !analysis
+        || analysis.importedGameId !== run.importedGameId
+        || analysis.snapshotId !== run.sourceAnalysisSnapshotId
+        || analysis.sourcePlyIndexedAt?.getTime() !== run.sourcePlyIndexedAt.getTime()
+      ) {
+        throw new Error('Diagnosis finding references inconsistent evidence analysis lineage.');
+      }
+    }
+  }
+
   for (const reference of references) {
     const sourceGameIds = new Set<number>();
     if (reference.importedGameId) sourceGameIds.add(reference.importedGameId);
     if (reference.evidenceEventId) {
-      const sourceGameId = eventGame.get(reference.evidenceEventId);
-      if (sourceGameId) sourceGameIds.add(sourceGameId);
+      const run = eventsById.get(reference.evidenceEventId);
+      if (run) sourceGameIds.add(run.importedGameId);
     }
     if (reference.sourceAnalysisRunId) {
       const sourceGameId = analysisGame.get(reference.sourceAnalysisRunId);
@@ -210,8 +281,14 @@ async function assertSourceOwnership(
     }
     if (sourceGameIds.size > 1) {
       throw new Error(
-        `Diagnosis reference ${reference.referenceKey} combines sources from different games.`,
+        'Diagnosis reference ' + reference.referenceKey + ' combines sources from different games.',
       );
+    }
+    if (reference.evidenceEventId && reference.sourceAnalysisRunId) {
+      const eventRun = eventsById.get(reference.evidenceEventId);
+      if (eventRun?.sourceAnalysisRunId !== reference.sourceAnalysisRunId) {
+        throw new Error('Diagnosis reference combines different analysis snapshots for one event.');
+      }
     }
   }
 }
