@@ -140,3 +140,32 @@ set until the complete #129 source-version/read-side invalidation and durable
 recalculation are implemented. The Phase 6 exit remains **BLOCKED**. The tests
 listed here require executed CI evidence on the PR head; no local PostgreSQL or
 npm execution is claimed by this connector-only change.
+
+## 8. Phase 6 blocker progress: conservative read-side source invalidation (PR pending)
+
+The diagnosis **summary** read repository now checks whether the owned user's
+`ImportRun`, `ImportedGame` (including ply-index updates), `GameAnalysisRun`, or
+`EvidenceRun` has an `updatedAt` later than the current finding set's
+`calculationAsOf`. If any does, the ranked summary returns
+`UNAVAILABLE / RANKING_STALE` rather than presenting the old ranking as
+current. A new queued import invalidates the summary even before import
+completes, and all four checks retain owner-scoped filters. Existing
+`NO_CURRENT_DIAGNOSIS`, policy and ranking read states remain distinct.
+
+**Test scope:** `apps/api/test/diagnosis-read-model.test.mjs` has mocked
+Prisma-regression cases for a newer update in each source table, the unchanged
+case, ownership filters, and a fail-closed service check. These are **query-
+contract tests**, not a disposable-PostgreSQL source-to-publication test. CI
+execution on the exact PR head is still required; no local checkout, database
+or native engine run is claimed.
+
+**Important limitation:** `calculationAsOf` is not an authoritative source
+snapshot watermark. These table-level timestamp checks are neither an atomic
+snapshot of all sources nor a guard against future-dated calculation timestamps,
+direct evidence-event edits that bypass their parent run, or staleness visible
+through direct finding drill-down links. They deliberately do not schedule
+recomputation or establish that existing references are current. The future
+#129 worker needs a transactional/versioned scope watermark, durable trigger,
+source readiness and complete hierarchy/ranking materialization, with
+read-side freshness consistently enforced across summary and detail.
+Phase 6 #120 remains **BLOCKED**.
