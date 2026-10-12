@@ -424,6 +424,9 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
         if (!repeated.isCurrent) {
           throw new Error('Diagnosis materialization key has already been superseded.');
         }
+        // Idempotent retries must not bypass the current-source fence.
+        // A previously published materialization may be stale after reindexing.
+        await assertSourceOwnership(tx, appUserId, draft);
         return loadSet(tx, repeated.id);
       }
 
