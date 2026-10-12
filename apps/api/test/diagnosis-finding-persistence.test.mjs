@@ -233,6 +233,27 @@ test('canonical finding persistence replaces current scope without deleting sour
     );
     assert.equal(repeated.id, first.id, 'same materialization key must be idempotent');
 
+    // A retry with the exact same materialization key must not return a
+    // formerly current result after the authoritative game is reindexed.
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: new Date('2026-09-22T04:06:00.000Z') },
+    });
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id, firstDraft, prismaDiagnosisFindingRepository,
+      ),
+      /evidence from a stale indexed source/,
+    );
+    const stillPublishedAfterRetry = await prismaDiagnosisFindingRepository.getCurrentScope(
+      user.id, firstDraft.scopeKey, versionTuple(firstDraft),
+    );
+    assert.equal(stillPublishedAfterRetry.id, first.id);
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: indexedAt },
+    });
+
     const revisedTimeFinding = baseFinding({
       producerVersion: 'time-pressure-quality-collapse-v2',
       effect: {
