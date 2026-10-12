@@ -27,6 +27,16 @@ const FIXTURES = REAL_STOCKFISH
       { label: 'blitz without source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: null, clockAlignment: 'UNAVAILABLE' },
       { label: 'blitz short source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100], clockAlignment: 'UNALIGNED' },
       { label: 'blitz excessive source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000, 17900, 17800], clockAlignment: 'ANOMALOUS' },
+      // Invalid provider samples are stored only where numeric and are never aligned
+      // to the plies; the surviving clocks must not shift into invented slots.
+      { label: 'blitz invalid negative clock value', speed: 'blitz', initial: 180, increment: 2,
+        clocks: [18150, 18100, -1, 18000], storedClocks: [18150, 18100, 18000],
+        rawClockPresence: 'INVALID', clockAlignment: 'UNAVAILABLE', clockAnomaly: 'CLOCK_SAMPLE_INVALID' },
+      // A syntactically valid sample can still imply negative elapsed time.
+      // Preserve the source clock while marking only the derived time inconsistent.
+      { label: 'blitz impossible elapsed-time delta', speed: 'blitz', initial: 180, increment: 2,
+        clocks: [18150, 18100, 20000, 18000], timingCoverage: 'PARTIAL',
+        thirdPlyTimingStatus: 'INCONSISTENT' },
       { label: 'blitz native process crash then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessCrash: true },
       { label: 'blitz native search deadline then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessTimeout: true },
     ]
@@ -46,8 +56,9 @@ function deterministicAnalysis() {
 
 for (const fixture of FIXTURES) {
 test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through ${REAL_STOCKFISH ? 'real Stockfish' : 'engine double'}, evidence, and replay`, async () => {
-  const completeClocks = fixture.clockAlignment === undefined;
-  const rawClocks = fixture.clocks ?? [];
+  const alignedClocks = fixture.clockAlignment === undefined;
+  const rawClocks = fixture.storedClocks ?? fixture.clocks ?? [];
+  const timingCoverage = fixture.timingCoverage ?? (alignedClocks ? 'COMPLETE' : 'UNAVAILABLE');
   const suffix = randomUUID();
   const prismaEvidenceRepository = createPrismaEvidenceRepository(prisma, {
     analysisVersion: 'pipeline-acceptance-' + suffix,
@@ -533,10 +544,10 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
     });
     assert.equal(game.plyIndexStatus, 'INDEXED');
     assert.ok(game.plyIndexedAt);
-    assert.equal(game.rawClockPresence, fixture.clocks === null ? 'ABSENT' : 'PRESENT');
+    assert.equal(game.rawClockPresence, fixture.rawClockPresence ?? (fixture.clocks === null ? 'ABSENT' : 'PRESENT'));
     assert.equal(game.rawClockStateCount, rawClocks.length);
     assert.equal(game.clockAlignmentStatus, fixture.clockAlignment ?? 'COMPLETE');
-    assert.equal(game.timingCoverageStatus, completeClocks ? 'COMPLETE' : 'UNAVAILABLE');
+    assert.equal(game.timingCoverageStatus, timingCoverage);
 
     const analysisRun = await prisma.gameAnalysisRun.findFirstOrThrow({
       where: { importedGameId: game.id },
@@ -601,9 +612,12 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
     assert.equal(replay.providerGameId, providerGameId);
     assert.equal(replay.speedCategory, fixture.speed);
     assert.equal(replay.provenance.source, 'LICHESS_API');
-    assert.equal(replay.clockSource.presence, fixture.clocks === null ? 'ABSENT' : 'PRESENT');
+    assert.equal(replay.clockSource.presence, fixture.rawClockPresence ?? (fixture.clocks === null ? 'ABSENT' : 'PRESENT'));
+    if (fixture.clockAnomaly) {
+      assert.ok(replay.clockSource.anomalies.includes(fixture.clockAnomaly));
+    }
     assert.equal(replay.clockSource.stateCount, rawClocks.length);
-    assert.equal(replay.timing.coverageStatus, completeClocks ? 'COMPLETE' : 'UNAVAILABLE');
+    assert.equal(replay.timing.coverageStatus, timingCoverage);
     assert.equal(replay.engine.status, 'COMPLETED');
     assert.equal(replay.engine.coverageStatus, 'COMPLETE');
     assert.equal(replay.engine.runId, analysisRun.id);
@@ -615,13 +629,21 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
     assert.equal(replay.plies.length, 4);
     assert.deepEqual(
       replay.plies.map((ply) => ply.sourceClock.afterCentiseconds),
-      completeClocks ? rawClocks : [null, null, null, null],
+      alignedClocks ? rawClocks : [null, null, null, null],
     );
-    assert.equal(replay.plies[2].timing.status, completeClocks ? 'AVAILABLE' : 'UNAVAILABLE');
-    if (completeClocks) {
+    assert.equal(replay.plies[2].timing.status,
+      fixture.thirdPlyTimingStatus ?? (alignedClocks ? 'AVAILABLE' : 'UNAVAILABLE'));
+    if (fixture.thirdPlyTimingStatus === 'INCONSISTENT') {
+      assert.equal(replay.plies[2].timing.unavailableReason, 'NEGATIVE_CLOCK_DELTA');
+      assert.equal(replay.plies[2].sourceClock.afterCentiseconds, 20000,
+        'suspicious but valid source data must remain lossless');
+      assert.equal(replay.plies[2].timing.moveTimeCentiseconds, null,
+        'negative elapsed time must never be presented as a measured duration');
+    } else if (alignedClocks) {
       assert.notEqual(replay.plies[2].timing.moveTimeCentiseconds, null);
     } else {
-      assert.equal(replay.plies[2].timing.moveTimeCentiseconds, null, 'missing clocks cannot create move times');
+      assert.equal(replay.plies[2].timing.moveTimeCentiseconds, null,
+        'missing or invalid clocks cannot create move times');
     }
 
     const phaseRun = replay.evidence.runs.find((run) => run.detectorKey === 'phase-context');
@@ -647,7 +669,7 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
     }
 
     for (const ply of replay.plies) {
-      assert.equal(ply.sourceClock.status, completeClocks ? 'AVAILABLE' : 'UNAVAILABLE');
+      assert.equal(ply.sourceClock.status, alignedClocks ? 'AVAILABLE' : 'UNAVAILABLE');
       assert.equal(ply.engine.status, 'AVAILABLE', 'missing clocks cannot erase real engine facts');
       assert.equal(ply.engine.analysisRunId, analysisRun.id);
       assert.equal(ply.engine.beforePosition.status, 'AVAILABLE');
