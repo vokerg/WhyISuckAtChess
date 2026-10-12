@@ -188,6 +188,12 @@ export async function createStockfishEngine(options: {
   const child = options.spawnProcess?.(binaryPath) ?? spawn(binaryPath, [], { stdio: 'pipe' });
   const reader = new UciLineReader(child.stdout);
   let closing = false;
+  // A timed-out or failed search must never leave a live UCI process producing
+  // late bestmove/info lines that a subsequent search could mistake for its own.
+  const terminate = () => {
+    closing = true;
+    if (!child.killed) child.kill();
+  };
 
   const processFailure = new Promise<never>((_, reject) => {
     child.once('error', (error) => {
@@ -250,29 +256,35 @@ export async function createStockfishEngine(options: {
       engineName,
       engineVersion,
       async analyzeFen(fen: string): Promise<StockfishPositionAnalysis> {
-        write('ucinewgame');
-        write(`position fen ${toUciFen(fen)}`);
-        write(`go depth ${settings.depth}`);
-        const lines = await waitFor((line) => line.startsWith('bestmove '), 'position analysis');
-        const bestMoveLine = lines.at(-1) ?? '';
-        const bestMove = bestMoveLine.split(/\s+/)[1] ?? null;
-        return summarizeStockfishSearch(
-          lines.filter((line) => line.startsWith('info ')),
-          bestMove === '(none)' ? null : bestMove,
-          fen,
-        );
+        if (closing || child.killed) throw new Error('Stockfish engine is closed');
+        try {
+          write('ucinewgame');
+          write(`position fen ${toUciFen(fen)}`);
+          write(`go depth ${settings.depth}`);
+          const lines = await waitFor((line) => line.startsWith('bestmove '), 'position analysis');
+          const bestMoveLine = lines.at(-1) ?? '';
+          const bestMove = bestMoveLine.split(/\s+/)[1] ?? null;
+          return summarizeStockfishSearch(
+            lines.filter((line) => line.startsWith('info ')),
+            bestMove === '(none)' ? null : bestMove,
+            fen,
+          );
+        } catch (error) {
+          terminate();
+          throw error;
+        }
       },
       async close(): Promise<void> {
-        if (!child.killed) {
-          closing = true;
-          write('quit');
-          child.kill();
+        if (closing) return;
+        try {
+          if (!child.killed) write('quit');
+        } finally {
+          terminate();
         }
       },
     };
   } catch (error) {
-    closing = true;
-    if (!child.killed) child.kill();
+    terminate();
     throw error;
   }
 }
