@@ -37,6 +37,8 @@ const FIXTURES = REAL_STOCKFISH
       { label: 'blitz impossible elapsed-time delta', speed: 'blitz', initial: 180, increment: 2,
         clocks: [18150, 18100, 20000, 18000], timingCoverage: 'PARTIAL',
         thirdPlyTimingStatus: 'INCONSISTENT' },
+      { label: 'blitz native in-flight source revision', speed: 'blitz', initial: 180, increment: 2,
+        clocks: [18150, 18100, 18100, 18000], supersedeDuringAnalysis: true },
       { label: 'blitz native process crash then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessCrash: true },
       { label: 'blitz native search deadline then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessTimeout: true },
     ]
@@ -78,6 +80,9 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
   let nativeCrashInjected = false;
   let nativeTimeoutInjected = false;
   let failedEngineProcessExited = null;
+  let nativeSupersessionInjected = false;
+  let supersedingRunId = null;
+  let revisedSourceIndexedAt = null;
 
   try {
     const user = await prisma.appUser.create({
@@ -312,7 +317,25 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
                   }
                 }
               }
-              return engine.analyzeFen(fen);
+              const analysis = await engine.analyzeFen(fen);
+              if (fixture.supersedeDuringAnalysis && !nativeSupersessionInjected) {
+                // Complete a real native search before a competing source projection
+                // invalidates the claimed snapshot. All subsequent writes must be fenced.
+                nativeSupersessionInjected = true;
+                assert.ok(targetGameId);
+                const indexed = await prisma.importedGame.findUniqueOrThrow({
+                  where: { id: targetGameId },
+                  select: { plyIndexedAt: true },
+                });
+                assert.ok(indexed.plyIndexedAt);
+                revisedSourceIndexedAt = new Date(indexed.plyIndexedAt.getTime() + 1_000);
+                await prisma.importedGame.update({
+                  where: { id: targetGameId },
+                  data: { plyIndexedAt: revisedSourceIndexedAt },
+                });
+                supersedingRunId = await analysisService.requestReanalysis(targetGameId);
+              }
+              return analysis;
             },
             async close() {
               await engine.close();
@@ -458,7 +481,66 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       workerId: 'pipeline-evidence-' + suffix,
     });
 
-    if (fixture.retryAfterProcessCrash || fixture.retryAfterProcessTimeout) {
+    if (fixture.supersedeDuringAnalysis) {
+      // Race a completed native UCI search with a revised indexed source and
+      // a replacement analysis request while the first worker retains its claim.
+      assert.equal(await importExecutor.runOnce(), true);
+      assert.equal(await plyIndexExecutor.runOnce(), true);
+      assert.equal(await analysisService.runOnce(), true);
+      assert.equal(nativeSupersessionInjected, true);
+      assert.ok(targetGameId);
+      assert.ok(supersedingRunId);
+      assert.ok(revisedSourceIndexedAt);
+      assert.equal(queuedAnalysisRunId, null, 'first analysis claim was consumed');
+
+      const runs = await prisma.gameAnalysisRun.findMany({
+        where: { importedGameId: targetGameId },
+        orderBy: { id: 'asc' },
+      });
+      assert.equal(runs.length, 2);
+      const staleRun = runs.find((run) => run.id !== supersedingRunId);
+      const replacementRun = runs.find((run) => run.id === supersedingRunId);
+      assert.ok(staleRun);
+      assert.ok(replacementRun);
+      assert.equal(staleRun.status, 'SUPERSEDED');
+      assert.equal(staleRun.coverageStatus, 'INCOMPLETE');
+      assert.ok(staleRun.cancelRequestedAt);
+      assert.equal(staleRun.positionsDone, 0, 'stale native results must not write progress');
+      assert.equal(staleRun.pliesDone, 0, 'stale native results must not write plies');
+      assert.notEqual(staleRun.sourcePlyIndexedAt.getTime(), revisedSourceIndexedAt.getTime());
+      assert.equal(replacementRun.status, 'QUEUED');
+      assert.equal(replacementRun.sourcePlyIndexedAt.getTime(), revisedSourceIndexedAt.getTime());
+      assert.equal(await prisma.importedGamePly.count({
+        where: { importedGameId: targetGameId, engineAnalysisRunId: staleRun.id },
+      }), 0, 'superseded run must not attach classified plies');
+      assert.equal(await prisma.evidenceRun.count({
+        where: { importedGameId: targetGameId },
+      }), 0);
+
+      const beforeReplacementPayload =
+        await createImportedGamesQueryService(undefined, prismaEvidenceRepository)
+          .getReplay(user.id, targetGameId);
+      assert.ok(beforeReplacementPayload);
+      const beforeReplacement = importedGameReplayResponseSchema.parse(beforeReplacementPayload);
+      assert.notEqual(beforeReplacement.engine.status, 'COMPLETED');
+      assert.deepEqual(beforeReplacement.evidence.runs, []);
+      assert.ok(beforeReplacement.plies.every((ply) => ply.engine.status === 'UNAVAILABLE'));
+
+      // Only the replacement snapshot can publish current engine/evidence results.
+      queuedAnalysisRunId = supersedingRunId;
+      assert.equal(await analysisService.runOnce(), true);
+      const completedReplacement = await prisma.gameAnalysisRun.findUniqueOrThrow({
+        where: { id: supersedingRunId },
+      });
+      assert.equal(completedReplacement.status, 'SUCCEEDED');
+      assert.equal(completedReplacement.coverageStatus, 'COMPLETE');
+      assert.equal(completedReplacement.sourcePlyIndexedAt.getTime(), revisedSourceIndexedAt.getTime());
+      assert.equal(nativeEngineSpawns, 2, 'each claim must own a separate native engine');
+      assert.equal((await prisma.gameAnalysisRun.findUniqueOrThrow({
+        where: { id: staleRun.id },
+      })).status, 'SUPERSEDED');
+      assert.equal(await evidenceService.runOnce(), true);
+    } else if (fixture.retryAfterProcessCrash || fixture.retryAfterProcessTimeout) {
       // Force a real process crash or search deadline. The real service must
       // persist retry state and withhold incomplete engine/evidence from replay.
       assert.equal(await importExecutor.runOnce(), true);
