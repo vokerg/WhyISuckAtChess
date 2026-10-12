@@ -52,6 +52,9 @@ export interface DiagnosisSummaryFindingSetRow {
   calculationVersion: string;
   policyVersions: unknown;
   calculationAsOf: Date;
+  // Conservative read-side invalidation until #129 provides an authoritative
+  // persisted source watermark and durable diagnosis refresh.
+  sourceFresh: boolean;
   findings: DiagnosisSummaryFindingRow[];
 }
 
@@ -62,7 +65,10 @@ export interface DiagnosisSummaryRepository {
   ): Promise<DiagnosisSummaryFindingSetRow | null>;
 }
 
-type DiagnosisSummaryDatabase = Pick<typeof prisma, 'diagnosisFindingSet'>;
+type DiagnosisSummaryDatabase = Pick<
+  typeof prisma,
+  'diagnosisFindingSet' | 'importRun' | 'importedGame' | 'gameAnalysisRun' | 'evidenceRun'
+>;
 
 export function createPrismaDiagnosisSummaryRepository(
   database: DiagnosisSummaryDatabase = prisma,
@@ -138,6 +144,31 @@ export function createPrismaDiagnosisSummaryRepository(
       });
 
       if (!row) return null;
+
+      // A publication cannot remain readable after *any* owned import,
+      // indexing, engine or detector run changes. Import completion alone
+      // is not diagnosis completion; new queued work also invalidates a
+      // published snapshot. These checks are conservative (not an atomic
+      // scope-wide source-version fence) and do not trigger recalculation.
+      const changedSince = { gt: row.calculationAsOf };
+      const [importChanged, gameChanged, analysisChanged, evidenceChanged] = await Promise.all([
+        database.importRun.findFirst({
+          where: { appUserId, updatedAt: changedSince },
+          select: { id: true },
+        }),
+        database.importedGame.findFirst({
+          where: { appUserId, updatedAt: changedSince },
+          select: { id: true },
+        }),
+        database.gameAnalysisRun.findFirst({
+          where: { importedGame: { is: { appUserId } }, updatedAt: changedSince },
+          select: { id: true },
+        }),
+        database.evidenceRun.findFirst({
+          where: { importedGame: { is: { appUserId } }, updatedAt: changedSince },
+          select: { id: true },
+        }),
+      ]);
       return {
         id: row.id,
         scopeKey: row.scopeKey,
@@ -146,6 +177,7 @@ export function createPrismaDiagnosisSummaryRepository(
         calculationVersion: row.calculationVersion,
         policyVersions: row.policyVersionsJson,
         calculationAsOf: row.calculationAsOf,
+        sourceFresh: !importChanged && !gameChanged && !analysisChanged && !evidenceChanged,
         findings: row.findings,
       };
     },
