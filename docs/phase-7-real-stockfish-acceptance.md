@@ -1,6 +1,6 @@
 # Phase 7: bounded real-Stockfish integration gate (#123)
 
-**Status: implementation under review; Phase 7 #123 not yet accepted.** This is a distinct real-binary gate, not the Phase 6 ranked-diagnosis acceptance gate (#120/#129).
+**Status: initial real-binary gate merged in #132; crash/retry extension under review; Phase 7 #123 not yet accepted.** This is a distinct real-binary gate, not the Phase 6 ranked-diagnosis acceptance gate (#120/#129).
 
 ## Reference / Why delta
 
@@ -38,9 +38,9 @@ The provider side is **recorded synthetic NDJSON** (in-memory `fetchImpl`), not 
 
 The real-engine gate also runs three deliberately untrusted clock sequences under the 180+2 blitz control: **no `clocks` field (ABSENT)**, **two clocks for four plies (UNALIGNED)**, and **six clocks for four plies (ANOMALOUS)**. Each must preserve actual engine results but expose no invented per-ply source clocks or move times. These cases test the same persisted import/index/analysis/evidence/owned-replay path, not a standalone timing calculation.
 
-All six games use 1 thread, 16 MiB hash and <=15 seconds per UCI command. Database game/import/run rows have random owned identifiers and are removed in `finally`; the server's source clocks, index, coverage and evidence remain authoritative. The check uses real engine process creation and UCI handshake/search, asserts recorded `engineName`/`engineVersion`, cache misses and complete position/ply counts, checks persisted current detector runs and typed owned replay with correct game, control and ply positions. It invalidates the indexed projection afterward and verifies that the old evidence disappears rather than presenting it as current. Each native process must exit after the worker closes it.
+All seven DB-backed games use 1 thread, 16 MiB hash and <=15 seconds per UCI command. Database game/import/run rows have random owned identifiers and are removed in `finally`; the server's source clocks, index, coverage and evidence remain authoritative. The check uses real engine process creation and UCI handshake/search, asserts recorded `engineName`/`engineVersion`, cache misses and complete position/ply counts, checks persisted current detector runs and typed owned replay with correct game, control and ply positions. It invalidates the indexed projection afterward and verifies that the old evidence disappears rather than presenting it as current. Each native process must exit after the worker closes it.
 
-A separate opt-in crash test force-terminates the spawned engine and asserts a pending search rejects without an invented result. Mock-based unit tests in `apps/api/test/engine-analysis.test.mjs` still cover initialization/search timeouts and bounded retry behavior; **those are doubles, not real-process timeout or worker-crash/restart acceptance**.
+A separate opt-in crash test force-terminates the spawned engine and asserts a pending search rejects without an invented result. An additional **DB-backed native crash/retry fixture** uses real imported four-ply 180+2 blitz source facts. During the first native search it sends SIGKILL to Stockfish, then asserts the durable `GameAnalysisRun` is `RETRY_WAIT` with one attempt, pending coverage, no finished positions/plies and an explicit subprocess error. Before retry, owned replay must not claim completed engine evidence or expose detector runs. The test advances the fixture's `runAfter` timestamp (it does **not** test real elapsed backoff), reclaims the **same immutable snapshot** with a new native process, and verifies two attempts, complete analysis, detector publication and owned replay. Native process shutdown is checked after completion. This tests service-level persistence and retry, **not abrupt termination/restart of the Node worker process**. Mock-based unit tests in `apps/api/test/engine-analysis.test.mjs` still cover initialization/search timeouts and bounded retry behavior; **those are doubles, not native timeout/restart acceptance**.
 
 The tests assert structural/range/identity invariants rather than fixed centipawn values: native Stockfish can produce different legal PVs and evaluations across binary builds and CPU configurations.
 
@@ -52,8 +52,8 @@ The standard CI/build/browser checks are tracked separately; a native success do
 
 ## Evidence / limits still needed before closing #123
 
-- Missing, short and excessive clock sequences are now checked with the actual engine and database. Extend to invalid *values* (tampered clock samples) and concurrent/superseded source/analysis claims, distinguishing production worker tests from independent doubles.
-- Verify native engine timeout/retry/recovery beyond the current forced crash and adapter unit doubles; record actual resource use/cleanup and any failed/partial database states.
+- Missing, short and excessive clock sequences are checked with the actual engine and database. Extend to invalid *values* (tampered clock samples) and concurrent/superseded source/analysis claims, distinguishing production worker tests from independent doubles.
+- The native crash/retry extension adds database-backed `RETRY_WAIT` -> same-snapshot successful recovery, with the backoff advanced by the test. Verify the new CI gate on its exact head. Remaining: native deadline expiry, stale-worker lease/restart recovery, superseded/concurrent source/analysis claims, and representative memory/CPU observations rather than merely bounded settings.
 - Carry over stable fixtures into #126 cost measurements; these tiny four-ply cases are **not** representative throughput/economics benchmarks.
 - This gate ends at owned replay/evidence. It cannot publish a ranked diagnosis until #129 connects the production diagnosis lifecycle.
 

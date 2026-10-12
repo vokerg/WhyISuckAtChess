@@ -27,6 +27,7 @@ const FIXTURES = REAL_STOCKFISH
       { label: 'blitz without source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: null, clockAlignment: 'UNAVAILABLE' },
       { label: 'blitz short source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100], clockAlignment: 'UNALIGNED' },
       { label: 'blitz excessive source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000, 17900, 17800], clockAlignment: 'ANOMALOUS' },
+      { label: 'blitz native process crash then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessCrash: true },
     ]
   : [{ speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] }];
 
@@ -57,6 +58,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
   let engineCalls = 0;
   let engineClosed = false;
   let realEngineProcessExited = null;
+  let nativeEngineSpawns = 0;
+  let nativeCrashInjected = false;
 
   try {
     const user = await prisma.appUser.create({
@@ -168,6 +171,9 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
         return 0;
       },
       async enqueueEligibleGame(input) {
+        // Retain the existing durable RETRY_WAIT row on the second cycle instead of
+        // requesting a new snapshot and accidentally superseding the retry.
+        if (queuedAnalysisRunId !== null) return null;
         assert.ok(targetGameId, 'index stage must publish a game before analysis is enqueued');
         queuedAnalysisRunId = await prismaAnalysisRepository.requestReanalysis({
           importedGameId: targetGameId,
@@ -184,12 +190,13 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
           where: { id: runId },
         });
         assert.ok(candidate.sourcePlyIndexedAt);
+        assert.ok(['QUEUED', 'RETRY_WAIT'].includes(candidate.status));
         const now = new Date();
         const claimToken = randomUUID();
         const claimed = await prisma.gameAnalysisRun.updateMany({
           where: {
             id: runId,
-            status: 'QUEUED',
+            status: candidate.status,
             sourcePlyIndexedAt: candidate.sourcePlyIndexedAt,
             cancelRequestedAt: null,
             importedGame: {
@@ -237,12 +244,15 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       engineFactory: async () => {
         if (REAL_STOCKFISH) {
           // Uses the actual child-process/UCI adapter; no fake search output.
+          let spawnedChild = null;
           const engine = await createStockfishEngine({
             binaryPath: process.env.STOCKFISH_PATH,
             settings: { depth: 6, multiPv: 1, threads: 1, hashMb: 16 },
             commandTimeoutMs: 15_000,
             spawnProcess: (binaryPath) => {
               const child = spawn(binaryPath, [], { stdio: 'pipe' });
+              spawnedChild = child;
+              nativeEngineSpawns += 1;
               realEngineProcessExited = new Promise((resolve) => {
                 child.once('exit', resolve);
               });
@@ -256,6 +266,13 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
             engineVersion: engine.engineVersion,
             async analyzeFen(fen) {
               engineCalls += 1;
+              if (fixture.retryAfterProcessCrash && !nativeCrashInjected) {
+                nativeCrashInjected = true;
+                assert.ok(spawnedChild, 'native process must exist before crash injection');
+                const pendingSearch = engine.analyzeFen(fen);
+                spawnedChild.kill('SIGKILL');
+                return pendingSearch;
+              }
               return engine.analyzeFen(fen);
             },
             async close() {
@@ -402,12 +419,58 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       workerId: 'pipeline-evidence-' + suffix,
     });
 
-    assert.equal(await runWorkerCycle({
-      importService: importExecutor,
-      plyIndexService: plyIndexExecutor,
-      analysisService,
-      evidenceService,
-    }), true);
+    if (fixture.retryAfterProcessCrash) {
+      // Simulate a native process dying during search. The real service must
+      // persist retry state and withhold incomplete engine/evidence from replay.
+      assert.equal(await importExecutor.runOnce(), true);
+      assert.equal(await plyIndexExecutor.runOnce(), true);
+      assert.equal(await analysisService.runOnce(), true);
+      assert.ok(queuedAnalysisRunId === null, 'first analysis claim was consumed');
+      assert.ok(targetGameId);
+
+      const failedRun = await prisma.gameAnalysisRun.findFirstOrThrow({
+        where: { importedGameId: targetGameId },
+      });
+      assert.equal(failedRun.status, 'RETRY_WAIT');
+      assert.equal(failedRun.coverageStatus, 'PENDING');
+      assert.equal(failedRun.attempts, 1);
+      assert.equal(failedRun.positionsDone, 0);
+      assert.equal(failedRun.pliesDone, 0);
+      assert.match(failedRun.error ?? '', /Stockfish exited unexpectedly/);
+      assert.equal(await prisma.evidenceRun.count({ where: { importedGameId: targetGameId } }), 0);
+
+      const beforeRetryPayload = await createImportedGamesQueryService().getReplay(user.id, targetGameId);
+      assert.ok(beforeRetryPayload);
+      const beforeRetry = importedGameReplayResponseSchema.parse(beforeRetryPayload);
+      assert.notEqual(beforeRetry.engine.status, 'COMPLETED');
+      assert.deepEqual(beforeRetry.evidence.runs, []);
+      assert.ok(beforeRetry.plies.every((ply) => ply.engine.status === 'UNAVAILABLE'));
+
+      // Advance only the fixture's backoff; keep the same run/snapshot and
+      // exercise a second claim with a newly started native UCI process.
+      await prisma.gameAnalysisRun.update({
+        where: { id: failedRun.id },
+        data: { runAfter: new Date(0) },
+      });
+      queuedAnalysisRunId = failedRun.id;
+      assert.equal(await analysisService.runOnce(), true);
+      const retriedRun = await prisma.gameAnalysisRun.findUniqueOrThrow({
+        where: { id: failedRun.id },
+      });
+      assert.equal(retriedRun.status, 'SUCCEEDED');
+      assert.equal(retriedRun.coverageStatus, 'COMPLETE');
+      assert.equal(retriedRun.attempts, 2);
+      assert.equal(retriedRun.snapshotId, failedRun.snapshotId);
+      assert.equal(nativeEngineSpawns, 2, 'retry must start a fresh native Stockfish process');
+      assert.equal(await evidenceService.runOnce(), true);
+    } else {
+      assert.equal(await runWorkerCycle({
+        importService: importExecutor,
+        plyIndexService: plyIndexExecutor,
+        analysisService,
+        evidenceService,
+      }), true);
+    }
 
     for (let processed = 1; processed < evidenceDetectors.length; processed += 1) {
       assert.equal(
