@@ -28,6 +28,7 @@ const FIXTURES = REAL_STOCKFISH
       { label: 'blitz short source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100], clockAlignment: 'UNALIGNED' },
       { label: 'blitz excessive source clocks', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000, 17900, 17800], clockAlignment: 'ANOMALOUS' },
       { label: 'blitz native process crash then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessCrash: true },
+      { label: 'blitz native search deadline then durable retry', speed: 'blitz', initial: 180, increment: 2, clocks: [18150, 18100, 18100, 18000], retryAfterProcessTimeout: true },
     ]
   : [{ speed: 'bullet', initial: 30, increment: 0, clocks: [2950, 2950, 2900, 2900] }];
 
@@ -60,6 +61,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
   let realEngineProcessExited = null;
   let nativeEngineSpawns = 0;
   let nativeCrashInjected = false;
+  let nativeTimeoutInjected = false;
+  let failedEngineProcessExited = null;
 
   try {
     const user = await prisma.appUser.create({
@@ -248,7 +251,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
           const engine = await createStockfishEngine({
             binaryPath: process.env.STOCKFISH_PATH,
             settings: { depth: 6, multiPv: 1, threads: 1, hashMb: 16 },
-            commandTimeoutMs: 15_000,
+            // Allow normal UCI startup; a suspended native search must hit this bound.
+            commandTimeoutMs: fixture.retryAfterProcessTimeout ? 2_000 : 15_000,
             spawnProcess: (binaryPath) => {
               const child = spawn(binaryPath, [], { stdio: 'pipe' });
               spawnedChild = child;
@@ -272,6 +276,26 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
                 const pendingSearch = engine.analyzeFen(fen);
                 spawnedChild.kill('SIGKILL');
                 return pendingSearch;
+              }
+              if (fixture.retryAfterProcessTimeout && !nativeTimeoutInjected) {
+                nativeTimeoutInjected = true;
+                assert.ok(spawnedChild?.pid, 'native process must exist before deadline injection');
+                failedEngineProcessExited = realEngineProcessExited;
+                // Pause the actual OS process during a search. process.kill keeps
+                // Node's child.killed flag false so the adapter can send SIGTERM
+                // on deadline; child.kill('SIGSTOP') would incorrectly mark it killed.
+                process.kill(spawnedChild.pid, 'SIGSTOP');
+                try {
+                  return await engine.analyzeFen(fen);
+                } finally {
+                  // Resume the stopped process so the adapter's SIGTERM takes effect.
+                  // Never leave a suspended Stockfish process behind on test failure.
+                  try {
+                    process.kill(spawnedChild.pid, 'SIGCONT');
+                  } catch (error) {
+                    if (error?.code !== 'ESRCH') throw error;
+                  }
+                }
               }
               return engine.analyzeFen(fen);
             },
@@ -419,8 +443,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       workerId: 'pipeline-evidence-' + suffix,
     });
 
-    if (fixture.retryAfterProcessCrash) {
-      // Simulate a native process dying during search. The real service must
+    if (fixture.retryAfterProcessCrash || fixture.retryAfterProcessTimeout) {
+      // Force a real process crash or search deadline. The real service must
       // persist retry state and withhold incomplete engine/evidence from replay.
       assert.equal(await importExecutor.runOnce(), true);
       assert.equal(await plyIndexExecutor.runOnce(), true);
@@ -436,7 +460,21 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       assert.equal(failedRun.attempts, 1);
       assert.equal(failedRun.positionsDone, 0);
       assert.equal(failedRun.pliesDone, 0);
-      assert.match(failedRun.error ?? '', /Stockfish exited unexpectedly/);
+      assert.match(
+        failedRun.error ?? '',
+        fixture.retryAfterProcessTimeout
+          ? /Stockfish position analysis timed out/
+          : /Stockfish exited unexpectedly/,
+      );
+      if (fixture.retryAfterProcessTimeout) {
+        assert.equal(nativeTimeoutInjected, true);
+        assert.ok(failedEngineProcessExited);
+        const failedProcessExited = await Promise.race([
+          failedEngineProcessExited.then(() => true),
+          new Promise((resolve) => setTimeout(() => resolve(false), 2_000)),
+        ]);
+        assert.equal(failedProcessExited, true, 'timed-out native process must exit before retry');
+      }
       assert.equal(await prisma.evidenceRun.count({ where: { importedGameId: targetGameId } }), 0);
 
       const beforeRetryPayload = await createImportedGamesQueryService().getReplay(user.id, targetGameId);
