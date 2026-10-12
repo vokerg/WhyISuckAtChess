@@ -432,6 +432,26 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
 
       await assertSourceOwnership(tx, appUserId, draft);
 
+      // The materialization key fences idempotent retries, but is not an
+      // ordering key. A delayed worker must never replace a newer revision
+      // with an older (or ambiguously same-time) calculation.
+      const currentRevision = await tx.diagnosisFindingSet.findFirst({
+        where: {
+          appUserId,
+          scopeKey: draft.scopeKey,
+          isCurrent: true,
+          supersededAt: null,
+        },
+        orderBy: [{ calculationAsOf: 'desc' }, { id: 'desc' }],
+        select: { calculationAsOf: true },
+      });
+      if (
+        currentRevision
+        && draft.calculationAsOf.getTime() <= currentRevision.calculationAsOf.getTime()
+      ) {
+        throw new Error('Diagnosis materialization must be newer than the current calculation.');
+      }
+
       const supersededAt = new Date();
       await tx.diagnosisFindingSet.updateMany({
         where: {
@@ -447,7 +467,7 @@ export const prismaDiagnosisFindingRepository: DiagnosisFindingRepository = {
 
       const id = await createFindingSet(tx, appUserId, draft);
       return loadSet(tx, id);
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   },
 
   async getCurrentScope(appUserId, scopeKey, versions) {
