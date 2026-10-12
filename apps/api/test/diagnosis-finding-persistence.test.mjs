@@ -462,6 +462,93 @@ test('canonical finding persistence replaces current scope without deleting sour
       second.id,
       'rejected replacement must leave the current scope unchanged',
     );
+    // Source lineage must be validated inside publication, even when a draft
+    // references only the event ID (and omits the engine-analysis run ID).
+    const sourceFenceDraft = (key, reference) => findingSet(
+      randomUUID().replaceAll('-', ''),
+      baseFinding({
+        findingKey: key,
+        evidenceReferences: [{
+          referenceKey: key + '-ref',
+          referenceType: reference.evidenceEventId ? 'EVIDENCE_EVENT' : 'ENGINE_ANALYSIS',
+          provenance: { fixture: 'source-lineage-fence' },
+          ...reference,
+        }],
+      }),
+      'finding-materialization-source-fence-v1',
+    );
+    const eventOnlyDraft = () => sourceFenceDraft(
+      'event-only-source',
+      { evidenceEventId: event.id },
+    );
+
+    // Reindexing an owned game invalidates formerly successful evidence.
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: new Date('2026-09-22T04:05:00.000Z') },
+    });
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id, eventOnlyDraft(), prismaDiagnosisFindingRepository,
+      ),
+      /evidence from a stale indexed source/,
+    );
+    await prisma.importedGame.update({
+      where: { id: game.id },
+      data: { plyIndexedAt: indexedAt },
+    });
+
+    // A same-owner analysis reference must not publish a failed or pending run.
+    await prisma.gameAnalysisRun.update({
+      where: { id: analysisRun.id },
+      data: { status: 'RETRY_WAIT', coverageStatus: 'PENDING' },
+    });
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id,
+        sourceFenceDraft('incomplete-analysis', {
+          importedGameId: game.id,
+          sourceAnalysisRunId: analysisRun.id,
+        }),
+        prismaDiagnosisFindingRepository,
+      ),
+      /analysis that is not complete on the current indexed source/,
+    );
+    // Even an event-only reference must fail when its analysis parent is invalid.
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id, eventOnlyDraft(), prismaDiagnosisFindingRepository,
+      ),
+      /analysis that is not complete on the current indexed source/,
+    );
+    await prisma.gameAnalysisRun.update({
+      where: { id: analysisRun.id },
+      data: { status: 'SUCCEEDED', coverageStatus: 'COMPLETE' },
+    });
+
+    // A run flag alone is not sufficient: the event must carry the exact
+    // matching native/engine-double analysis snapshot, not an arbitrary ID.
+    await prisma.evidenceRun.update({
+      where: { id: evidenceRun.id },
+      data: { sourceAnalysisSnapshotId: 'mismatched-snapshot' },
+    });
+    await assert.rejects(
+      () => replaceCurrentDiagnosisFindingScope(
+        user.id, eventOnlyDraft(), prismaDiagnosisFindingRepository,
+      ),
+      /inconsistent evidence analysis lineage/,
+    );
+    await prisma.evidenceRun.update({
+      where: { id: evidenceRun.id },
+      data: { sourceAnalysisSnapshotId: analysisRun.snapshotId },
+    });
+
+    const stillCurrent = await prismaDiagnosisFindingRepository.getCurrentScope(
+      user.id, secondDraft.scopeKey, versionTuple(secondDraft),
+    );
+    assert.equal(stillCurrent.id, second.id,
+      'source-provenance rejects must preserve the published current scope');
+
   } finally {
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => {});
