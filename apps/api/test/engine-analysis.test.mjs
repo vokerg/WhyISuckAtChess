@@ -72,20 +72,25 @@ test('Stockfish adapter rejects a hung UCI command at the configured timeout', a
   assert.equal(child.killed, true);
 });
 
-test('Stockfish adapter rejects a hung search and disposes the engine process', async () => {
+test('Stockfish adapter terminates a timed-out search immediately and cannot reuse its stale UCI output', async () => {
   const child = new EventEmitter();
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
   child.killed = false;
+  let killCount = 0;
+  const commands = [];
   child.kill = () => {
+    killCount += 1;
     child.killed = true;
     return true;
   };
   child.stdin = {
     write: (value) => {
       const command = String(value).trim();
+      commands.push(command);
       if (command === 'uci') child.stdout.write('id name Stockfish 18\nuciok\n');
       if (command === 'isready') child.stdout.write('readyok\n');
+      // Deliberately never send bestmove for the first search.
       return true;
     },
   };
@@ -98,8 +103,17 @@ test('Stockfish adapter rejects a hung search and disposes the engine process', 
     () => engine.analyzeFen('8/8/8/8/8/8/8/K6k w - -'),
     /position analysis timed out/,
   );
+  assert.equal(child.killed, true, 'timeout must kill Stockfish before a separate close() call');
+  assert.equal(killCount, 1);
+  // A late response from this subprocess must never be accepted as a new run.
+  child.stdout.write('info depth 16 score cp 999 pv a1a2\nbestmove a1a2\n');
+  await assert.rejects(
+    () => engine.analyzeFen('8/8/8/8/8/8/8/K6k w - -'),
+    /Stockfish engine is closed/,
+  );
+  assert.equal(commands.filter((command) => command.startsWith('go ')).length, 1);
   await engine.close();
-  assert.equal(child.killed, true);
+  assert.equal(killCount, 1, 'closing after fatal timeout must be idempotent');
 });
 
 function fakeAnalysis(scoreCpWhite = 12, options = {}) {
