@@ -275,7 +275,7 @@ test('worker bounds both stalled provider headers and stalled NDJSON response bo
   for (const stalledAt of ['headers', 'body']) {
     const claimedAt = new Date('2026-10-13T07:30:00.000Z');
     const run = {
-      id: 74, appUserId: 7, status: 'RUNNING', claimedAt,
+      id: 74, appUserId: 7, status: 'RUNNING', claimedAt, cancelRequestedAt: null,
       requestedFrom: new Date('2026-01-01T00:00:00.000Z'),
       requestedTo: new Date('2026-01-02T00:00:00.000Z'),
       lichessUserIdSnapshot: 'u1', checkpointJson: null,
