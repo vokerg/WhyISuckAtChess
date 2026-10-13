@@ -21,6 +21,10 @@ export { ActiveImportRunError } from './account-import.repository.prisma';
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const COMMIT_BATCH_SIZE = 50;
 const STALE_RUN_MS = 15 * 60 * 1000;
+// Bound a single provider export below the worker's stale-lease threshold.
+// The timeout covers response headers and the streamed NDJSON body; it is not
+// a substitute for per-game sizes or a full worker throughput budget.
+export const LICHESS_PROVIDER_WINDOW_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface CreateLichessImportRequest {
   from?: Date;
@@ -33,12 +37,20 @@ export interface AccountImportServiceOptions {
   connectionService: Pick<LichessConnectionService, 'getCredentialForUser' | 'markCredentialRevokedForUser'>;
   fetchImpl?: typeof fetch;
   now?: () => Date;
+  /** For deterministic timeout tests; production uses the bounded default. */
+  providerWindowTimeoutMs?: number;
 }
 
 export function createLichessAccountImportService(options: AccountImportServiceOptions) {
   const repository = options.repository ?? createPrismaAccountImportRepository();
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? (() => new Date());
+  const providerWindowTimeoutMs = options.providerWindowTimeoutMs ?? LICHESS_PROVIDER_WINDOW_TIMEOUT_MS;
+  if (!Number.isSafeInteger(providerWindowTimeoutMs)
+      || providerWindowTimeoutMs < 1
+      || providerWindowTimeoutMs > LICHESS_PROVIDER_WINDOW_TIMEOUT_MS) {
+    throw new Error('Invalid Lichess provider window timeout.');
+  }
 
   const requestImport = async (appUserId: number, request: CreateLichessImportRequest = {}) => {
     const credential = await options.connectionService.getCredentialForUser(appUserId);
@@ -123,6 +135,8 @@ export function createLichessAccountImportService(options: AccountImportServiceO
 
     const windows = planImportWindows(run.requestedFrom, run.requestedTo);
     const startWindow = readCheckpoint(run.checkpointJson);
+    let providerSignal: AbortSignal | undefined;
+    let clearProviderDeadline: (() => void) | undefined;
 
     try {
       for (let index = startWindow; index < windows.length; index += 1) {
@@ -140,7 +154,17 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           rated: readRatedScope(run.scopeJson),
           speeds: LICHESS_IMPORT_SPEEDS,
         });
+        // Use an owned timer (rather than AbortSignal.timeout's unref'ed
+        // timer) so even a stalled test/worker read has a live deadline.
+        const providerAbort = new AbortController();
+        providerSignal = providerAbort.signal;
+        const timeout = setTimeout(
+          () => providerAbort.abort(new DOMException('Lichess export timed out.', 'TimeoutError')),
+          providerWindowTimeoutMs,
+        );
+        clearProviderDeadline = () => clearTimeout(timeout);
         const response = await fetchImpl(url, {
+          signal: providerSignal,
           headers: {
             Accept: 'application/x-ndjson',
             Authorization: `Bearer ${credential.accessToken}`,
@@ -167,7 +191,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
         let skipped = 0;
         let importedGames: Awaited<ReturnType<AccountImportRepository['commitGames']>> = { imported: 0, duplicate: 0, updated: 0 };
         let batch: ReturnType<typeof normalizeLichessGame>[] = [];
-        for await (const rawGame of readLichessNdjson(response)) {
+        for await (const rawGame of readLichessNdjson(response, providerSignal)) {
           seen += 1;
           const normalized = normalizeLichessGame(rawGame, credential);
           if (!isInScope(normalized, window, run.scopeJson)) {
@@ -203,6 +227,9 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           checkpointJson: { nextWindow: index + 1, lastWindow: { from: window.from.toISOString(), to: window.to.toISOString() } },
         });
         await repository.heartbeat(run.id, claimedAt, now());
+        clearProviderDeadline();
+        clearProviderDeadline = undefined;
+        providerSignal = undefined;
       }
 
       await repository.completeRun(run.id, claimedAt, run, now());
@@ -211,12 +238,18 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       if (error instanceof ImportLeaseLostError) {
         return settleLeaseLoss(run, claimedAt);
       }
-      if (error instanceof LichessNdjsonRecordError) {
+      if (providerSignal?.aborted && providerSignal.reason?.name === 'TimeoutError') {
+        await repository.failRun(run.id, claimedAt, 'PROVIDER_TIMEOUT', 'Lichess import timed out. Retry the import.', now());
+      } else if (error instanceof LichessNdjsonRecordError) {
         await repository.failRun(run.id, claimedAt, 'MALFORMED_RECORD', error.message, now());
       } else {
         await repository.failRun(run.id, claimedAt, 'IMPORT_FAILED', 'Lichess import failed. Retry the import.', now());
       }
       return repository.getRun(run.appUserId, run.id);
+    } finally {
+      // Covers response status early returns, malformed records, cancellation,
+      // lease loss and exceptions, not only the successful window path.
+      clearProviderDeadline?.();
     }
   };
 
