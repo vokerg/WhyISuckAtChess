@@ -53,9 +53,8 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
   app.get<{ Params: { runId: string } }>('/api/me/imports/:runId', async (request, reply) => {
     const auth = requireAuth(request, reply);
     if (!auth) return;
-    if (!/^[1-9]\d*$/.test(request.params.runId)) return reply.code(400).send({ message: 'Invalid import run id.' });
-    const runId = Number(request.params.runId);
-    if (!Number.isSafeInteger(runId) || runId < 1) return reply.code(400).send({ message: 'Invalid import run id.' });
+    const runId = parseImportRunId(request.params.runId);
+    if (runId === null) return reply.code(400).send({ message: 'Invalid import run id.' });
     reply.header('Cache-Control', 'private, no-store');
     const run = await service.getRun(auth.userId, runId);
     if (!run) return reply.code(404).send({ message: 'Import run not found.' });
@@ -65,11 +64,18 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
   app.post<{ Params: { runId: string } }>('/api/me/imports/:runId/cancel', async (request, reply) => {
     const auth = requireAuth(request, reply);
     if (!auth) return;
-    if (!/^[1-9]\d*$/.test(request.params.runId)) return reply.code(400).send({ message: 'Invalid import run id.' });
-    const runId = Number(request.params.runId);
-    if (!Number.isSafeInteger(runId) || runId < 1) return reply.code(400).send({ message: 'Invalid import run id.' });
+    const runId = parseImportRunId(request.params.runId);
+    if (runId === null) return reply.code(400).send({ message: 'Invalid import run id.' });
     const run = await service.cancelRun(auth.userId, runId);
     if (!run) return reply.code(404).send({ message: 'Import run not found.' });
     return { importRun: toImportRunResponse(run) };
   });
+}
+
+// ImportRun.id is a Prisma Int (signed 32-bit). Reject aliases and overflow
+// before reaching Prisma, which otherwise may surface an invalid-ID 500.
+function parseImportRunId(value: string): number | null {
+  if (!/^[1-9]\d*$/.test(value)) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id <= 2_147_483_647 ? id : null;
 }
