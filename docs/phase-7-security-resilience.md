@@ -4,7 +4,7 @@
 
 | Boundary / threat | Required invariant | Reproduction or existing evidence | State |
 | --- | --- | --- | --- |
-| Imported-game URL ID aliases and overflow | Only canonical positive decimal IDs within the 32-bit game ID domain reach owned detail/replay services | `apps/api/test/imported-games-read-model.test.mjs`: both HTTP endpoints reject `09`, `9e0`, `0x9`, encoded `+9`, zero, negative and overflow IDs before service invocation | **New regression in this PR; verify on CI** |
+| Imported-game URL ID aliases and overflow | Only canonical positive decimal IDs within the 32-bit game ID domain reach owned detail/replay services | `apps/api/test/imported-games-read-model.test.mjs`: both HTTP endpoints reject `09`, `9e0`, `0x9`, encoded `+9`, zero, negative and overflow IDs before service invocation | Verified on PR #144 exact-head CI run #314 (both jobs successful); broader ownership matrix pending |
 | Imported-game owner isolation | An owned game cannot be read by another application user, including evidence/replay | Prisma `findDetail`/`findReplay` ownership predicates and cross-user service checks in `imported-games-read-model.test.mjs` | Existing scoped tests; broader hostile-ID matrix pending |
 | Import run ID and cancellation | Only canonical positive signed-32-bit run IDs reach owner-scoped status/cancel services; unowned IDs are not disclosed | `lichess-onboarding.test.mjs` checks aliases, exact upper bound, overflow, missing runs, owner propagation, and no service invocation for invalid IDs on both routes | Additional regression; verify on exact-head CI |
 | Summary and drill-down ownership | Current owned findings only; stale rankings fail closed | `diagnosis-read-model.test.mjs`, `diagnosis-drill-down.test.mjs` | Existing scoped tests; cross-user request matrix pending |
@@ -18,7 +18,7 @@
 
 Before this PR, `parseGameId` used `Number(value)` with an integer/range check. This parsed alternative representations of the same URL identifier (including scientific and hexadecimal notation, zero padding and a leading plus). It did **not** by itself demonstrate an authorization bypass because subsequent service and Prisma queries are owner-scoped. However, it violated strict path identifier validation and allowed multiple spellings to reach downstream services. The amended parser requires `^[1-9]\d*$` first, followed by safe-integer and maximum database ID bounds. Invalid IDs return 400; syntactically valid but unowned IDs continue to produce 404.
 
-This patch does not change query responses for canonical IDs, authentication modes, provider authorization, import state or stored evidence. The API route test verifies both imported-game detail and replay, and asserts that invalid requests never reach the service.
+PR #144 does not change query responses for canonical IDs, authentication modes, provider authorization, import state or stored evidence. The API route test verifies both imported-game detail and replay, and asserts that invalid requests never reach the service.
 
 ## Next #127 gates
 
