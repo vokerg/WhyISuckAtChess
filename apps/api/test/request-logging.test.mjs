@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
 import test from 'node:test';
 import Fastify from 'fastify';
-import { apiLoggerOptions, serializeSafeHttpRequest } from '../dist/request-logging.js';
+import { apiLoggerOptions, registerSafeNotFoundHandler, serializeSafeHttpRequest } from '../dist/request-logging.js';
 import { registerLichessRoutes } from '../dist/modules/lichess/lichess.routes.js';
 import { LichessOAuthError } from '../dist/modules/lichess/lichess-connection.service.js';
 
@@ -37,6 +37,7 @@ test('actual Fastify request logs and OAuth redirects do not disclose callback s
     },
   });
   const app = Fastify({ logger: { ...apiLoggerOptions, stream: sink } });
+  registerSafeNotFoundHandler(app);
   const code = 'sensitive-code-123';
   const state = 'sensitive-state-456';
   const description = 'sensitive-description-789';
@@ -72,8 +73,12 @@ test('actual Fastify request logs and OAuth redirects do not disclose callback s
     assert.equal(queries[0].code, code);
     assert.equal(queries[0].state, state);
 
-    // Unknown callback paths also pass through the global safe serializer.
-    await app.inject({ method: 'GET', url: `/missing?code=${code}` });
+    // Fastify's default 404 logger includes the raw URL in a free-form msg;
+    // the production-safe fallback must remove the query from logs AND output.
+    const missing = await app.inject({ method: 'GET', url: `/missing?code=${code}&state=${state}` });
+    assert.equal(missing.statusCode, 404);
+    assert.equal(missing.json().message, 'Route GET:/missing not found');
+    assert.doesNotMatch(missing.body, /sensitive-code-123|sensitive-state-456/);
   } finally {
     await app.close();
   }
