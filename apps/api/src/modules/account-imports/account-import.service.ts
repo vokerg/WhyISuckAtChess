@@ -109,7 +109,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           run.id,
           claimedAt,
           'AUTH_REQUIRED',
-          error instanceof Error ? error.message : 'Lichess credential unavailable.',
+          'Lichess credential unavailable. Reconnect Lichess before importing.',
           now(),
         );
       } catch (failureError) {
@@ -214,7 +214,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       if (error instanceof LichessNdjsonRecordError) {
         await repository.failRun(run.id, claimedAt, 'MALFORMED_RECORD', error.message, now());
       } else {
-        await repository.failRun(run.id, claimedAt, 'IMPORT_FAILED', error instanceof Error ? error.message : 'Lichess import failed.', now());
+        await repository.failRun(run.id, claimedAt, 'IMPORT_FAILED', 'Lichess import failed. Retry the import.', now());
       }
       return repository.getRun(run.appUserId, run.id);
     }
