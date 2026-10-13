@@ -33,6 +33,7 @@ import {
   timeControlComparisonService as defaultTimeControlComparisonService,
   type TimeControlComparisonService,
 } from './modules/diagnosis/time-control-comparison.service';
+import { registerSafeNotFoundHandler } from './request-logging';
 import prisma from './prisma';
 
 export interface PrismaLifecycle {
@@ -52,6 +53,7 @@ export interface BuildAppOptions extends AuthPluginOptions {
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: options.logger ?? false });
+  registerSafeNotFoundHandler(app);
   const prismaLifecycle = options.prisma ?? prisma;
 
   app.addHook('onClose', async () => {
