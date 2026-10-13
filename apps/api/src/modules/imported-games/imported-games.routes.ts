@@ -65,6 +65,9 @@ export async function registerImportedGamesRoutes(
 }
 
 function parseGameId(value: string): number | null {
+  // Route IDs must have one canonical decimal spelling; Number() alone accepts
+  // aliases such as 0x9, 9e0, +9, and 09 that bypass URL-level ID validation.
+  if (!/^[1-9]\d*$/.test(value)) return null;
   const gameId = Number(value);
   return Number.isSafeInteger(gameId) && gameId > 0 && gameId <= 2_147_483_647 ? gameId : null;
 }
