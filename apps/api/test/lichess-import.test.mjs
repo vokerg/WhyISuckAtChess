@@ -6,7 +6,7 @@ import {
   normalizeLichessGame,
   readLichessNdjson,
 } from '../dist/modules/account-imports/providers/lichess/lichess-account-import.js';
-import { createLichessAccountImportService, planImportWindows } from '../dist/modules/account-imports/account-import.service.js';
+import { createLichessAccountImportService, planImportWindows, toImportRunResponse } from '../dist/modules/account-imports/account-import.service.js';
 import {
   decideClockSequence,
   ImportLeaseLostError,
@@ -199,4 +199,65 @@ test('malformed NDJSON is classified separately from a valid record', async () =
   const iterator = readLichessNdjson(response);
   assert.deepEqual((await iterator.next()).value, { id: 'ok' });
   await assert.rejects(iterator.next(), (error) => error instanceof LichessNdjsonRecordError && error.lineNumber === 2);
+});
+
+
+test('worker failures never persist raw credential or provider exception details into import status', async () => {
+  for (const failureSource of ['credential', 'provider']) {
+    const now = new Date('2026-10-13T04:30:00.000Z');
+    const secret = 'secret-token-in-exception-' + failureSource;
+    const run = {
+      id: 42, appUserId: 7, status: 'RUNNING',
+      claimedAt: now, cancelRequestedAt: null,
+      requestedFrom: new Date('2026-01-01T00:00:00.000Z'),
+      requestedTo: new Date('2026-01-02T00:00:00.000Z'),
+      lichessUserIdSnapshot: 'u1', checkpointJson: null,
+      scopeJson: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+      errorCode: null, error: null,
+    };
+    let failureWrites = 0;
+    const repository = {
+      async getRun(appUserId, runId) {
+        assert.equal(appUserId, run.appUserId);
+        assert.equal(runId, run.id);
+        return run;
+      },
+      async failRun(runId, claimedAt, code, message) {
+        assert.equal(runId, run.id);
+        assert.equal(claimedAt, now);
+        failureWrites += 1;
+        run.status = 'FAILED';
+        run.errorCode = code;
+        run.error = message;
+      },
+    };
+    const service = createLichessAccountImportService({
+      repository,
+      connectionService: {
+        async getCredentialForUser() {
+          if (failureSource === 'credential') {
+            throw new Error('Credential adapter failed with Authorization: Bearer ' + secret);
+          }
+          return { lichessUserId: 'u1', username: 'Alice', accessToken: secret, credentialGeneration: 'generation-1' };
+        },
+        async markCredentialRevokedForUser() { return true; },
+      },
+      fetchImpl: async () => {
+        throw new Error('Provider fetch failed with Authorization: Bearer ' + secret);
+      },
+      now: () => now,
+    });
+
+    const result = await service.executeRun(run);
+    const expectedCode = failureSource === 'credential' ? 'AUTH_REQUIRED' : 'IMPORT_FAILED';
+    const expectedMessage = failureSource === 'credential'
+      ? 'Lichess credential unavailable. Reconnect Lichess before importing.'
+      : 'Lichess import failed. Retry the import.';
+
+    assert.equal(failureWrites, 1, failureSource);
+    assert.equal(result.status, 'FAILED');
+    assert.equal(result.errorCode, expectedCode);
+    assert.equal(result.error, expectedMessage);
+    assert.equal(JSON.stringify(toImportRunResponse(result)).includes(secret), false, failureSource);
+  }
 });
