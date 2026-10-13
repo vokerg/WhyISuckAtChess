@@ -16,7 +16,7 @@
 
 ## Scoped finding: alternative numeric game IDs
 
-Before this PR, `parseGameId` used `Number(value)` with an integer/range check. This parsed alternative representations of the same URL identifier (including scientific and hexadecimal notation, zero padding and a leading plus). It did **not** by itself demonstrate an authorization bypass because subsequent service and Prisma queries are owner-scoped. However, it violated strict path identifier validation and allowed multiple spellings to reach downstream services. The amended parser requires `^[1-9]\\d*$` first, followed by safe-integer and maximum database ID bounds. Invalid IDs return 400; syntactically valid but unowned IDs continue to produce 404.
+Before this PR, `parseGameId` used `Number(value)` with an integer/range check. This parsed alternative representations of the same URL identifier (including scientific and hexadecimal notation, zero padding and a leading plus). It did **not** by itself demonstrate an authorization bypass because subsequent service and Prisma queries are owner-scoped. However, it violated strict path identifier validation and allowed multiple spellings to reach downstream services. The amended parser requires `^[1-9]\d*$` first, followed by safe-integer and maximum database ID bounds. Invalid IDs return 400; syntactically valid but unowned IDs continue to produce 404.
 
 This patch does not change query responses for canonical IDs, authentication modes, provider authorization, import state or stored evidence. The API route test verifies both imported-game detail and replay, and asserts that invalid requests never reach the service.
 
