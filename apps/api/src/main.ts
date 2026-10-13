@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import { buildApp } from './app';
+import { apiLoggerOptions } from './request-logging';
 
 const port = process.env['PORT'] ? Number.parseInt(process.env['PORT'], 10) : 3000;
 
 async function bootstrap() {
-  const app = await buildApp({ logger: true });
+  const app = await buildApp({ logger: apiLoggerOptions });
   let shuttingDown = false;
 
   const shutdown = async (signal: NodeJS.Signals) => {
