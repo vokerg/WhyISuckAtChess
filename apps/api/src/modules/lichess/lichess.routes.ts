@@ -30,6 +30,10 @@ export async function registerLichessRoutes(
   });
 
   app.get<{ Querystring: CallbackQuery }>('/api/auth/lichess/callback', async (request, reply) => {
+    // OAuth authorization codes and PKCE state are single-use secrets in the URL.
+    // Neither successful nor failed callback responses may be cached or referred.
+    reply.header('Cache-Control', 'no-store');
+    reply.header('Referrer-Policy', 'no-referrer');
     try {
       await service.handleCallback(request.query);
       return reply.redirect(`${readWebAppUrl()}/settings/lichess?lichessConnected=1`);
