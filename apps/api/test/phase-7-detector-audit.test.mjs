@@ -65,6 +65,21 @@ test('Phase 7 detector audit excludes labels when actual coverage unexpectedly d
   assert.equal(report.summary.falseNegatives, null);
 });
 
+test('Phase 7 detector audit counts opponent motifs emitted despite coverage loss', () => {
+  const first = corpus.cases.find((entry) => entry.id === 'tact-missed-existing-fork');
+  const report = buildDetectorAudit({ ...corpus, cases: [first] }, () => ({
+    coverage: { status: 'INCOMPLETE', reason: 'injected-coverage-drop' },
+    findings: [
+      { type: 'OPPONENT_TACTICAL_MOTIF', details: { motif: 'FORK', motifState: 'CREATED_BY_BEST_REPLY' } },
+      { type: 'ALLOWED_TACTICAL_MOTIF', details: { motif: 'PIN', motifState: 'NEWLY_ALLOWED' } },
+    ],
+  }));
+  assert.equal(report.rows[0].observedMotifCount, 2);
+  assert.equal(report.summary.unexpectedMotifsDuringCoverageLoss, 2);
+  assert.equal(report.summary.scopedAssertions, 0, 'coverage loss excludes oracle assertions');
+  assert.equal(report.summary.precision, null);
+});
+
 test('Phase 7 detector audit fails closed when an unadjudicated label is misrepresented as reviewed', () => {
   const first = corpus.cases.find((entry) => entry.id === 'tact-missed-existing-fork');
   const data = {
