@@ -156,9 +156,8 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
       // Null, NOT zero: no independently reviewed reference labels exist.
       truePositives: null, falsePositives: null, falseNegatives: null,
       trueNegatives: null, precision: null, recall: null,
-      unsupportedFamilies: [
-        'MATERIAL', 'TACTICAL_OFFENSE_OTHER', 'DEFENSIVE_THREAT',
-        'CONVERSION', 'PHASE_ENDGAME', 'OPENING',
+      notAssessedRegisteredDetectors: [
+        'MATERIAL', 'PHASE', 'DEFENSIVE_THREAT', 'CONVERSION', 'OPENING',
       ],
     },
     rows,
