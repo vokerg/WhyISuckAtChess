@@ -115,26 +115,51 @@ export async function* readLichessNdjson(
   let buffer = '';
   let lineNumber = 0;
 
-  while (true) {
-    if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+  try {
+    while (true) {
+      if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+      // A signal check before reader.read() is insufficient: an upstream stream
+      // can stall forever with an outstanding read and no further chunks.
+      const { done, value } = await readResponseChunk(reader, signal);
+      buffer += decoder.decode(value, { stream: !done });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        lineNumber += 1;
+        yield parseNdjsonLine(trimmed, lineNumber);
+      }
+      if (done) break;
+    }
+
+    const trimmed = buffer.trim();
+    if (trimmed) {
       lineNumber += 1;
       yield parseNdjsonLine(trimmed, lineNumber);
     }
-    if (done) break;
+  } finally {
+    if (signal?.aborted) void reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
+}
 
-  const trimmed = buffer.trim();
-  if (trimmed) {
-    lineNumber += 1;
-    yield parseNdjsonLine(trimmed, lineNumber);
-  }
+// Abort pending reader.read(), including for injected streams that do not
+// automatically propagate Fetch's AbortSignal into their ReadableStream.
+function readResponseChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal?: AbortSignal,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (!signal) return reader.read();
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new DOMException('The operation was aborted.', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    reader.read().then(
+      (chunk) => { signal.removeEventListener('abort', onAbort); resolve(chunk); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
 }
 
 function parseNdjsonLine(line: string, lineNumber: number): LichessGame {
