@@ -51,6 +51,20 @@ test('Phase 7 detector audit exposes oracle disagreement, but does not invent fa
   assert.equal(report.summary.falseNegatives, null, 'an unreviewed oracle mismatch is not expert FN');
 });
 
+test('Phase 7 detector audit excludes labels when actual coverage unexpectedly drops', () => {
+  const first = corpus.cases.find((entry) => entry.id === 'tact-missed-existing-fork');
+  const report = buildDetectorAudit({ ...corpus, cases: [first] }, () => ({
+    coverage: { status: 'INCOMPLETE', reason: 'injected-coverage-drop' },
+    findings: [],
+  }));
+  assert.equal(report.summary.declaredAssertions, 1);
+  assert.equal(report.summary.scopedAssertions, 0, 'coverage-invalid labels cannot enter oracle denominator');
+  assert.equal(report.summary.coverageExcludedCases, 1);
+  assert.equal(report.summary.coverageAgreements, 0);
+  assert.equal(report.rows[0].scopedLabels[0].agreesWithTestOracle, null);
+  assert.equal(report.summary.falseNegatives, null);
+});
+
 test('Phase 7 detector audit fails closed when an unadjudicated label is misrepresented as reviewed', () => {
   const first = corpus.cases.find((entry) => entry.id === 'tact-missed-existing-fork');
   const data = {
