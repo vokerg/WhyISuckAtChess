@@ -20,7 +20,7 @@ npm test
 
 The JSON report is generated from the checked-in v1 [corpus](../apps/api/test/fixtures/phase-7-gold-corpus.v1.json), the production tactical-motif detector, and one-ply synthetic analysis snapshots. The test invokes the same report producer. No database, Lichess request, Stockfish process, credentials, or production accounts are required. Engine annotations use a **deterministic test double**, not Stockfish. The report includes no personal identifiers or nondeterministic engine outputs.
 
-It records per case: stable ID, synthetic ply/UCI, engine version/provenance, case kind, expected/observed coverage, scoped required/forbidden exact motif predictions, review status, and presence of a coverage-gap finding. Only *explicitly listed* required and forbidden labels are compared. An additional unlisted motif is exposed by its count, not assumed false-positive: no exhaustive reference labeling exists.
+It records per case: stable ID, synthetic ply/UCI, engine version/provenance, case kind, expected/observed coverage, scoped required/forbidden exact motif predictions, review status, and presence of a coverage-gap finding. Only *explicitly listed* required and forbidden labels are compared. Additional unlisted missed, allowed **or opponent** tactical motifs are exposed by count, not assumed false-positive: no exhaustive reference labeling exists.
 
 ## V1 baseline and denominators
 
@@ -37,7 +37,7 @@ All cases are `PENDING_DOMAIN_REVIEW`. Synthetic oracle agreements only measure 
 ## Audit interpretation and human review
 
 - **Event identity:** each case is one legal FEN/SAN/UCI transition, not a sampled real game. Compare `type + motif + motifState`. Review other observed motifs separately rather than automatically declaring them FP.
-- **Coverage:** assert known presence/absence only with `COMPLETE` expected and observed coverage. `UNAVAILABLE` or `INCOMPLETE` are exclusions, **not** TN/FN. Emitting a tactical motif during insufficient coverage is a separate integrity failure.
+- **Coverage:** assert known presence/absence only with `COMPLETE` expected and observed coverage. `UNAVAILABLE` or `INCOMPLETE` are exclusions, **not** TN/FN. Emitting a tactical motif during insufficient coverage is a separate integrity failure; the report counts every such motif across the three currently implemented tactical event types.
 - **Domain truth:** use the [corpus adjudication protocol](phase-7-gold-corpus.md). Review legality, real engine line, continuation, coverage, chess mechanism and interpretation separately. Attach source evidence and human reviewer identity; retain disputes. Version the corpus and policy on revised labels.
 - **Error classes:** distinguish a wrongly emitted event, a missed expected event, wrong mechanism/reason, source or analysis gap, and disputed/unreviewable position. A simulated centipawn loss does not independently validate the chess meaning.
 - **Future metrics:** once independently adjudicated eligible positive and negative events exist, report per-family TP/FP/FN/TN, explicit denominators, precision/recall only where defined, and exclusions separately. Do not double-count aliases of the same game/ply.
