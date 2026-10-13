@@ -425,7 +425,17 @@ test('HTTP routes pass authenticated ownership through list/detail/replay bounda
     assert.equal((await app.inject({ method: 'GET', url: '/api/imported-games?limit=1' })).statusCode, 200);
     assert.equal((await app.inject({ method: 'GET', url: '/api/imported-games/9/replay' })).statusCode, 404);
     assert.equal((await app.inject({ method: 'GET', url: '/api/imported-games/9' })).statusCode, 404);
-    assert.equal((await app.inject({ method: 'GET', url: '/api/imported-games/not-an-id' })).statusCode, 400);
+    for (const invalidId of [
+      'not-an-id', '09', '9e0', '0x9', '%2B9', '0', '-1', '2147483648',
+      '9007199254740992',
+    ]) {
+      for (const suffix of ['', '/replay']) {
+        const response = await app.inject({
+          method: 'GET', url: '/api/imported-games/' + invalidId + suffix,
+        });
+        assert.equal(response.statusCode, 400, invalidId + suffix);
+      }
+    }
   } finally {
     await app.close();
   }
