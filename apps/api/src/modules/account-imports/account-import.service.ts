@@ -136,6 +136,7 @@ export function createLichessAccountImportService(options: AccountImportServiceO
     const windows = planImportWindows(run.requestedFrom, run.requestedTo);
     const startWindow = readCheckpoint(run.checkpointJson);
     let providerSignal: AbortSignal | undefined;
+    let clearProviderDeadline: (() => void) | undefined;
 
     try {
       for (let index = startWindow; index < windows.length; index += 1) {
@@ -153,7 +154,15 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           rated: readRatedScope(run.scopeJson),
           speeds: LICHESS_IMPORT_SPEEDS,
         });
-        providerSignal = AbortSignal.timeout(providerWindowTimeoutMs);
+        // Use an owned timer (rather than AbortSignal.timeout's unref'ed
+        // timer) so even a stalled test/worker read has a live deadline.
+        const providerAbort = new AbortController();
+        providerSignal = providerAbort.signal;
+        const timeout = setTimeout(
+          () => providerAbort.abort(new DOMException('Lichess export timed out.', 'TimeoutError')),
+          providerWindowTimeoutMs,
+        );
+        clearProviderDeadline = () => clearTimeout(timeout);
         const response = await fetchImpl(url, {
           signal: providerSignal,
           headers: {
@@ -218,6 +227,8 @@ export function createLichessAccountImportService(options: AccountImportServiceO
           checkpointJson: { nextWindow: index + 1, lastWindow: { from: window.from.toISOString(), to: window.to.toISOString() } },
         });
         await repository.heartbeat(run.id, claimedAt, now());
+        clearProviderDeadline();
+        clearProviderDeadline = undefined;
         providerSignal = undefined;
       }
 
@@ -235,6 +246,10 @@ export function createLichessAccountImportService(options: AccountImportServiceO
         await repository.failRun(run.id, claimedAt, 'IMPORT_FAILED', 'Lichess import failed. Retry the import.', now());
       }
       return repository.getRun(run.appUserId, run.id);
+    } finally {
+      // Covers response status early returns, malformed records, cancellation,
+      // lease loss and exceptions, not only the successful window path.
+      clearProviderDeadline?.();
     }
   };
 
