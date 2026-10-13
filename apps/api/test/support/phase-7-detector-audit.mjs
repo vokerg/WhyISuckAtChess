@@ -100,6 +100,11 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
     assert.equal(entry.review.status, 'PENDING_DOMAIN_REVIEW',
       'a domain review requires a separate adjudicated audit and revised metrics');
     const result = detect(tacticalSnapshot(entry));
+    const observedCoverage = result.coverage.status;
+    const coverageMatches = observedCoverage === entry.expected.coverage
+      && result.coverage.reason === entry.expected.reason;
+    const coverageEligible = observedCoverage === 'COMPLETE'
+      && entry.expected.coverage === 'COMPLETE';
     const labels = [
       ...entry.expected.required.map((label) => ({ label, required: true })),
       ...entry.expected.forbidden.map((label) => ({ label, required: false })),
@@ -107,14 +112,9 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
       const observed = hasLabel(result.findings, label);
       return {
         label, oracleRequiresDetection: required, observedDetection: observed,
-        agreesWithTestOracle: observed === required,
+        agreesWithTestOracle: coverageEligible ? observed === required : null,
       };
     });
-    const observedCoverage = result.coverage.status;
-    const coverageMatches = observedCoverage === entry.expected.coverage
-      && result.coverage.reason === entry.expected.reason;
-    const coverageEligible = observedCoverage === 'COMPLETE'
-      && entry.expected.coverage === 'COMPLETE';
     return {
       caseId: entry.id, caseKind: entry.caseKind,
       plyNumber: 1, playedUci: entry.source.playedUci,
@@ -146,7 +146,8 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
       coveredCases: rows.length - coverageExcludedCases.length,
       coverageExcludedCases: coverageExcludedCases.length,
       coverageExcludedIds: coverageExcludedCases.map((row) => row.caseId),
-      scopedAssertions: scopedLabels.length,
+      declaredAssertions: scopedLabels.length,
+      scopedAssertions: scopedLabels.filter((label) => label.agreesWithTestOracle !== null).length,
       testOracleAgreements: scopedLabels.filter((label) => label.agreesWithTestOracle).length,
       coverageAgreements: rows.filter((row) => row.coverageMatches).length,
       unexpectedMotifsDuringCoverageLoss: coverageExcludedCases
