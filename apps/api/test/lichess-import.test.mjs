@@ -261,3 +261,77 @@ test('worker failures never persist raw credential or provider exception details
     assert.equal(JSON.stringify(toImportRunResponse(result)).includes(secret), false, failureSource);
   }
 });
+
+
+test('NDJSON reader abort interrupts an already pending upstream body read', { timeout: 3000 }, async () => {
+  const controller = new AbortController();
+  const response = new Response(new ReadableStream({ start() {} }));
+  const result = readLichessNdjson(response, controller.signal).next();
+  controller.abort(new Error('deliberate body stall abort'));
+  await assert.rejects(result, /deliberate body stall abort/);
+});
+
+test('worker bounds both stalled provider headers and stalled NDJSON response bodies', { timeout: 5000 }, async () => {
+  for (const stalledAt of ['headers', 'body']) {
+    const claimedAt = new Date('2026-10-13T07:30:00.000Z');
+    const run = {
+      id: 74, appUserId: 7, status: 'RUNNING', claimedAt,
+      requestedFrom: new Date('2026-01-01T00:00:00.000Z'),
+      requestedTo: new Date('2026-01-02T00:00:00.000Z'),
+      lichessUserIdSnapshot: 'u1', checkpointJson: null,
+      scopeJson: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+      errorCode: null, error: null,
+    };
+    let failWrites = 0;
+    let fetchSignals = 0;
+    const repository = {
+      async getRun(appUserId, runId) {
+        assert.equal(appUserId, run.appUserId);
+        assert.equal(runId, run.id);
+        return run;
+      },
+      async failRun(id, lease, code, message) {
+        assert.equal(id, run.id);
+        assert.equal(lease, claimedAt);
+        failWrites += 1;
+        run.status = 'FAILED';
+        run.errorCode = code;
+        run.error = message;
+      },
+    };
+    const service = createLichessAccountImportService({
+      repository,
+      connectionService: {
+        async getCredentialForUser() {
+          return { lichessUserId: 'u1', username: 'Alice', accessToken: 'secret-credential-value', credentialGeneration: 'generation-1' };
+        },
+        async markCredentialRevokedForUser() { return true; },
+      },
+      fetchImpl: async (_url, init) => {
+        assert.equal(init.headers.Authorization, 'Bearer secret-credential-value');
+        assert.ok(init.signal instanceof AbortSignal, 'fetch must receive window deadline');
+        fetchSignals += 1;
+        if (stalledAt === 'headers') {
+          return new Promise((_resolve, reject) => {
+            init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+          });
+        }
+        return new Response(new ReadableStream({ start() {} }));
+      },
+      now: () => claimedAt,
+      providerWindowTimeoutMs: 30,
+    });
+
+    const result = await service.executeRun(run);
+    assert.equal(fetchSignals, 1, stalledAt);
+    assert.equal(failWrites, 1, stalledAt);
+    assert.equal(result.status, 'FAILED', stalledAt);
+    assert.equal(result.errorCode, 'PROVIDER_TIMEOUT', stalledAt);
+    assert.equal(result.error, 'Lichess import timed out. Retry the import.', stalledAt);
+    assert.equal(JSON.stringify(toImportRunResponse({
+      ...result,
+      requestedFrom: run.requestedFrom,
+      requestedTo: run.requestedTo,
+    })).includes('secret-credential-value'), false);
+  }
+});
