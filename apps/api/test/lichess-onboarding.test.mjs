@@ -71,18 +71,41 @@ async function appWithService(service = fakeService()) {
 }
 
 test('API latest and run/cancel use authenticated app user; unsafe and foreign run ids fail closed', async () => {
-  const app = await appWithService();
+  const calls = [];
+  const backing = fakeService();
+  const app = await appWithService({
+    ...backing,
+    getRun: async (...args) => {
+      calls.push(['get', ...args]);
+      return backing.getRun(...args);
+    },
+    cancelRun: async (...args) => {
+      calls.push(['cancel', ...args]);
+      return backing.cancelRun(...args);
+    },
+  });
   try {
     const latest = await app.inject({ method: 'GET', url: '/api/me/imports/lichess/latest' });
     assert.equal(latest.statusCode, 200);
     assert.deepEqual(latest.json(), { importRun: toImportRunResponse(storedRun()) });
-    for (const id of ['999', 'not-a-number', '9007199254740992', '05', '5e0', '0x5']) {
-      const response = await app.inject({ method: 'GET', url: '/api/me/imports/' + id });
-      assert.equal(response.statusCode, id === '999' ? 404 : 400);
+    for (const id of [
+      '999', '2147483647', 'not-a-number', '9007199254740992',
+      '9007199254740991', '2147483648', '05', '5e0', '0x5',
+      '%2B5', '0', '-5',
+    ]) {
+      for (const [method, suffix] of [['GET', ''], ['POST', '/cancel']]) {
+        const response = await app.inject({ method, url: '/api/me/imports/' + id + suffix });
+        assert.equal(response.statusCode, ['999', '2147483647'].includes(id) ? 404 : 400, method + ' ' + id + suffix);
+      }
     }
     const cancelled = await app.inject({ method: 'POST', url: '/api/me/imports/5/cancel' });
     assert.equal(cancelled.statusCode, 200);
     assert.equal(cancelled.json().importRun.status, 'CANCEL_REQUESTED');
+    assert.deepEqual(calls, [
+      ['get', 99, 999], ['cancel', 99, 999],
+      ['get', 99, 2_147_483_647], ['cancel', 99, 2_147_483_647],
+      ['cancel', 99, 5],
+    ], 'noncanonical and out-of-range IDs must never invoke import services');
   } finally { await app.close(); }
 });
 
