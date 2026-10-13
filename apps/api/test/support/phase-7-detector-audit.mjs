@@ -128,6 +128,7 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
       observedMotifCount: result.findings.filter((finding) => (
         finding.type === 'MISSED_TACTICAL_MOTIF'
         || finding.type === 'ALLOWED_TACTICAL_MOTIF'
+        || finding.type === 'OPPONENT_TACTICAL_MOTIF'
       )).length,
       coverageGapFlag: result.findings.some((finding) => finding.type === 'TACTICAL_MOTIF_COVERAGE_GAP'),
     };
@@ -151,7 +152,7 @@ export function buildDetectorAudit(data = corpus, detect = detectTacticalMotifEv
       testOracleAgreements: scopedLabels.filter((label) => label.agreesWithTestOracle).length,
       coverageAgreements: rows.filter((row) => row.coverageMatches).length,
       unexpectedMotifsDuringCoverageLoss: coverageExcludedCases
-        .filter((row) => row.observedMotifCount > 0).length,
+        .reduce((total, row) => total + row.observedMotifCount, 0),
       reviewedAssertions: 0,
       // Null, NOT zero: no independently reviewed reference labels exist.
       truePositives: null, falsePositives: null, falseNegatives: null,
