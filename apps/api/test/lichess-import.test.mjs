@@ -407,7 +407,7 @@ test('NDJSON reader accepts the exact byte limit and multiple records in a large
   const record = prefix + 'x'.repeat(MAX_LICHESS_NDJSON_RECORD_BYTES - Buffer.byteLength(prefix + suffix)) + suffix;
   assert.equal(Buffer.byteLength(record), MAX_LICHESS_NDJSON_RECORD_BYTES);
   const rows = [];
-  for await (const row of readLichessNdjson(new Response(record + '\\n' + '{"id":"next"}\\n'))) {
+  for await (const row of readLichessNdjson(new Response(record + '\n' + '{"id":"next"}\n'))) {
     rows.push(row);
   }
   assert.deepEqual(rows.map((row) => row.id), ['at-limit', 'next']);
@@ -424,7 +424,6 @@ test('NDJSON reader rejects fragmented oversized UTF-8 records before JSON parsi
     start(controller) {
       controller.enqueue(bytes.subarray(0, 31));
       controller.enqueue(bytes.subarray(31));
-      controller.close();
     },
     cancel() { cancelled = true; },
   }));
@@ -433,12 +432,11 @@ test('NDJSON reader rejects fragmented oversized UTF-8 records before JSON parsi
     (error) => error instanceof LichessNdjsonRecordTooLargeError && error.lineNumber === 1
       && error.message === 'Lichess returned oversized NDJSON on line 1.',
   );
-  // The stream may have already closed, but the reader must reject the record.
-  assert.equal(typeof cancelled, 'boolean');
+  assert.equal(cancelled, true, 'oversized records must cancel the upstream stream');
 });
 
 test('NDJSON reader preserves UTF-8 split across network chunks and CRLF boundaries', async () => {
-  const encoded = new TextEncoder().encode('{"id":"unicode","pgn":"é♟"}\\r\\n');
+  const encoded = new TextEncoder().encode('{"id":"unicode","pgn":"é♟"}\r\n');
   const middleOfUtf8 = encoded.indexOf(0xc3) + 1;
   assert.ok(middleOfUtf8 > 1);
   const response = new Response(new ReadableStream({
