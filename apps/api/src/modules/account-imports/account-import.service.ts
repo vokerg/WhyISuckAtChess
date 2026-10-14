@@ -335,12 +335,25 @@ function isInScope(game: ReturnType<typeof normalizeLichessGame>, window: Import
   return true;
 }
 
+// A malformed or stale Retry-After must not hot-loop a worker, and an
+// arbitrarily distant HTTP-date must not strand a deferred import for months.
+// Apply the same bounded backoff to both Retry-After formats.
+const MIN_RATE_LIMIT_RETRY_MS = 60_000;
+const MAX_RATE_LIMIT_RETRY_MS = 60 * 60 * 1000;
+
 function retryAtFromResponse(response: Response, now: Date): Date {
   const retryAfter = response.headers.get('retry-after');
-  const seconds = retryAfter ? Number(retryAfter) : NaN;
-  if (Number.isFinite(seconds) && seconds >= 0) return new Date(now.getTime() + Math.min(seconds, 3600) * 1000);
-  const date = retryAfter ? new Date(retryAfter) : null;
-  return date && !Number.isNaN(date.getTime()) ? date : new Date(now.getTime() + 60_000);
+  const seconds = retryAfter === null ? NaN : Number(retryAfter);
+  let delayMs = MIN_RATE_LIMIT_RETRY_MS;
+
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    delayMs = seconds * 1000;
+  } else if (retryAfter) {
+    const dateMs = Date.parse(retryAfter);
+    if (Number.isFinite(dateMs)) delayMs = dateMs - now.getTime();
+  }
+
+  return new Date(now.getTime() + Math.max(MIN_RATE_LIMIT_RETRY_MS, Math.min(MAX_RATE_LIMIT_RETRY_MS, delayMs)));
 }
 
 function sumCommitResults(
