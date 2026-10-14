@@ -82,6 +82,17 @@ export class LichessNdjsonRecordError extends Error {
   }
 }
 
+// Fail an import window rather than buffering an unbounded provider record.
+// This is a byte limit on one NDJSON line, not a global response or game cap.
+export const MAX_LICHESS_NDJSON_RECORD_BYTES = 2 * 1024 * 1024;
+
+export class LichessNdjsonRecordTooLargeError extends Error {
+  constructor(readonly lineNumber: number) {
+    super(`Lichess returned oversized NDJSON on line ${lineNumber}.`);
+    this.name = 'LichessNdjsonRecordTooLargeError';
+  }
+}
+
 export function buildLichessGamesRequestUrl(options: LichessGamesRequestOptions): string {
   if (options.to <= options.from) throw new Error('Lichess import window must be a non-empty half-open interval.');
 
@@ -103,43 +114,70 @@ export async function* readLichessNdjson(
   response: Response,
   signal?: AbortSignal,
 ): AsyncGenerator<LichessGame, void, void> {
-  if (!response.body) {
-    const text = await response.text();
-    if (!text.trim()) return;
-    yield parseNdjsonLine(text.trim(), 1);
-    return;
-  }
+  // An absent Response body contains no records; do not materialize a whole
+  // provider response via response.text() as an alternate unbounded path.
+  if (!response.body) return;
 
   const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  let chunks: Uint8Array[] = [];
+  let bufferedBytes = 0;
   let lineNumber = 0;
+  let completed = false;
+
+  const appendChunk = (chunk: Uint8Array) => {
+    if (chunk.byteLength > MAX_LICHESS_NDJSON_RECORD_BYTES - bufferedBytes) {
+      throw new LichessNdjsonRecordTooLargeError(lineNumber + 1);
+    }
+    if (chunk.byteLength) {
+      chunks.push(chunk);
+      bufferedBytes += chunk.byteLength;
+    }
+  };
+  const takeLine = (): string => {
+    const bytes = new Uint8Array(bufferedBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    chunks = [];
+    bufferedBytes = 0;
+    // Decode after finding byte-level newlines so UTF-8 sequences split
+    // across network chunks remain intact.
+    return new TextDecoder().decode(bytes).trim();
+  };
 
   try {
     while (true) {
       if (signal?.aborted) throw signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
-      // A signal check before reader.read() is insufficient: an upstream stream
-      // can stall forever with an outstanding read and no further chunks.
       const { done, value } = await readResponseChunk(reader, signal);
-      buffer += decoder.decode(value, { stream: !done });
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        lineNumber += 1;
-        yield parseNdjsonLine(trimmed, lineNumber);
+      if (done) {
+        const trimmed = takeLine();
+        completed = true;
+        if (trimmed) {
+          lineNumber += 1;
+          yield parseNdjsonLine(trimmed, lineNumber);
+        }
+        break;
       }
-      if (done) break;
-    }
 
-    const trimmed = buffer.trim();
-    if (trimmed) {
-      lineNumber += 1;
-      yield parseNdjsonLine(trimmed, lineNumber);
+      let start = 0;
+      for (let index = 0; index < value.byteLength; index += 1) {
+        if (value[index] !== 0x0a) continue; // LF (optional CR is trimmed)
+        appendChunk(value.subarray(start, index));
+        const trimmed = takeLine();
+        if (trimmed) {
+          lineNumber += 1;
+          yield parseNdjsonLine(trimmed, lineNumber);
+        }
+        start = index + 1;
+      }
+      appendChunk(value.subarray(start));
     }
   } finally {
-    if (signal?.aborted) void reader.cancel().catch(() => {});
+    // A rejected record or early consumer exit must stop the upstream stream;
+    // a completed response needs no cancellation.
+    if (!completed || signal?.aborted) void reader.cancel().catch(() => {});
     reader.releaseLock();
   }
 }
