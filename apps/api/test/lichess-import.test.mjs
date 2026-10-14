@@ -335,3 +335,65 @@ test('worker bounds both stalled provider headers and stalled NDJSON response bo
     })).includes('secret-credential-value'), false);
   }
 });
+
+test('provider rate-limit Retry-After seconds and HTTP-dates produce bounded durable deferrals', async () => {
+  const now = new Date('2026-10-14T06:00:00.000Z');
+  const cases = [
+    { label: 'numeric seconds', header: '120', delayMs: 120_000 },
+    { label: 'oversized numeric seconds', header: '86400', delayMs: 3_600_000 },
+    { label: 'valid HTTP-date', header: 'Wed, 14 Oct 2026 06:02:00 GMT', delayMs: 120_000 },
+    { label: 'distant HTTP-date', header: 'Thu, 15 Oct 2026 06:00:00 GMT', delayMs: 3_600_000 },
+    { label: 'past HTTP-date', header: 'Wed, 14 Oct 2026 05:00:00 GMT', delayMs: 60_000 },
+    { label: 'zero seconds', header: '0', delayMs: 60_000 },
+    { label: 'invalid header', header: 'not-a-date', delayMs: 60_000 },
+    { label: 'missing header', header: null, delayMs: 60_000 },
+  ];
+
+  for (const { label, header, delayMs } of cases) {
+    const claimedAt = new Date(now);
+    const run = {
+      id: 91, appUserId: 7, status: 'RUNNING', claimedAt, cancelRequestedAt: null,
+      requestedFrom: new Date('2026-01-01T00:00:00.000Z'),
+      requestedTo: new Date('2026-01-02T00:00:00.000Z'),
+      lichessUserIdSnapshot: 'u1', checkpointJson: null,
+      scopeJson: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+    };
+    let deferrals = 0;
+    const service = createLichessAccountImportService({
+      repository: {
+        async getRun(userId, runId) {
+          assert.equal(userId, 7);
+          assert.equal(runId, 91);
+          return run;
+        },
+        async deferRun(runId, lease, retryAt, code, message) {
+          assert.equal(runId, 91);
+          assert.equal(lease, claimedAt);
+          assert.equal(code, 'RATE_LIMITED');
+          assert.equal(message, 'Lichess rate-limited this import window.');
+          assert.equal(retryAt.getTime(), now.getTime() + delayMs, label);
+          run.status = 'QUEUED';
+          run.rateLimitUntil = retryAt;
+          deferrals += 1;
+        },
+        async failRun() { throw new Error('rate limiting must not fail the import'); },
+      },
+      connectionService: {
+        async getCredentialForUser() {
+          return { lichessUserId: 'u1', username: 'Alice', accessToken: 'test-secret', credentialGeneration: 'generation-1' };
+        },
+        async markCredentialRevokedForUser() { throw new Error('must not revoke credential'); },
+      },
+      fetchImpl: async () => new Response('', {
+        status: 429,
+        headers: header === null ? {} : { 'Retry-After': header },
+      }),
+      now: () => now,
+    });
+
+    const result = await service.executeRun(run);
+    assert.equal(result.status, 'QUEUED', label);
+    assert.equal(result.rateLimitUntil.toISOString(), new Date(now.getTime() + delayMs).toISOString(), label);
+    assert.equal(deferrals, 1, label);
+  }
+});
