@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../../auth/request-auth';
 import { LichessImportRequestSchema } from '@why-i-suck-at-chess/contracts';
 import { LichessCredentialUnavailableError } from '../lichess/lichess-connection.service';
-import { ActiveImportRunError } from './account-import.service';
+import { ActiveImportRunError, LichessImportRangeTooLargeError } from './account-import.service';
 import type { LichessAccountImportService } from './account-import.service';
 import { toImportRunResponse } from './account-import.service';
 
@@ -25,6 +25,9 @@ export async function registerAccountImportRoutes(app: FastifyInstance, service:
       });
       return reply.code(202).send({ importRun: toImportRunResponse(run) });
     } catch (error) {
+      if (error instanceof LichessImportRangeTooLargeError) {
+        return reply.code(400).send({ code: 'IMPORT_RANGE_TOO_LARGE', message: error.message });
+      }
       if (error instanceof ActiveImportRunError) {
         return reply.code(409).send({ code: 'ACTIVE_IMPORT', message: 'An import is already active.' });
       }
