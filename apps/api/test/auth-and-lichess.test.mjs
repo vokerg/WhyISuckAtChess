@@ -315,6 +315,71 @@ test('disconnect remains authoritative when a stored token is undecryptable', as
   assert.equal(fetched, false);
 });
 
+test('disconnect cannot be held by stalled Lichess revocation even if fetch ignores abort', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  let attempted = 0;
+  let capturedSignal;
+  const service = createLichessConnectionService({
+    store,
+    decrypt: fakeDecrypt,
+    tokenRevocationTimeoutMs: 15,
+    fetchImpl: async (_url, init) => {
+      attempted += 1;
+      assert.equal(init.method, 'DELETE');
+      capturedSignal = init.signal;
+      return new Promise(() => {}); // Deliberately ignores AbortSignal.
+    },
+  });
+
+  assert.deepEqual(await service.disconnectForUser(1), { disconnected: true });
+  assert.equal(attempted, 1);
+  assert.equal(capturedSignal.aborted, true);
+  assert.equal(await store.findConnectionForUser(1), null);
+});
+
+test('reconnect completes after superseded token revocation stalls', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  store.states.set('state-stalled-revoke', {
+    appUserId: 1,
+    provider: 'LICHESS',
+    state: 'state-stalled-revoke',
+    codeVerifier: 'verifier',
+    expiresAt: new Date('2026-09-07T05:10:00Z'),
+    consumed: false,
+  });
+  let capturedSignal;
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    encrypt: fakeEncrypt,
+    decrypt: fakeDecrypt,
+    tokenRevocationTimeoutMs: 15,
+    oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+    fetchImpl: async (url, init = {}) => {
+      if (init.method === 'DELETE') {
+        capturedSignal = init.signal;
+        return new Promise(() => {}); // Provider never completes the revoke.
+      }
+      if (String(url).endsWith('/api/token')) return jsonResponse({ access_token: 'new-token' });
+      if (String(url).endsWith('/api/account')) return jsonResponse({ id: 'lichess-1', username: 'TokenIdentity' });
+      throw new Error(`unexpected URL ${url}`);
+    },
+  });
+
+  await service.handleCallback({ state: 'state-stalled-revoke', code: 'code' });
+  const connection = await store.findConnectionForUser(1);
+  assert.ok(connection);
+  assert.equal(fakeDecrypt({
+    ciphertext: connection.accessTokenCiphertext,
+    iv: connection.accessTokenIv,
+    authTag: connection.accessTokenAuthTag,
+  }), 'new-token');
+  assert.equal(capturedSignal.aborted, true);
+  assert.notEqual(connection.credentialGeneration, 'generation-seed');
+});
+
 test('reconnect racing a slow disconnect cannot delete the freshly replaced credential', async () => {
   const store = new FakeLichessStore();
   seedConnection(store);
