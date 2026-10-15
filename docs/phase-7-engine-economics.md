@@ -93,7 +93,71 @@ resource/cost acceptance criteria. Historical native acceptance runs and
 their machine/binary details are linked in the real-engine gate document;
 none currently constitute a statistically useful economics sample.
 
-## 2. Required full-pipeline measurement plan (not completed)
+## 2. Bounded persisted-cache cold/warm probe (partial #126)
+
+The opt-in `scripts/phase-7-worker-cache-benchmark.mjs` supplies a **different
+measurement** from the five-FEN UCI-only microbaseline: it inserts one original
+four-ply 180+0 blitz PGN, indexes it with the production ply-index service,
+and processes it through the **real persisted Stockfish analysis service**
+against freshly migrated PostgreSQL. It then **requests reanalysis as a new
+durable run** with identical indexed source, engine identity, analysis version,
+settings hash, and actual cache rows. Without that new run, the normal
+already-complete scheduling path would skip work, making a "warm" result invalid.
+
+The cold run must report zero hits and all distinct positions as misses; the
+warm run must report all hits and zero misses. Both durable runs must have
+`SUCCEEDED/COMPLETE` coverage with all plies, one attempt, matching provenance,
+and unchanged `StockfishPositionAnalysis` row count after the warm run.
+The report includes wall-clock worker-cycle times **including engine startup**
+and Postgres persistence, indexed PGN time, database-reported queue/claim times,
+cache ratios, row counts, OS/engine identifiers, binary SHA-256 and database
+size before/after (affected by physical allocation; **not per-game storage
+economics**). The probe does not contact Lichess or run evidence/diagnosis.
+
+**Safety requirements:** explicit `RUN_PHASE7_CACHE_BENCHMARK=1`; an absolute
+`STOCKFISH_PATH`; a **local** dedicated DB whose name starts
+`why_chess_cache_benchmark_ci`, `_test`, or `_local`; an empty database
+after migrations; and an exclusive worker environment. The runner deletes
+only its generated user and positions. It runs one fixed four-ply sample at
+depth 6, MultiPV 1, one thread and 16 MiB hash, with 15-second UCI deadlines.
+Never point this probe at Neon, a shared or production database, or personal
+Lichess games.
+
+```sh
+# Create a separate, empty LOCAL database with the required benchmark name.
+export DATABASE_URL='postgresql://postgres:postgres@localhost:5432/why_chess_cache_benchmark_local'
+npm run db:migrate
+npm run build:api
+export RUN_PHASE7_CACHE_BENCHMARK=1
+export STOCKFISH_PATH=/usr/games/stockfish
+timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > phase-7-cache-probe.json
+node --test scripts/phase-7-worker-cache-policy.test.mjs
+```
+
+The dedicated native workflow creates a separate disposable PostgreSQL 16
+database for this probe so prior integration tests cannot contaminate a cold
+cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v1`.
+Inspect the **exact run/head** and its CPU/binary/environment before citing
+actual measured values; merely landing the script or passing a unit test is
+not a measurement. This narrow synthetic case cannot establish statistically
+representative distributions, process CPU/RSS, concurrency, queue saturation,
+provider ingestion, evidence/diagnosis throughput, or cloud capacity/cost. In
+particular, source clocks are absent, not silently reconstructed. Keep #126
+and the Phase 7 #128 pilot gate open until representative empirical work.
+
+### CRT reference / Why delta
+
+**Reference:** CRT `apps/api/benchmarks/onboarding-throughput-safe.mjs`
+uses an opt-in disposable-database guard, timed synthetic work and structured
+results. **Preserve:** isolation, measured rather than inferred durations,
+explicit provenance, and safe cleanup. **Change:** Why uses its own Lichess
+indexing and durable, version-keyed native Stockfish position cache and
+explicitly forces the second run to distinguish reuse from no-op scheduling.
+**Omit:** CRT's Chess.com workflows, WASM engine and provider-loading stress.
+**Future seam:** native pipeline benchmarks for representative strata,
+process-resource instrumentation, concurrency and recovery.
+
+## 3. Required full-pipeline measurement plan (not completed)
 
 Run on disposable PostgreSQL 16 with the recorded native engine configuration
 and a controlled CPU/memory environment. Only recorded, rights-cleared NDJSON
