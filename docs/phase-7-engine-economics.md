@@ -14,9 +14,11 @@ through 1.e4 e5 2.Nf3 Nc6) with the **production native UCI adapter**, not an
 engine double. It uses a single engine process, depth 6 (configurable 4–10),
 MultiPV 1, one thread, 16 MiB hash, and 15-second per-UCI-command deadline.
 Three sequential passes (configurable 1–8) provide 15 search-duration samples
-by default. The first pass is reported separately from subsequent searches,
-which might reuse **Stockfish's internal transposition hash**. This is **not**
-an experiment on Why's persisted position cache.
+by default. The first pass is reported separately from subsequent searches.
+The production adapter sends `ucinewgame` before **each** analysis, so no
+controlled transposition-hash reuse is being measured; any timing differences
+may reflect host or process warm-up. This is **not** an experiment on Why's
+persisted position cache.
 
 The report is machine-readable JSON, schema
 `phase-7-native-timing-microbaseline-v1`. It records per-search wall time,
@@ -57,7 +59,7 @@ differences without matching recorded provenance.
 | Measurement | Evidence | Interpretation |
 | --- | --- | --- |
 | Native engine wall-time distribution for 5 synthetic positions | Opt-in JSON from the dedicated workflow; confirm exact run/head before citing values | **Microbaseline only**, not a game/worker distribution |
-| Repeated in-process engine searches | First pass versus later passes in the same JSON | Stockfish hash effects may exist; **not** DB cache hits |
+| Repeated in-process engine searches | First pass versus later passes in the same JSON | `ucinewgame` is sent per search; timing variation is **not** a measured engine-hash or DB-cache hit rate |
 | Cold and warm persisted position cache | **Not yet measured** | Requires real DB-backed repeated position workloads |
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
 | CPU and peak RSS per engine/worker | **Not yet measured** | Host CPU model/RAM inventory is **not** process resource usage |
