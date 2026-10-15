@@ -73,7 +73,7 @@ The engine process session (including startup/teardown) took 136.773 ms.
 These are **one CI runner's five very short synthetic opening positions**
 and nearest-rank descriptive quantiles, not an independent game sample or
 an estimate of native Stockfish costs at production depth 16 / MultiPV 3.
-The subsequent doc-only corrections do not constitute a second measurement
+Subsequent non-runtime corrections do not constitute a second measurement
 run; preserve the original head reference when citing these timings.
 
 ### Evidence register
