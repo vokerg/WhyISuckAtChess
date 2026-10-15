@@ -1,6 +1,7 @@
 // Phase 7 #126: strictly opt-in, native Stockfish + persisted position-cache probe.
 // This uses one synthetic four-ply PGN in a fresh LOCAL disposable PostgreSQL DB.
 // Not an import/provider, representative throughput, or production-depth benchmark.
+import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { arch, cpus, platform, totalmem } from 'node:os';
@@ -8,6 +9,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { assertDisposableCacheBenchmarkUrl, validatedCacheRun } from './phase-7-worker-cache-policy.mjs';
+import { readLinuxStockfishProcessResources } from './phase-7-stockfish-process-metrics.mjs';
 
 const PGN = [
   '[Event "Phase 7 synthetic cache benchmark"]',
@@ -78,6 +80,7 @@ export async function runPersistedCacheProbe() {
   const { createStockfishEngine, settingsHash } = adapterModule;
   let userId = null;
   let positionIds = [];
+  const stockfishChildReports = [];
   try {
     await assertEmptyBenchmarkDatabase(prisma);
     const dbSizeBeforeBytes = await sizeOfDatabase(prisma);
@@ -128,22 +131,52 @@ export async function runPersistedCacheProbe() {
       analysisVersion: ANALYSIS_VERSION,
       settings: SETTINGS,
       workerId: 'phase7-cache-benchmark-' + suffix,
-      engineFactory: () => createStockfishEngine({
-        binaryPath, settings: SETTINGS, commandTimeoutMs: 15_000,
-      }),
+      engineFactory: async () => {
+        let childPid = null;
+        const engine = await createStockfishEngine({
+          binaryPath, settings: SETTINGS, commandTimeoutMs: 15_000,
+          spawnProcess: (path) => {
+            const child = spawn(path, [], { stdio: 'pipe' });
+            childPid = child.pid;
+            return child;
+          },
+        });
+        return {
+          engineName: engine.engineName,
+          engineVersion: engine.engineVersion,
+          analyzeFen: (fen) => engine.analyzeFen(fen),
+          async close() {
+            // Sample BEFORE closing/killing the native child. Linux VmHWM is
+            // process-lifetime peak RSS, not a one-time current RSS snapshot.
+            // Includes native startup/idle overhead even on an all-cache-hit run.
+            try {
+              stockfishChildReports.push(platform() === 'linux'
+                ? await readLinuxStockfishProcessResources(childPid)
+                : null);
+            } finally {
+              await engine.close();
+            }
+          },
+        };
+      },
     });
 
     async function measureRun(expectedId) {
+      const reportsBefore = stockfishChildReports.length;
       const started = performance.now();
       const claimed = await service.runOnce();
       const wallMs = roundMs(performance.now() - started);
       if (!claimed) throw new Error('Benchmark worker did not claim its queued run.');
+      if (stockfishChildReports.length !== reportsBefore + 1) {
+        throw new Error('Benchmark did not capture exactly one native child resource sample.');
+      }
       const persisted = await prisma.gameAnalysisRun.findUniqueOrThrow({
         where: { id: expectedId },
       });
       return {
         ...validatedCacheRun(persisted),
         workerCycleWallMs: wallMs,
+        stockfishChildResources: stockfishChildReports.at(-1),
         sourcePlyIndexedAt: persisted.sourcePlyIndexedAt?.toISOString(),
         analysisVersion: persisted.analysisVersion,
         settingsHash: persisted.settingsHash,
@@ -176,7 +209,7 @@ export async function runPersistedCacheProbe() {
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v1',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v2',
       observedAtUtc: new Date().toISOString(),
       measurementKind: 'SYNTHETIC_SINGLE_GAME_DB_CACHE_COLD_WARM',
       environment: {
@@ -214,7 +247,7 @@ export async function runPersistedCacheProbe() {
         'real Lichess provider import and evidence/diagnosis throughput',
         'representative bullet/blitz/rapid game distributions and clock coverage',
         'production depth-16/MultiPV-3 resource use',
-        'native Stockfish child CPU/peak RSS',
+        'Node worker process CPU/RSS and database server process CPU/RSS',
         'concurrency, saturation, cancellation/backlog, retry/recovery economics',
         'cloud pricing, per-1k-game cost or pilot capacity',
       ],
