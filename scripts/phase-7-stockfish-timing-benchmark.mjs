@@ -1,5 +1,6 @@
 // Opt-in, real-binary wall-clock microbaseline for Phase 7 #126.
 // This is NOT the Lichess -> DB worker throughput/economics acceptance gate.
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { arch, cpus, platform, totalmem } from 'node:os';
@@ -11,6 +12,7 @@ import {
   settingsHash,
 } from '../apps/api/dist/modules/engine-analysis/stockfish.adapter.js';
 import { summarizeDurationMs } from './phase-7-benchmark-statistics.mjs';
+import { sampleNativeChildProcessResources } from './phase-7-stockfish-child-resources.mjs';
 
 // All positions arise from e4 e5 Nf3 Nc6. No Lichess accounts, requests, or user data.
 const POSITIONS = Object.freeze([
@@ -60,10 +62,17 @@ export async function runNativeTimingBaseline() {
   // analyzeFen sends ucinewgame before each search, so these repeats do not
   // deliberately reuse the engine's transposition hash. Differences may
   // reflect process/host warm-up, not the application's persisted cache.
+  let childPid = null;
+  let nativeChildResources = null;
   const engine = await createStockfishEngine({
     binaryPath,
     settings,
     commandTimeoutMs: 15_000,
+    spawnProcess: (command) => {
+      const child = spawn(command, [], { stdio: 'pipe' });
+      childPid = child.pid ?? null;
+      return child;
+    },
   });
   try {
     for (let pass = 0; pass < passes; pass += 1) {
@@ -82,6 +91,8 @@ export async function runNativeTimingBaseline() {
         });
       }
     }
+    // Sample while the same native child is still alive; close() terminates it.
+    nativeChildResources = await sampleNativeChildProcessResources(childPid);
   } finally {
     await engine.close();
   }
@@ -112,12 +123,13 @@ export async function runNativeTimingBaseline() {
       firstPass: summarizeDurationMs(first),
       repeatedPasses: later.length ? summarizeDurationMs(later) : null,
       allSearches: summarizeDurationMs(samples.map((row) => row.wallMs)),
+      nativeChildResources,
       samples,
     },
     notMeasured: [
       'Lichess import/index/DB/evidence/diagnosis worker throughput',
       'application persisted position-cache cold/warm hit rate',
-      'Stockfish child CPU-time and peak resident memory',
+      'per-game Stockfish child CPU-time/peak RSS (only the aggregate synthetic session is sampled)',
       'worker concurrency, cancellation/backlog, recovery cost',
       'representative user-game length/time-control distribution',
       'cloud infrastructure cost or per-game capacity',
