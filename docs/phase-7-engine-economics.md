@@ -82,7 +82,7 @@ run; preserve the original head reference when citing these timings.
 | --- | --- | --- |
 | Native engine wall-time distribution for 5 synthetic positions | Opt-in JSON from the dedicated workflow; confirm exact run/head before citing values | **Microbaseline only**, not a game/worker distribution |
 | Repeated in-process engine searches | First pass versus later passes in the same JSON | `ucinewgame` is sent per search; timing variation is **not** a measured engine-hash or DB-cache hit rate |
-| Cold and warm persisted position cache | **Not yet measured** | Requires real DB-backed repeated position workloads |
+| Cold and warm persisted position cache | **One synthetic four-ply game measured** in [native run #38788784797](https://github.com/vokerg/WhyISuckAtChess/actions/runs/38788784797): cold 0/5 hits, warm 5/5 hits | Real DB-cache behavior on one game only, not a representative hit-rate distribution |
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
 | CPU and peak RSS per engine/worker | **Partial, opt-in Linux native child sampling** during the single-game persisted-cache probe; no representative distribution or worker/DB process accounting | Real `/proc` child counters are distinct from host inventory; small depth-6 samples cannot bound production depth-16 or workload costs |
 | Concurrent workers, cancellation, backlog, recovery | **Not yet measured** | Crash tests establish bounded behavior, not performance under load |
@@ -117,10 +117,12 @@ Stockfish child process's** cumulative user/system CPU ticks converted to
 milliseconds using the host's `getconf CLK_TCK`, plus its kernel-reported
 `VmHWM` peak resident bytes from `/proc/<pid>/status`. Sampling happens
 before the native process closes on **each** cold/warm worker cycle, including
-startup overhead on a cache hit. It does not measure Node worker or PostgreSQL
+startup overhead on a cache hit. The short `getconf` and `/proc` sampling
+cost is included in the reported worker-cycle wall clock. It does not measure Node worker or PostgreSQL
 process CPU/RSS. CPU-time resolution is limited by kernel ticks and results
 may show zero CPU time for very short work; values are **not** per-position
-measurements. Non-Linux runs return null resources explicitly. The probe does not contact Lichess or run evidence/diagnosis.
+measurements. Non-Linux runs return null resources explicitly. The probe does
+not contact Lichess or run evidence/diagnosis.
 
 **Safety requirements:** explicit `RUN_PHASE7_CACHE_BENCHMARK=1`; an absolute
 `STOCKFISH_PATH`; a **local** dedicated DB whose name starts
@@ -148,8 +150,9 @@ cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v2`.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
 not a measurement. This narrow synthetic case cannot establish statistically
-representative distributions, Node/DB CPU/RSS and representative child CPU/RSS, concurrency, queue saturation,
-provider ingestion, evidence/diagnosis throughput, or cloud capacity/cost. In
+representative distributions, Node/DB CPU/RSS and representative child CPU/RSS,
+concurrency, queue saturation, provider ingestion, evidence/diagnosis throughput,
+or cloud capacity/cost. In
 particular, source clocks are absent, not silently reconstructed. Keep #126
 and the Phase 7 #128 pilot gate open until representative empirical work.
 
