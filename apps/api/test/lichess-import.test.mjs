@@ -119,6 +119,40 @@ test('Lichess import planning bounds extreme but valid ISO-date ranges before al
   assert.throws(() => planImportWindows(new Date('invalid'), maxTo), /Import end must be after import start/);
 });
 
+test('worker durably fails an invalid legacy history range without starting provider work', async () => {
+  const claimedAt = new Date('2026-10-15T04:00:00.000Z');
+  const run = {
+    id: 152, appUserId: 7, claimedAt, status: 'RUNNING', cancelRequestedAt: null,
+    requestedFrom: new Date('2000-01-01T00:00:00.000Z'),
+    requestedTo: new Date('2026-10-01T00:00:00.000Z'),
+    lichessUserIdSnapshot: 'u1', checkpointJson: null,
+  };
+  let failures = 0;
+  const service = createLichessAccountImportService({
+    repository: {
+      async getRun() { return run; },
+      async failRun(id, lease, code, message) {
+        assert.equal(id, run.id);
+        assert.equal(lease, claimedAt);
+        assert.equal(code, 'IMPORT_FAILED');
+        assert.equal(message, 'Lichess import failed. Retry the import.');
+        failures += 1;
+        run.status = 'FAILED';
+      },
+    },
+    connectionService: {
+      async getCredentialForUser() {
+        return { lichessUserId: 'u1', username: 'Alice', accessToken: 'test', credentialGeneration: 'generation-1' };
+      },
+    },
+    fetchImpl: async () => { throw new Error('invalid durable work must not call Lichess'); },
+    now: () => claimedAt,
+  });
+  const result = await service.executeRun(run);
+  assert.equal(result.status, 'FAILED');
+  assert.equal(failures, 1);
+});
+
 test('worker executor sends the connected credential and commits source games', async () => {
   const from = new Date('2026-01-01T00:00:00.000Z');
   const to = new Date('2026-01-02T00:00:00.000Z');
