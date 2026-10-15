@@ -57,8 +57,9 @@ export async function runNativeTimingBaseline() {
   const totalStart = performance.now();
 
   // One process per run, just like the current native acceptance fixture.
-  // Repeated engine searches can hit Stockfish's internal hash; they do NOT
-  // exercise the application's persisted position cache.
+  // analyzeFen sends ucinewgame before each search, so these repeats do not
+  // deliberately reuse the engine's transposition hash. Differences may
+  // reflect process/host warm-up, not the application's persisted cache.
   const engine = await createStockfishEngine({
     binaryPath,
     settings,
