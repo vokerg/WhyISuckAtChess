@@ -12,6 +12,9 @@ on:
       - 'scripts/phase-7-stockfish-timing-benchmark.mjs'
       - 'scripts/phase-7-stockfish-timing-benchmark.test.mjs'
       - 'scripts/phase-7-benchmark-statistics.mjs'
+      - 'scripts/phase-7-worker-cache-benchmark.mjs'
+      - 'scripts/phase-7-worker-cache-policy.mjs'
+      - 'scripts/phase-7-worker-cache-policy.test.mjs'
       - '.github/workflows/real-stockfish-acceptance.yml'
 
 jobs:
@@ -74,3 +77,17 @@ jobs:
           timeout 120s node scripts/phase-7-stockfish-timing-benchmark.mjs > /tmp/phase7-native-timing.json
           node -e "const x=require('/tmp/phase7-native-timing.json'); if(x.schemaVersion!=='phase-7-native-timing-microbaseline-v1'||x.results.allSearches.count!==15||!x.environment.stockfishBinarySha256) process.exit(1)"
           cat /tmp/phase7-native-timing.json
+      - name: Create isolated PostgreSQL database for persisted cache probe
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE why_chess_cache_benchmark_ci'
+      - name: Run real persisted Stockfish cold/warm cache probe (synthetic, not pilot economics)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_chess_cache_benchmark_ci
+          RUN_PHASE7_CACHE_BENCHMARK: '1'
+        run: |
+          npm run db:migrate
+          timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > /tmp/phase7-db-cache.json
+          node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v1'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal) process.exit(1)"
+          cat /tmp/phase7-db-cache.json
