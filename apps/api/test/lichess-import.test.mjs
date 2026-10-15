@@ -8,7 +8,13 @@ import {
   normalizeLichessGame,
   readLichessNdjson,
 } from '../dist/modules/account-imports/providers/lichess/lichess-account-import.js';
-import { createLichessAccountImportService, planImportWindows, toImportRunResponse } from '../dist/modules/account-imports/account-import.service.js';
+import {
+  createLichessAccountImportService,
+  LichessImportRangeTooLargeError,
+  MAX_LICHESS_IMPORT_WINDOWS,
+  planImportWindows,
+  toImportRunResponse,
+} from '../dist/modules/account-imports/account-import.service.js';
 import {
   decideClockSequence,
   ImportLeaseLostError,
@@ -91,6 +97,60 @@ test('window planning keeps contiguous half-open coverage', () => {
   for (let index = 1; index < windows.length; index += 1) {
     assert.equal(windows[index - 1].to.toISOString(), windows[index].from.toISOString());
   }
+});
+
+test('Lichess import planning bounds extreme but valid ISO-date ranges before allocating windows', () => {
+  const from = new Date('2026-01-01T00:00:00.000Z');
+  const windowMs = 30 * 24 * 60 * 60 * 1000;
+  const maxTo = new Date(from.getTime() + MAX_LICHESS_IMPORT_WINDOWS * windowMs);
+  const within = planImportWindows(from, maxTo);
+  assert.equal(within.length, MAX_LICHESS_IMPORT_WINDOWS);
+  assert.equal(within.at(-1).to.toISOString(), maxTo.toISOString());
+  assert.throws(
+    () => planImportWindows(from, new Date(maxTo.getTime() + 1)),
+    (error) => error instanceof LichessImportRangeTooLargeError
+      && error.message === 'Import range exceeds 256 windows.',
+  );
+  assert.throws(
+    () => planImportWindows(new Date('2000-01-01T00:00:00.000Z'), new Date('9999-01-01T00:00:00.000Z')),
+    LichessImportRangeTooLargeError,
+  );
+  assert.throws(() => planImportWindows(from, maxTo, 0), /positive safe integer/);
+  assert.throws(() => planImportWindows(new Date('invalid'), maxTo), /Import end must be after import start/);
+});
+
+test('worker durably fails an invalid legacy history range without starting provider work', async () => {
+  const claimedAt = new Date('2026-10-15T04:00:00.000Z');
+  const run = {
+    id: 152, appUserId: 7, claimedAt, status: 'RUNNING', cancelRequestedAt: null,
+    requestedFrom: new Date('2000-01-01T00:00:00.000Z'),
+    requestedTo: new Date('2026-10-01T00:00:00.000Z'),
+    lichessUserIdSnapshot: 'u1', checkpointJson: null,
+  };
+  let failures = 0;
+  const service = createLichessAccountImportService({
+    repository: {
+      async getRun() { return run; },
+      async failRun(id, lease, code, message) {
+        assert.equal(id, run.id);
+        assert.equal(lease, claimedAt);
+        assert.equal(code, 'IMPORT_FAILED');
+        assert.equal(message, 'Lichess import failed. Retry the import.');
+        failures += 1;
+        run.status = 'FAILED';
+      },
+    },
+    connectionService: {
+      async getCredentialForUser() {
+        return { lichessUserId: 'u1', username: 'Alice', accessToken: 'test', credentialGeneration: 'generation-1' };
+      },
+    },
+    fetchImpl: async () => { throw new Error('invalid durable work must not call Lichess'); },
+    now: () => claimedAt,
+  });
+  const result = await service.executeRun(run);
+  assert.equal(result.status, 'FAILED');
+  assert.equal(failures, 1);
 });
 
 test('worker executor sends the connected credential and commits source games', async () => {

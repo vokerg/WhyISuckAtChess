@@ -13,7 +13,8 @@
 | Authentication configuration | Dev-single-user mode explicitly gated outside production; Clerk requests authenticated | `auth-config.test.mjs`, `auth-and-lichess.test.mjs` | Existing checks; deployed configuration review pending |
 | Import errors, retries and cancellation | Recover safely from malformed source, provider errors, cancellation and stale work | `lichess-import.test.mjs`, `diagnosis-worker-acceptance.test.mjs` | Partial; transient-provider failure matrix pending |
 | Lichess provider 429 rate-limit retry | A provider-supplied `Retry-After` cannot defer a run indefinitely or cause an immediate retry loop; numeric and HTTP-date values have the same 60-second to one-hour bounds | `lichess-import.test.mjs`: controlled 429 responses, numeric/date/invalid/past/missing headers, lease-scoped `deferRun` and durable retry timestamp | Scoped regression in PR; exact-head CI and independent review pending |
-| Oversized Lichess NDJSON records | Streaming reader rejects one provider record above 2 MiB of UTF-8 bytes before string concatenation or JSON parsing; no silent dropping or checkpoint advancement | `lichess-import.test.mjs`: exact boundary, fragmented multi-byte overrun, split UTF-8 and worker failure/status regression | Scoped resource bound in PR; CI/review pending; chunk allocation and whole-window workloads not benchmarked |
+| Oversized Lichess NDJSON records | Streaming reader rejects one provider record above 2 MiB of UTF-8 bytes before string concatenation or JSON parsing; no silent dropping or checkpoint advancement | `lichess-import.test.mjs`: exact boundary, fragmented multi-byte overrun, split UTF-8 and worker failure/status regression | PR #150 squash-merged after exact-head CI #38515695916 passed both jobs; chunk allocation and whole-window workloads not benchmarked |
+| Oversized Lichess history requests | User-selected valid ISO date spans must not allocate or persist unbounded 30-day provider windows | `lichess-import.test.mjs`: 256-window edge and pathological date range; `lichess-onboarding.test.mjs`: API 400 with no `createRun` invocation | PR #151 squash-merged after exact-head CI #38679286453 passed both jobs and scoped patch review; not a per-window throughput or storage budget |
 | Stalled Lichess export response | Provider header and NDJSON body read must terminate within one bounded window; preserve lease-fenced failure and safe status text | `lichess-import.test.mjs`: controlled never-resolving headers and body stream, real abort signal and `PROVIDER_TIMEOUT` status, plus direct pending-read abort | Scoped timeout regression; exact-head CI/review pending; broader outage/retry matrix pending |
 | Native Stockfish process failure | No stale evidence survives native process kill or worker recovery | `docs/phase-7-real-stockfish-acceptance.md`; opt-in native CI | Separate #123 gate, not re-executed here |
 | Import failure persistence into browser-visible run status | Unexpected credential-adapter and provider exception text must never be serialized as import status; preserve stable failure codes | `apps/api/test/lichess-import.test.mjs`: injected token-bearing credential and fetch exceptions, asserted `AUTH_REQUIRED`/`IMPORT_FAILED` and no token in `toImportRunResponse` | PR #146 merged after both exact-head CI jobs passed; historical errors remain unmodified |
@@ -67,6 +68,27 @@ The focused unit test injects 429 responses with near/far/past HTTP dates and nu
 A single provider NDJSON line previously accumulated without limit in the import reader. A malformed or adversarial game/PGN field could force unbounded application-side line buffering before JSON parsing, independently of the ten-minute export deadline. The streaming reader now enforces a conservative **2 MiB UTF-8 byte cap per record**, checking each segment before buffering or parsing; newline-delimited *collections* of legitimate smaller records may exceed this total. A split UTF-8 character is decoded only after a complete line is assembled. Any oversized record stops the window with stable `PROVIDER_RECORD_TOO_LARGE` status and a line number, rather than silently dropping a source game. The upstream reader is cancelled on error/early exit.
 
 Committed batches from earlier in the window remain idempotent through the existing repository path; the window checkpoint does not advance on oversize. The cap is an engineering safety policy, **not a measured Lichess payload limit**, and unusually large legitimate provider records require explicit follow-up rather than truncation. This scope does not bound one upstream network chunk already allocated by Fetch, per-window game count/CPU, all normalization costs, or concurrent-worker memory. Controlled fixture and CI evidence are not real-provider or operational throughput measurements. #127 remains open.
+
+## Follow-up: bound oversized import history ranges
+
+The authenticated import endpoint accepts explicit ISO timestamp bounds and previously
+planned the entire range into 30-day windows without a count limit. Even a syntactically
+valid start in year 2000 and an end in year 9999 could allocate excessive in-memory work
+and persist a long-lived job, despite the per-provider-window deadline and per-record
+NDJSON cap. This is an adversarial input risk, not an observed workload incident.
+
+The planner now rejects requests that would exceed **256 windows** (approximately 21
+years at 30 days each) before creating a run. The API returns stable HTTP 400
+`IMPORT_RANGE_TOO_LARGE` without echoing input or exposing another user's state.
+Defaults remain 30 days, and valid wider backfills are supported within the cap.
+The planner also rejects invalid dates and nonpositive window sizes. Previously
+persisted malformed/oversized ranges enter the worker's lease-fenced failure handling
+instead of crashing before it can record a safe failure.
+
+The engineering cap is not evidence of provider-side maximum history or acceptable
+total import cost. Large but permitted accounts, pending queue backlog, concurrent
+workers, real Clerk ownership, and provider outages still require the Phase 7 #127/#126
+resilience and economics gates. Tests are synthetic; no live Lichess or Neon data is used.
 
 ## Follow-up: bound best-effort Lichess token revocation
 
