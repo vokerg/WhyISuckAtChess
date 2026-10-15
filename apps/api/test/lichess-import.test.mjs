@@ -8,7 +8,13 @@ import {
   normalizeLichessGame,
   readLichessNdjson,
 } from '../dist/modules/account-imports/providers/lichess/lichess-account-import.js';
-import { createLichessAccountImportService, planImportWindows, toImportRunResponse } from '../dist/modules/account-imports/account-import.service.js';
+import {
+  createLichessAccountImportService,
+  LichessImportRangeTooLargeError,
+  MAX_LICHESS_IMPORT_WINDOWS,
+  planImportWindows,
+  toImportRunResponse,
+} from '../dist/modules/account-imports/account-import.service.js';
 import {
   decideClockSequence,
   ImportLeaseLostError,
@@ -91,6 +97,26 @@ test('window planning keeps contiguous half-open coverage', () => {
   for (let index = 1; index < windows.length; index += 1) {
     assert.equal(windows[index - 1].to.toISOString(), windows[index].from.toISOString());
   }
+});
+
+test('Lichess import planning bounds extreme but valid ISO-date ranges before allocating windows', () => {
+  const from = new Date('2026-01-01T00:00:00.000Z');
+  const windowMs = 30 * 24 * 60 * 60 * 1000;
+  const maxTo = new Date(from.getTime() + MAX_LICHESS_IMPORT_WINDOWS * windowMs);
+  const within = planImportWindows(from, maxTo);
+  assert.equal(within.length, MAX_LICHESS_IMPORT_WINDOWS);
+  assert.equal(within.at(-1).to.toISOString(), maxTo.toISOString());
+  assert.throws(
+    () => planImportWindows(from, new Date(maxTo.getTime() + 1)),
+    (error) => error instanceof LichessImportRangeTooLargeError
+      && error.message === 'Import range exceeds 256 windows.',
+  );
+  assert.throws(
+    () => planImportWindows(new Date('2000-01-01T00:00:00.000Z'), new Date('9999-01-01T00:00:00.000Z')),
+    LichessImportRangeTooLargeError,
+  );
+  assert.throws(() => planImportWindows(from, maxTo, 0), /positive safe integer/);
+  assert.throws(() => planImportWindows(new Date('invalid'), maxTo), /Import end must be after import start/);
 });
 
 test('worker executor sends the connected credential and commits source games', async () => {
