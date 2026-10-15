@@ -251,6 +251,36 @@ test('OAuth token exchange deadline bounds a fetch that ignores abort and preser
   assert.equal((await store.findConnectionForUser(1)).accessTokenCiphertext, 'enc:old-token');
 });
 
+test('abort-aware OAuth token fetch is classified as timeout without exposing adapter details', async () => {
+  const store = new FakeLichessStore();
+  store.states.set('state-abort-aware', {
+    appUserId: 1, provider: 'LICHESS', state: 'state-abort-aware',
+    codeVerifier: 'verifier', expiresAt: new Date('2026-09-07T05:10:00Z'), consumed: false,
+  });
+  let capturedSignal;
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+    oauthProviderTimeoutMs: 15,
+    fetchImpl: async (_url, init) => {
+      capturedSignal = init.signal;
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('private-token adapter abort detail')), { once: true });
+      });
+    },
+  });
+  await assert.rejects(
+    service.handleCallback({ state: 'state-abort-aware', code: 'private-code' }),
+    (error) => error instanceof LichessOAuthError
+      && /Request timed out/.test(error.message)
+      && !error.message.includes('private-token')
+      && !error.message.includes('private-code'),
+  );
+  assert.equal(capturedSignal.aborted, true);
+  assert.equal(await store.findConnectionForUser(1), null);
+});
+
 for (const stalledAt of ['headers', 'json-body']) {
   test(`OAuth account ${stalledAt} deadline aborts and cleans up newly issued token without replacing connection`, async () => {
     const store = new FakeLichessStore();

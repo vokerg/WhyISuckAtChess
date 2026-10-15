@@ -278,8 +278,10 @@ export function createLichessConnectionService(options: LichessConnectionService
   ): Promise<T> => {
     const controller = new AbortController();
     let deadlineHandle: ReturnType<typeof setTimeout> | undefined;
+    let didTimeout = false;
     const deadline = new Promise<never>((_, reject) => {
       deadlineHandle = setTimeout(() => {
+        didTimeout = true;
         controller.abort();
         reject(new LichessOAuthError(`${safeFailureMessage} Request timed out.`));
       }, oauthProviderTimeoutMs);
@@ -287,6 +289,8 @@ export function createLichessConnectionService(options: LichessConnectionService
     try {
       return await Promise.race([operation(controller.signal), deadline]);
     } catch (error) {
+      // An abort-aware fetch may reject before the deadline promise settles.
+      if (didTimeout) throw new LichessOAuthError(`${safeFailureMessage} Request timed out.`);
       if (error instanceof LichessOAuthError) throw error;
       // Adapter/HTTP parsing failures may contain credentials or OAuth code.
       throw new LichessOAuthError(safeFailureMessage);
