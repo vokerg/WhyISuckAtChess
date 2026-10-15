@@ -54,6 +54,28 @@ on Ubuntu 24.04 with apt `stockfish=16-1build1` and PostgreSQL 16.
 Its logs contain the measured JSON; do not extrapolate across runner/CPU/binary
 differences without matching recorded provenance.
 
+### First observed native CI sample (illustrative; not economics acceptance)
+
+Dedicated [real-Stockfish workflow run #38708355101](https://github.com/vokerg/WhyISuckAtChess/actions/runs/38708355101)
+passed against benchmark commit `a9c7d848f3e558c349696841a0ffc65a3549f2b3`.
+Its recorded environment was Ubuntu 24.04 x64, 4 logical CPUs (AMD EPYC
+9V74), Node 22.23.3, and Stockfish 16 apt package `16-1build1` (binary
+SHA-256 `00628bd9c9855c1b7ff93d7f8d51b413586cdc6336fe637f9a14a61531a05aca`).
+Engine configuration: depth 6, MultiPV 1, 1 thread, 16 MiB hash.
+
+| Sample | Count | p50 wall ms | p95 wall ms | Mean wall ms |
+| --- | ---: | ---: | ---: | ---: |
+| First pass | 5 | 1.829 | 2.566 | — |
+| Subsequent passes | 10 | 1.443 | 2.209 | — |
+| All searches | 15 | 1.561 | 2.566 | 1.723 |
+
+The engine process session (including startup/teardown) took 136.773 ms.
+These are **one CI runner's five very short synthetic opening positions**
+and nearest-rank descriptive quantiles, not an independent game sample or
+an estimate of native Stockfish costs at production depth 16 / MultiPV 3.
+The subsequent doc-only corrections do not constitute a second measurement
+run; preserve the original head reference when citing these timings.
+
 ### Evidence register
 
 | Measurement | Evidence | Interpretation |
