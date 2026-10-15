@@ -9,6 +9,9 @@ on:
       - 'apps/api/test/pipeline-acceptance.test.mjs'
       - 'apps/api/test/native-worker-restart.test.mjs'
       - 'apps/api/src/modules/engine-analysis/**'
+      - 'scripts/phase-7-stockfish-timing-benchmark.mjs'
+      - 'scripts/phase-7-stockfish-timing-benchmark.test.mjs'
+      - 'scripts/phase-7-benchmark-statistics.mjs'
       - '.github/workflows/real-stockfish-acceptance.yml'
 
 jobs:
@@ -64,3 +67,10 @@ jobs:
         run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
       - name: Run isolated native Node worker crash and lease recovery (depth 6, 1 thread)
         run: timeout 120s node --test apps/api/test/native-worker-restart.test.mjs
+      - name: Run synthetic Phase 7 native timing microbaseline (not worker economics)
+        env:
+          RUN_PHASE7_ENGINE_BENCHMARK: '1'
+        run: |
+          timeout 120s node scripts/phase-7-stockfish-timing-benchmark.mjs > /tmp/phase7-native-timing.json
+          node -e "const x=require('/tmp/phase7-native-timing.json'); if(x.schemaVersion!=='phase-7-native-timing-microbaseline-v1'||x.results.allSearches.count!==15||!x.environment.stockfishBinarySha256) process.exit(1)"
+          cat /tmp/phase7-native-timing.json
