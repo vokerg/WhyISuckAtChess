@@ -217,6 +217,88 @@ test('OAuth callback consumes state once and persists identity from the authenti
   assert.equal(calls.length, 2);
 });
 
+test('OAuth token exchange deadline bounds a fetch that ignores abort and preserves existing connection', async () => {
+  const store = new FakeLichessStore();
+  seedConnection(store);
+  store.states.set('state-token-stall', {
+    appUserId: 1, provider: 'LICHESS', state: 'state-token-stall',
+    codeVerifier: 'verifier', expiresAt: new Date('2026-09-07T05:10:00Z'), consumed: false,
+  });
+  let signal;
+  let calls = 0;
+  const service = createLichessConnectionService({
+    store,
+    now: () => new Date('2026-09-07T05:00:00Z'),
+    oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+    oauthProviderTimeoutMs: 15,
+    fetchImpl: async (url, init = {}) => {
+      assert.ok(String(url).endsWith('/api/token'));
+      assert.equal(init.method, 'POST');
+      calls += 1;
+      signal = init.signal;
+      return new Promise(() => {}); // Deliberately ignores abort.
+    },
+  });
+  await assert.rejects(
+    service.handleCallback({ state: 'state-token-stall', code: 'private-oauth-code' }),
+    (error) => error instanceof LichessOAuthError
+      && /Request timed out/.test(error.message)
+      && !error.message.includes('private-oauth-code'),
+  );
+  assert.equal(calls, 1);
+  assert.equal(signal.aborted, true);
+  assert.equal(store.states.get('state-token-stall').consumed, true);
+  assert.equal((await store.findConnectionForUser(1)).accessTokenCiphertext, 'enc:old-token');
+});
+
+for (const stalledAt of ['headers', 'json-body']) {
+  test(`OAuth account ${stalledAt} deadline aborts and cleans up newly issued token without replacing connection`, async () => {
+    const store = new FakeLichessStore();
+    seedConnection(store);
+    store.states.set('state-account-stall', {
+      appUserId: 1, provider: 'LICHESS', state: 'state-account-stall',
+      codeVerifier: 'verifier', expiresAt: new Date('2026-09-07T05:10:00Z'), consumed: false,
+    });
+    let signal;
+    let revoked = 0;
+    const service = createLichessConnectionService({
+      store,
+      now: () => new Date('2026-09-07T05:00:00Z'),
+      oauthConfig: { clientId: 'why-client', redirectUri: 'http://localhost/callback' },
+      decrypt: fakeDecrypt,
+      oauthProviderTimeoutMs: 15,
+      fetchImpl: async (url, init = {}) => {
+        if (init.method === 'DELETE') {
+          assert.equal(init.headers.Authorization, 'Bearer newly-issued-token');
+          revoked += 1;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).endsWith('/api/token')) return jsonResponse({ access_token: 'newly-issued-token' });
+        if (String(url).endsWith('/api/account')) {
+          signal = init.signal;
+          assert.equal(init.headers.Authorization, 'Bearer newly-issued-token');
+          if (stalledAt === 'headers') return new Promise(() => {}); // Ignores abort.
+          return { ok: true, json: async () => new Promise(() => {}) }; // Headers resolved, body hangs.
+        }
+        throw new Error('Unexpected provider URL');
+      },
+    });
+    await assert.rejects(
+      service.handleCallback({ state: 'state-account-stall', code: 'oauth-code' }),
+      (error) => error instanceof LichessOAuthError && /Request timed out/.test(error.message),
+    );
+    assert.equal(signal.aborted, true);
+    assert.equal(revoked, 1);
+    assert.equal((await store.findConnectionForUser(1)).accessTokenCiphertext, 'enc:old-token');
+  });
+}
+
+test('OAuth provider timeout cannot be disabled or made unbounded', () => {
+  const store = new FakeLichessStore();
+  assert.throws(() => createLichessConnectionService({ store, oauthProviderTimeoutMs: 0 }), /Invalid Lichess OAuth provider timeout/);
+  assert.throws(() => createLichessConnectionService({ store, oauthProviderTimeoutMs: 60_001 }), /Invalid Lichess OAuth provider timeout/);
+});
+
 test('expired OAuth state is rejected before token exchange', async () => {
   const store = new FakeLichessStore();
   store.states.set('expired-state', {

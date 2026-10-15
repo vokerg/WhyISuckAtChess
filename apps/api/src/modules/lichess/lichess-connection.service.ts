@@ -234,6 +234,8 @@ export interface LichessConnectionServiceOptions {
   oauthConfig?: LichessOAuthConfig;
   /** Max wait for best-effort provider token revocation (default 5 seconds). */
   tokenRevocationTimeoutMs?: number;
+  /** Bound each OAuth token exchange and authenticated account read (default 10 seconds). */
+  oauthProviderTimeoutMs?: number;
 }
 
 interface LichessTokenResponse {
@@ -261,6 +263,37 @@ export function createLichessConnectionService(options: LichessConnectionService
   if (!Number.isSafeInteger(tokenRevocationTimeoutMs) || tokenRevocationTimeoutMs <= 0) {
     throw new Error('Invalid Lichess token revocation timeout.');
   }
+
+  const oauthProviderTimeoutMs = options.oauthProviderTimeoutMs ?? 10_000;
+  if (!Number.isSafeInteger(oauthProviderTimeoutMs)
+      || oauthProviderTimeoutMs <= 0 || oauthProviderTimeoutMs > 60_000) {
+    throw new Error('Invalid Lichess OAuth provider timeout.');
+  }
+
+  // Cover both response headers and JSON body consumption. Promise.race is
+  // required in addition to abort for stalled/injected fetch adapters.
+  const withOAuthProviderDeadline = async <T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+    safeFailureMessage: string,
+  ): Promise<T> => {
+    const controller = new AbortController();
+    let deadlineHandle: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      deadlineHandle = setTimeout(() => {
+        controller.abort();
+        reject(new LichessOAuthError(`${safeFailureMessage} Request timed out.`));
+      }, oauthProviderTimeoutMs);
+    });
+    try {
+      return await Promise.race([operation(controller.signal), deadline]);
+    } catch (error) {
+      if (error instanceof LichessOAuthError) throw error;
+      // Adapter/HTTP parsing failures may contain credentials or OAuth code.
+      throw new LichessOAuthError(safeFailureMessage);
+    } finally {
+      if (deadlineHandle) clearTimeout(deadlineHandle);
+    }
+  };
 
   const revokeLichessToken = async (accessToken: string): Promise<void> => {
     const controller = new AbortController();
@@ -424,8 +457,27 @@ export function createLichessConnectionService(options: LichessConnectionService
       }
 
       const config = readConfig();
-      const token = await exchangeCodeForToken(fetchImpl, query.code, loginState.codeVerifier, config);
-      const account = await fetchLichessAccount(fetchImpl, token.accessToken);
+      const authorizationCode = query.code;
+      const token = await withOAuthProviderDeadline(
+        (signal) => exchangeCodeForToken(fetchImpl, authorizationCode, loginState.codeVerifier, config, signal),
+        'Could not exchange Lichess OAuth code for a token.',
+      );
+      let account: { id: string; username: string };
+      try {
+        account = await withOAuthProviderDeadline(
+          (signal) => fetchLichessAccount(fetchImpl, token.accessToken, signal),
+          'Could not load the connected Lichess account.',
+        );
+      } catch (error) {
+        // The newly issued token has not been stored. Revoke it best-effort
+        // without touching an existing connection or leaking the token.
+        try {
+          await revokeLichessToken(token.accessToken);
+        } catch {
+          // A failed upstream cleanup does not make an unauthenticated account authoritative.
+        }
+        throw error;
+      }
       const encryptedToken = encrypt(token.accessToken);
       const expiresAt = token.expiresIn === undefined
         ? null
@@ -498,6 +550,7 @@ async function exchangeCodeForToken(
   code: string,
   codeVerifier: string,
   config: LichessOAuthConfig,
+  signal: AbortSignal,
 ): Promise<{ accessToken: string; expiresIn?: number; scopes: string[] }> {
   const response = await fetchImpl(tokenUrl, {
     method: 'POST',
@@ -509,6 +562,7 @@ async function exchangeCodeForToken(
       redirect_uri: config.redirectUri,
       client_id: config.clientId,
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -537,9 +591,11 @@ async function exchangeCodeForToken(
 async function fetchLichessAccount(
   fetchImpl: typeof fetch,
   accessToken: string,
+  signal: AbortSignal,
 ): Promise<{ id: string; username: string }> {
   const response = await fetchImpl(accountUrl, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal,
   });
   if (!response.ok) {
     throw new LichessOAuthError('Could not load the connected Lichess account.');
