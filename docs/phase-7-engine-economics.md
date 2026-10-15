@@ -33,8 +33,8 @@ cumulative user/system CPU ticks (converted using `getconf CLK_TCK`) and
 `VmHWM` peak resident bytes **once before termination**. The CPU count is
 coarse at host clock-tick resolution and describes the entire short synthetic
 session, not individual positions or Node/DB worker resource usage; on other
-platforms this field is `null`. A missing Linux sample fails the opt-in run. No cloud price assumptions or computed
-throughput denominators are inserted.
+platforms this field is `null`. A missing Linux sample fails the opt-in run.
+No cloud price assumptions or computed throughput denominators are inserted.
 
 Prerequisites: Node >=22.12, npm >=10, repository dependencies/build, and
 an explicitly identified native Stockfish executable. **No Lichess account,
@@ -89,7 +89,7 @@ run; preserve the original head reference when citing these timings.
 | --- | --- | --- |
 | Native engine wall-time distribution for 5 synthetic positions | Opt-in JSON from the dedicated workflow; confirm exact run/head before citing values | **Microbaseline only**, not a game/worker distribution |
 | Repeated in-process engine searches | First pass versus later passes in the same JSON | `ucinewgame` is sent per search; timing variation is **not** a measured engine-hash or DB-cache hit rate |
-| Cold and warm persisted position cache | **Not yet measured** | Requires real DB-backed repeated position workloads |
+| Cold and warm persisted position cache | Real DB-backed 4-ply synthetic probe: 0/5 to 5/5 hits (see #156 and its exact-head native workflow) | **Partial**; only one game, not representative cross-game reuse |
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
 | Stockfish child CPU/peak RSS | One Linux live-child snapshot per synthetic engine session/pass, available only from new exact-head benchmark runs | **Partial**; not a representative per-game distribution, and not application worker CPU/RSS |
 | Concurrent workers, cancellation, backlog, recovery | **Not yet measured** | Crash tests establish bounded behavior, not performance under load |
@@ -122,7 +122,8 @@ size before/after (affected by physical allocation; **not per-game storage
 economics**). Each cold/warm run independently samples the live Stockfish
 child's cumulative CPU time and peak RSS before engine shutdown on Linux.
 These readings exclude the Node process and PostgreSQL, and the two single-game
-samples are not a useful CPU/RSS distribution. The probe does not contact Lichess or run evidence/diagnosis.
+samples are not a useful CPU/RSS distribution. The probe does not contact
+Lichess or run evidence/diagnosis.
 
 **Safety requirements:** explicit `RUN_PHASE7_CACHE_BENCHMARK=1`; an absolute
 `STOCKFISH_PATH`; a **local** dedicated DB whose name starts
@@ -150,8 +151,8 @@ cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v1`.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
 not a measurement. This narrow synthetic case cannot establish statistically
-representative resource distributions, Node worker/DB CPU/RSS, concurrency, queue saturation,
-provider ingestion, evidence/diagnosis throughput, or cloud capacity/cost. In
+representative resource distributions, Node worker/DB CPU/RSS, concurrency,
+queue saturation, provider ingestion, evidence/diagnosis throughput, or cloud capacity/cost. In
 particular, source clocks are absent, not silently reconstructed. Keep #126
 and the Phase 7 #128 pilot gate open until representative empirical work.
 
