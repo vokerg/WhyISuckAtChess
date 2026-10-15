@@ -22,6 +22,16 @@ export { ActiveImportRunError } from './account-import.repository.prisma';
 const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const COMMIT_BATCH_SIZE = 50;
 const STALE_RUN_MS = 15 * 60 * 1000;
+// Bound user-requested history before allocating import windows or creating
+// durable work. This covers more than the lifetime of Lichess as of 2026.
+export const MAX_LICHESS_IMPORT_WINDOWS = 256;
+
+export class LichessImportRangeTooLargeError extends Error {
+  constructor() {
+    super(`Import range exceeds ${MAX_LICHESS_IMPORT_WINDOWS} windows.`);
+    this.name = 'LichessImportRangeTooLargeError';
+  }
+}
 // Bound a single provider export below the worker's stale-lease threshold.
 // The timeout covers response headers and the streamed NDJSON body; it is not
 // a substitute for per-game sizes or a full worker throughput budget.
@@ -134,12 +144,14 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       return repository.getRun(run.appUserId, run.id);
     }
 
-    const windows = planImportWindows(run.requestedFrom, run.requestedTo);
     const startWindow = readCheckpoint(run.checkpointJson);
     let providerSignal: AbortSignal | undefined;
     let clearProviderDeadline: (() => void) | undefined;
 
     try {
+      // Corrupt or legacy work must fail durably rather than crashing the worker
+      // before its lease-fenced failure handler is active.
+      const windows = planImportWindows(run.requestedFrom, run.requestedTo);
       for (let index = startWindow; index < windows.length; index += 1) {
         if (await isCancellationRequested(run)) {
           await repository.cancelRun(run.id, claimedAt, now());
@@ -275,6 +287,18 @@ export function createLichessAccountImportService(options: AccountImportServiceO
 export type LichessAccountImportService = ReturnType<typeof createLichessAccountImportService>;
 
 export function planImportWindows(from: Date, to: Date, windowMs = WINDOW_MS): ImportWindow[] {
+  const startMs = from.getTime();
+  const endMs = to.getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    throw new Error('Import end must be after import start.');
+  }
+  if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
+    throw new Error('Import window size must be a positive safe integer.');
+  }
+  // Check the count before constructing any window; otherwise a permitted
+  // ISO datetime range can create tens of thousands of durable export windows.
+  const windowCount = Math.ceil((endMs - startMs) / windowMs);
+  if (windowCount > MAX_LICHESS_IMPORT_WINDOWS) throw new LichessImportRangeTooLargeError();
   const windows: ImportWindow[] = [];
   let cursor = from;
   while (cursor < to) {
