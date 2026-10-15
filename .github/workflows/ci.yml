@@ -94,8 +94,13 @@ jobs:
 
       - name: Install Chromium for browser acceptance
         run: |
-          npm install --no-save --no-package-lock --workspaces=false playwright@1.56.1
-          npx playwright install --with-deps chromium
+          # npm install in the monorepo can hit an npm Arborist edgesOut
+          # failure after npm ci. Keep the disposable Playwright tooling isolated.
+          mkdir -p "$RUNNER_TEMP/why-browser-deps"
+          npm install --prefix "$RUNNER_TEMP/why-browser-deps" --no-save --no-package-lock playwright@1.56.1
+          ln -s "$RUNNER_TEMP/why-browser-deps/node_modules/playwright" node_modules/playwright
+          ln -s "$RUNNER_TEMP/why-browser-deps/node_modules/playwright-core" node_modules/playwright-core
+          node "$RUNNER_TEMP/why-browser-deps/node_modules/playwright/cli.js" install --with-deps chromium
 
       - name: Bootstrap real diagnosis fixture database and API
         run: npm run db:migrate && npm run build:api
