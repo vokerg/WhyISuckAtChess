@@ -3,7 +3,7 @@
 **Status:** **Partial benchmark instrumentation, not an economics sign-off.**
 The first deliverable is a reproducible native Stockfish wall-clock **microbaseline**.
 This document does **not** claim representative per-game cost, position-cache hit rate,
-application worker throughput, child process CPU/RSS, or pilot capacity.
+application worker throughput, representative child process CPU/RSS, or pilot capacity.
 See [real-Stockfish acceptance](phase-7-real-stockfish-acceptance.md) for the
 separate already-tested disposable-PostgreSQL provenance and recovery gate.
 
@@ -84,7 +84,7 @@ run; preserve the original head reference when citing these timings.
 | Repeated in-process engine searches | First pass versus later passes in the same JSON | `ucinewgame` is sent per search; timing variation is **not** a measured engine-hash or DB-cache hit rate |
 | Cold and warm persisted position cache | **Not yet measured** | Requires real DB-backed repeated position workloads |
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
-| CPU and peak RSS per engine/worker | **Not yet measured** | Host CPU model/RAM inventory is **not** process resource usage |
+| CPU and peak RSS per engine/worker | **Partial, opt-in Linux native child sampling** during the single-game persisted-cache probe; no representative distribution or worker/DB process accounting | Real `/proc` child counters are distinct from host inventory; small depth-6 samples cannot bound production depth-16 or workload costs |
 | Concurrent workers, cancellation, backlog, recovery | **Not yet measured** | Crash tests establish bounded behavior, not performance under load |
 | Cloud cost/capacity and uncertainty | **Not yet measured** | Requires operational CPU/DB/RAM observations and explicitly sourced rates |
 
@@ -112,7 +112,15 @@ The report includes wall-clock worker-cycle times **including engine startup**
 and Postgres persistence, indexed PGN time, database-reported queue/claim times,
 cache ratios, row counts, OS/engine identifiers, binary SHA-256 and database
 size before/after (affected by physical allocation; **not per-game storage
-economics**). The probe does not contact Lichess or run evidence/diagnosis.
+economics**). On Linux, the v2 JSON report additionally captures the **real
+Stockfish child process's** cumulative user/system CPU ticks converted to
+milliseconds using the host's `getconf CLK_TCK`, plus its kernel-reported
+`VmHWM` peak resident bytes from `/proc/<pid>/status`. Sampling happens
+before the native process closes on **each** cold/warm worker cycle, including
+startup overhead on a cache hit. It does not measure Node worker or PostgreSQL
+process CPU/RSS. CPU-time resolution is limited by kernel ticks and results
+may show zero CPU time for very short work; values are **not** per-position
+measurements. Non-Linux runs return null resources explicitly. The probe does not contact Lichess or run evidence/diagnosis.
 
 **Safety requirements:** explicit `RUN_PHASE7_CACHE_BENCHMARK=1`; an absolute
 `STOCKFISH_PATH`; a **local** dedicated DB whose name starts
@@ -131,16 +139,16 @@ npm run build:api
 export RUN_PHASE7_CACHE_BENCHMARK=1
 export STOCKFISH_PATH=/usr/games/stockfish
 timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > phase-7-cache-probe.json
-node --test scripts/phase-7-worker-cache-policy.test.mjs
+node --test scripts/phase-7-worker-cache-policy.test.mjs scripts/phase-7-stockfish-process-metrics.test.mjs
 ```
 
 The dedicated native workflow creates a separate disposable PostgreSQL 16
 database for this probe so prior integration tests cannot contaminate a cold
-cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v1`.
+cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v2`.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
 not a measurement. This narrow synthetic case cannot establish statistically
-representative distributions, process CPU/RSS, concurrency, queue saturation,
+representative distributions, Node/DB CPU/RSS and representative child CPU/RSS, concurrency, queue saturation,
 provider ingestion, evidence/diagnosis throughput, or cloud capacity/cost. In
 particular, source clocks are absent, not silently reconstructed. Keep #126
 and the Phase 7 #128 pilot gate open until representative empirical work.
