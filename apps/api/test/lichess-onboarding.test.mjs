@@ -158,6 +158,15 @@ test('API import with no dates requests exactly 30 days and one window; explicit
     assert.equal(created[1].requestedFrom.toISOString(), '2026-07-01T12:34:56.789Z');
     assert.equal(created[1].requestedTo.toISOString(), '2026-10-01T12:34:56.789Z');
     assert.equal(created[1].windowsTotal, 4);
+
+    const oversized = await app.inject({
+      method: 'POST', url: '/api/me/imports/lichess',
+      payload: { from: '2000-01-01T00:00:00.000Z', to: fixedNow.toISOString() },
+    });
+    assert.equal(oversized.statusCode, 400);
+    assert.equal(oversized.json().code, 'IMPORT_RANGE_TOO_LARGE');
+    assert.equal(oversized.json().message, 'Import range exceeds 256 windows.');
+    assert.equal(created.length, 2, 'oversized date ranges must not create durable import work');
   } finally { await app.close(); }
 });
 
