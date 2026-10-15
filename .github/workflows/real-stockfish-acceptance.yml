@@ -15,6 +15,8 @@ on:
       - 'scripts/phase-7-worker-cache-benchmark.mjs'
       - 'scripts/phase-7-worker-cache-policy.mjs'
       - 'scripts/phase-7-worker-cache-policy.test.mjs'
+      - 'scripts/phase-7-stockfish-process-metrics.mjs'
+      - 'scripts/phase-7-stockfish-process-metrics.test.mjs'
       - '.github/workflows/real-stockfish-acceptance.yml'
 
 jobs:
@@ -77,6 +79,8 @@ jobs:
           timeout 120s node scripts/phase-7-stockfish-timing-benchmark.mjs > /tmp/phase7-native-timing.json
           node -e "const x=require('/tmp/phase7-native-timing.json'); if(x.schemaVersion!=='phase-7-native-timing-microbaseline-v1'||x.results.allSearches.count!==15||!x.environment.stockfishBinarySha256) process.exit(1)"
           cat /tmp/phase7-native-timing.json
+      - name: Validate native child CPU and RSS parser (pure Linux fixture tests)
+        run: node --test scripts/phase-7-stockfish-process-metrics.test.mjs
       - name: Create isolated PostgreSQL database for persisted cache probe
         env:
           PGPASSWORD: postgres
@@ -89,5 +93,5 @@ jobs:
         run: |
           npm run db:migrate
           timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > /tmp/phase7-db-cache.json
-          node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v1'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal) process.exit(1)"
+          node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v2'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal||!['cold','warm'].every(k=>x.results[k].stockfishChildResources?.measurementSource==='LINUX_PROC_PID_STAT_AND_STATUS'&&x.results[k].stockfishChildResources.peakResidentBytes>0&&Number.isFinite(x.results[k].stockfishChildResources.cpuTotalMs))) process.exit(1)"
           cat /tmp/phase7-db-cache.json
