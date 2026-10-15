@@ -12,6 +12,7 @@ import {
   LICHESS_IMPORT_SPEEDS,
   buildLichessGamesRequestUrl,
   LichessNdjsonRecordError,
+  LichessNdjsonRecordTooLargeError,
   normalizeLichessGame,
   readLichessNdjson,
 } from './providers/lichess/lichess-account-import';
@@ -240,6 +241,8 @@ export function createLichessAccountImportService(options: AccountImportServiceO
       }
       if (providerSignal?.aborted && providerSignal.reason?.name === 'TimeoutError') {
         await repository.failRun(run.id, claimedAt, 'PROVIDER_TIMEOUT', 'Lichess import timed out. Retry the import.', now());
+      } else if (error instanceof LichessNdjsonRecordTooLargeError) {
+        await repository.failRun(run.id, claimedAt, 'PROVIDER_RECORD_TOO_LARGE', error.message, now());
       } else if (error instanceof LichessNdjsonRecordError) {
         await repository.failRun(run.id, claimedAt, 'MALFORMED_RECORD', error.message, now());
       } else {

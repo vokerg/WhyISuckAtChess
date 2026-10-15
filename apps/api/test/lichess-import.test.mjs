@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   buildLichessGamesRequestUrl,
   LichessNdjsonRecordError,
+  LichessNdjsonRecordTooLargeError,
+  MAX_LICHESS_NDJSON_RECORD_BYTES,
   normalizeLichessGame,
   readLichessNdjson,
 } from '../dist/modules/account-imports/providers/lichess/lichess-account-import.js';
@@ -396,4 +398,99 @@ test('provider rate-limit Retry-After seconds and HTTP-dates produce bounded dur
     assert.equal(result.rateLimitUntil.toISOString(), new Date(now.getTime() + delayMs).toISOString(), label);
     assert.equal(deferrals, 1, label);
   }
+});
+
+
+test('NDJSON reader accepts the exact byte limit and multiple records in a larger stream', async () => {
+  const prefix = '{"id":"at-limit","pgn":"';
+  const suffix = '"}';
+  const record = prefix + 'x'.repeat(MAX_LICHESS_NDJSON_RECORD_BYTES - Buffer.byteLength(prefix + suffix)) + suffix;
+  assert.equal(Buffer.byteLength(record), MAX_LICHESS_NDJSON_RECORD_BYTES);
+  const rows = [];
+  for await (const row of readLichessNdjson(new Response(record + '\n' + '{"id":"next"}\n'))) {
+    rows.push(row);
+  }
+  assert.deepEqual(rows.map((row) => row.id), ['at-limit', 'next']);
+  assert.equal(rows[0].pgn.length, MAX_LICHESS_NDJSON_RECORD_BYTES - Buffer.byteLength(prefix + suffix));
+});
+
+test('NDJSON reader rejects fragmented oversized UTF-8 records before JSON parsing', async () => {
+  const line = '{"id":"oversize","pgn":"' + 'é'.repeat(Math.floor(MAX_LICHESS_NDJSON_RECORD_BYTES / 2)) + '"}';
+  assert.ok(line.length < MAX_LICHESS_NDJSON_RECORD_BYTES, 'limit must count UTF-8 bytes, not code units');
+  const bytes = new TextEncoder().encode(line);
+  assert.ok(bytes.byteLength > MAX_LICHESS_NDJSON_RECORD_BYTES);
+  let cancelled = false;
+  const response = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes.subarray(0, 31));
+      controller.enqueue(bytes.subarray(31));
+    },
+    cancel() { cancelled = true; },
+  }));
+  await assert.rejects(
+    async () => { for await (const _record of readLichessNdjson(response)) { throw new Error('unexpected yield'); } },
+    (error) => error instanceof LichessNdjsonRecordTooLargeError && error.lineNumber === 1
+      && error.message === 'Lichess returned oversized NDJSON on line 1.',
+  );
+  assert.equal(cancelled, true, 'oversized records must cancel the upstream stream');
+});
+
+test('NDJSON reader preserves UTF-8 split across network chunks and CRLF boundaries', async () => {
+  const encoded = new TextEncoder().encode('{"id":"unicode","pgn":"é♟"}\r\n');
+  const middleOfUtf8 = encoded.indexOf(0xc3) + 1;
+  assert.ok(middleOfUtf8 > 1);
+  const response = new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoded.subarray(0, middleOfUtf8));
+      controller.enqueue(encoded.subarray(middleOfUtf8));
+      controller.close();
+    },
+  }));
+  const records = [];
+  for await (const record of readLichessNdjson(response)) records.push(record);
+  assert.deepEqual(records, [{ id: 'unicode', pgn: 'é♟' }]);
+});
+
+test('oversized provider NDJSON fails an import without checkpointing or leaking source bytes', async () => {
+  const claimedAt = new Date('2026-10-14T06:00:00.000Z');
+  const run = {
+    id: 92, appUserId: 7, status: 'RUNNING', claimedAt, cancelRequestedAt: null,
+    requestedFrom: new Date('2026-01-01T00:00:00.000Z'),
+    requestedTo: new Date('2026-01-02T00:00:00.000Z'),
+    lichessUserIdSnapshot: 'u1', checkpointJson: null,
+    scopeJson: { provider: 'LICHESS', speeds: ['bullet', 'blitz', 'rapid'] },
+    errorCode: null, error: null,
+  };
+  let failureWrites = 0;
+  const repository = {
+    async getRun() { return run; },
+    async failRun(id, lease, code, message) {
+      assert.equal(id, 92);
+      assert.equal(lease, claimedAt);
+      assert.equal(code, 'PROVIDER_RECORD_TOO_LARGE');
+      assert.equal(message, 'Lichess returned oversized NDJSON on line 1.');
+      run.status = 'FAILED';
+      run.errorCode = code;
+      run.error = message;
+      failureWrites += 1;
+    },
+    async updateProgress() { throw new Error('must not checkpoint an oversized window'); },
+    async commitGames() { throw new Error('must not persist an oversized first record'); },
+  };
+  const service = createLichessAccountImportService({
+    repository,
+    connectionService: {
+      async getCredentialForUser() {
+        return { lichessUserId: 'u1', username: 'Alice', accessToken: 'secret-credential-value', credentialGeneration: 'generation-1' };
+      },
+    },
+    fetchImpl: async () => new Response('{"id":"large","pgn":"' + 'x'.repeat(MAX_LICHESS_NDJSON_RECORD_BYTES) + '"}'),
+    now: () => claimedAt,
+  });
+  const result = await service.executeRun(run);
+  assert.equal(failureWrites, 1);
+  assert.equal(result.status, 'FAILED');
+  assert.equal(result.errorCode, 'PROVIDER_RECORD_TOO_LARGE');
+  assert.equal(result.error.includes('secret-credential-value'), false);
+  assert.equal(run.checkpointJson, null);
 });
