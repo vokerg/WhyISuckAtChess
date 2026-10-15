@@ -232,6 +232,8 @@ export interface LichessConnectionServiceOptions {
   encrypt?: typeof encryptToken;
   decrypt?: typeof decryptToken;
   oauthConfig?: LichessOAuthConfig;
+  /** Max wait for best-effort provider token revocation (default 5 seconds). */
+  tokenRevocationTimeoutMs?: number;
 }
 
 interface LichessTokenResponse {
@@ -253,14 +255,38 @@ export function createLichessConnectionService(options: LichessConnectionService
   const encrypt = options.encrypt ?? encryptToken;
   const decrypt = options.decrypt ?? decryptToken;
   const readConfig = () => options.oauthConfig ?? loadLichessOAuthConfig();
+  // Align with CRT's bounded best-effort revocation; do not let a stalled
+  // provider block local disconnect or a completed credential replacement.
+  const tokenRevocationTimeoutMs = options.tokenRevocationTimeoutMs ?? 5_000;
+  if (!Number.isSafeInteger(tokenRevocationTimeoutMs) || tokenRevocationTimeoutMs <= 0) {
+    throw new Error('Invalid Lichess token revocation timeout.');
+  }
 
   const revokeLichessToken = async (accessToken: string): Promise<void> => {
-    const response = await fetchImpl(tokenUrl, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${accessToken}` },
+    const controller = new AbortController();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    // Fetch honors abort, but the race also bounds injected/stalled adapters
+    // that fail to observe the signal. Never expose token-bearing errors.
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort();
+        reject(new Error('Lichess token revocation timed out.'));
+      }, tokenRevocationTimeoutMs);
     });
-    if (!response.ok && response.status !== 401 && response.status !== 403) {
-      throw new Error('Could not revoke Lichess OAuth token.');
+    try {
+      const response = await Promise.race([
+        fetchImpl(tokenUrl, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
+        }),
+        deadline,
+      ]);
+      if (!response.ok && response.status !== 401 && response.status !== 403) {
+        throw new Error('Could not revoke Lichess OAuth token.');
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
   };
 
