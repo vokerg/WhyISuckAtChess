@@ -95,6 +95,7 @@ run; preserve the original head reference when citing these timings.
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
 | Stockfish child CPU/peak RSS | One Linux live-child snapshot per synthetic engine session/pass, available only from new exact-head benchmark runs | **Partial**; not a representative per-game distribution, and not application worker CPU/RSS |
 | Node benchmark parent CPU/RSS | `process.cpuUsage()` delta plus `process.memoryUsage.rss()` before/after each cache worker cycle | **Partial**; inclusive Node parent-process CPU, not an isolated worker, child engine, or PostgreSQL sample; RSS endpoints are **not peaks** |
+| Per-cache-cycle native engine phase wall time | v5 instruments awaited Stockfish initialization, each `analyzeFen`, and shutdown within `service.runOnce()`; checks search count equals durable cache misses | **Partial**; isolates engine *await* windows from remaining worker wall time, but does not measure database-only time, per-query latencies or representative game cost |
 | Concurrent workers, cancellation, backlog, recovery | **Not yet measured** | Crash tests establish bounded behavior, not performance under load |
 | Cloud cost/capacity and uncertainty | **Not yet measured** | Requires operational CPU/DB/RAM observations and explicitly sourced rates |
 
@@ -140,8 +141,8 @@ and `completedAt` timestamps must be valid, chronologically ordered, and yield
 safe integer millisecond intervals; invalid timing is rejected instead of
 silently being clamped to zero. These database timestamps are not monotonic
 wall-clock timers and do not replace the separate measured worker-cycle wall
-time. The v4 JSON also reports
-`nodeHostResources` for each cold/warm/cross-game `service.runOnce()` call. The resource
+time. The v5 JSON also reports
+`nodeHostResources` for each cold/warm/cross-game `service.runOnce()` call. It additionally records per-cycle `enginePhaseTimings`: time awaited for native UCI startup, each completed `analyzeFen` search, and shutdown, plus nearest-rank search-duration quantiles and raw duration samples. The measured native search count **must equal persisted cache misses**; an all-hit warm cycle has zero searches and a `null` search-duration distribution. `engineAwaitedWallMs` is their sum, and `otherWorkerWallMs` is the containing monotonic `runOnce()` wall duration minus these nested awaits. This residual also includes JavaScript work, scheduling, Prisma interaction, PostgreSQL operations and time waiting outside the measured engine calls, **not** a PostgreSQL-only or CPU-time measurement. Timings are rounded only for output and rejected if the underlying phase sums contradict the containing worker cycle. The resource
 window uses `process.cpuUsage()` to obtain the **parent benchmark Node process's**
 user/system CPU delta in milliseconds, and `process.memoryUsage.rss()` for
 resident bytes at the start and end. These Node readings include parent
@@ -167,15 +168,15 @@ npm run build:api
 export RUN_PHASE7_CACHE_BENCHMARK=1
 export STOCKFISH_PATH=/usr/games/stockfish
 timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > phase-7-cache-probe.json
-node --test scripts/phase-7-worker-cache-policy.test.mjs scripts/phase-7-stockfish-child-resources.test.mjs scripts/phase-7-node-host-resources.test.mjs
+node --test scripts/phase-7-worker-cache-policy.test.mjs scripts/phase-7-stockfish-child-resources.test.mjs scripts/phase-7-node-host-resources.test.mjs scripts/phase-7-cache-engine-phase-timings.test.mjs
 ```
 
 The dedicated native workflow creates a separate disposable PostgreSQL 16
 database for this probe so prior integration tests cannot contaminate a cold
-cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v4`, including
+cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v5`, including
 `fixture.crossGame`, `results.crossGame`, second-game indexing time, and the
 post-cross-game row count. The workflow validates all three native-child and
-Node-parent resource snapshots, exact shared/new position counts and cache
+Node-parent resource snapshots, nested Stockfish phase awaits and search-to-cache-miss counts, exact shared/new position counts and cache
 row growth.
 On successful validation it uploads `/tmp/phase7-native-timing.json` and
 `/tmp/phase7-db-cache.json` together as an Actions artifact named
