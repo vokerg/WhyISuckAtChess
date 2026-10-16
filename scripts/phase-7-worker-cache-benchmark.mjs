@@ -96,26 +96,26 @@ export async function runPersistedCacheProbe() {
     });
     userId = user.id;
     const gameSource = {
-        appUserId: user.id,
-        provider: 'LICHESS',
-        providerGameId: 'phase7-cache-bench-' + suffix,
-        connectedLichessUserId: 'synthetic-fixture',
-        connectedLichessUsername: 'FixtureUser',
-        source: 'PHASE7_SYNTHETIC',
-        pgn: PGN,
-        rated: true,
-        variant: 'standard',
-        speedCategory: 'blitz',
-        timeControlRaw: '180+0',
-        timeControlInitial: 180,
-        timeControlIncrement: 0,
-        timeControlSource: 'PGN',
-        userColor: 'WHITE',
-        whiteUsername: 'FixtureUser',
-        blackUsername: 'FixtureOpponent',
-        status: 'resign',
-        rawClockPresence: 'ABSENT',
-        rawClockStateCount: 0,
+      appUserId: user.id,
+      provider: 'LICHESS',
+      providerGameId: 'phase7-cache-bench-' + suffix,
+      connectedLichessUserId: 'synthetic-fixture',
+      connectedLichessUsername: 'FixtureUser',
+      source: 'PHASE7_SYNTHETIC',
+      pgn: PGN,
+      rated: true,
+      variant: 'standard',
+      speedCategory: 'blitz',
+      timeControlRaw: '180+0',
+      timeControlInitial: 180,
+      timeControlIncrement: 0,
+      timeControlSource: 'PGN',
+      userColor: 'WHITE',
+      whiteUsername: 'FixtureUser',
+      blackUsername: 'FixtureOpponent',
+      status: 'resign',
+      rawClockPresence: 'ABSENT',
+      rawClockStateCount: 0,
     };
     const game = await prisma.importedGame.create({ data: gameSource });
 
@@ -201,8 +201,8 @@ export async function runPersistedCacheProbe() {
     const warm = await measureRun(warmId);
     const positionAnalysisRowsAfterWarm = await prisma.stockfishPositionAnalysis.count();
 
-    // A different indexed game overlaps only on the first two move-pairs'
-    // first two plies (starting position, after e4, after ...e5).
+    // A different indexed game shares the first two plies (starting
+    // position, after e4, after ...e5), then diverges.
     // Read actual normalized position IDs rather than assuming hit counts.
     const sibling = await prisma.importedGame.create({
       data: {
@@ -239,7 +239,7 @@ export async function runPersistedCacheProbe() {
     );
 
     if (cold.cacheHits !== 0 || cold.cacheMisses !== cold.positionsTotal
-        || cold.positionsTotal !== positionIds.length
+        || cold.positionsTotal !== firstPositionIds.length
         || warm.cacheHits !== warm.positionsTotal || warm.cacheMisses !== 0
         || warm.positionsTotal !== cold.positionsTotal
         || warm.pliesTotal !== cold.pliesTotal
@@ -247,7 +247,7 @@ export async function runPersistedCacheProbe() {
         || cold.analysisVersion !== warm.analysisVersion
         || cold.engineName !== warm.engineName || cold.engineVersion !== warm.engineVersion
         || cold.sourcePlyIndexedAt !== warm.sourcePlyIndexedAt
-        || positionAnalysisRowsAfterCold !== positionIds.length
+        || positionAnalysisRowsAfterCold !== firstPositionIds.length
         || positionAnalysisRowsAfterWarm !== positionAnalysisRowsAfterCold
         || crossGame.pliesTotal !== siblingPlies.length
         || crossGame.settingsHash !== cold.settingsHash
