@@ -46,7 +46,7 @@ test('exact controls, game lengths and source-clock arms stay separate', () => {
 
 test('Lichess time-control classification enforces bullet/blitz/rapid boundaries', () => {
   const cases = [
-    [30, 0, 'bullet'], [179, 0, 'bullet'], [180, 0, 'blitz'],
+    [0, 1, 'bullet'], [0, 5, 'blitz'], [30, 0, 'bullet'], [179, 0, 'bullet'], [180, 0, 'blitz'],
     [479, 0, 'blitz'], [480, 0, 'rapid'], [1499, 0, 'rapid'],
     [120, 2, 'blitz'], // 120 + 40*2 = 200, not bullet
   ];
