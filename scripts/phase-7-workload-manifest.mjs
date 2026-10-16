@@ -73,6 +73,16 @@ export function summarizeWorkloadManifest(manifest) {
     assertInteger(game.plies, 1, 1_000, 'ply count');
     assertInteger(game.distinctPositions, 1, game.plies + 1, 'game distinct positions');
     assertInteger(game.sourceClockSamples, 0, game.plies, 'source clock sample count');
+    // Lichess speed pools use initial + 40 * increment (estimated 40-move game).
+    // Do not let an author-declared pool contradict the exact clock settings.
+    const estimatedSeconds = game.initialSeconds + 40 * game.incrementSeconds;
+    const clockSpeed = estimatedSeconds < 30 ? 'ultraBullet'
+      : estimatedSeconds < 180 ? 'bullet'
+      : estimatedSeconds < 480 ? 'blitz'
+      : estimatedSeconds < 1500 ? 'rapid' : 'classical';
+    if (clockSpeed !== game.speedCategory) {
+      throw new Error('Workload speed category contradicts the exact time control.');
+    }
     if ((game.clockCoverage === 'ABSENT' && game.sourceClockSamples !== 0)
         || (game.clockCoverage === 'COMPLETE' && game.sourceClockSamples !== game.plies)
         || (game.clockCoverage === 'PARTIAL'
