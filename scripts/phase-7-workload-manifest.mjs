@@ -68,7 +68,7 @@ export function summarizeWorkloadManifest(manifest) {
         || !CLOCK_STATES.includes(game.clockCoverage)) {
       throw new Error('Invalid workload origin, speed, or source-clock coverage.');
     }
-    assertInteger(game.initialSeconds, 1, 86_400, 'initial time');
+    assertInteger(game.initialSeconds, 0, 86_400, 'initial time');
     assertInteger(game.incrementSeconds, 0, 600, 'time increment');
     assertInteger(game.plies, 1, 1_000, 'ply count');
     assertInteger(game.distinctPositions, 1, game.plies + 1, 'game distinct positions');
