@@ -95,3 +95,14 @@ jobs:
           timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > /tmp/phase7-db-cache.json
           node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v3'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal||!x.results.cold.nativeChildResources?.peakResidentBytes||!x.results.warm.nativeChildResources?.peakResidentBytes||x.results.cold.nativeChildResources.cpuTotalMs<0||x.results.warm.nativeChildResources.cpuTotalMs<0||!['cold','warm'].every(k=>x.results[k].nodeHostResources?.source==='NODE_PARENT_CPU_USAGE_AND_RSS_BOUNDARY_SNAPSHOTS'&&Number.isFinite(x.results[k].nodeHostResources.cpuTotalMs)&&x.results[k].nodeHostResources.cpuTotalMs>=0&&x.results[k].nodeHostResources.rssBeforeBytes>0&&x.results[k].nodeHostResources.rssAfterBytes>0)) process.exit(1)"
           cat /tmp/phase7-db-cache.json
+      # Both reports contain synthetic positions only. The Actions run links
+      # the retained measurements to the exact head SHA and runner.
+      - name: Retain raw synthetic native benchmark measurements
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-native-benchmarks-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            /tmp/phase7-native-timing.json
+            /tmp/phase7-db-cache.json
+          if-no-files-found: error
+          retention-days: 30
