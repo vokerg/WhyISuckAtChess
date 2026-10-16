@@ -127,7 +127,8 @@ samples are not a useful CPU/RSS distribution. Persisted `createdAt`, `claimedAt
 and `completedAt` timestamps must be valid, chronologically ordered, and yield
 safe integer millisecond intervals; invalid timing is rejected instead of
 silently being clamped to zero. These database timestamps are not monotonic
-wall-clock timers and do not replace the separate measured worker-cycle wall time. The v3 JSON also reports
+wall-clock timers and do not replace the separate measured worker-cycle wall
+time. The v3 JSON also reports
 `nodeHostResources` for each cold/warm `service.runOnce()` call. The resource
 window uses `process.cpuUsage()` to obtain the **parent benchmark Node process's**
 user/system CPU delta in milliseconds, and `process.memoryUsage.rss()` for
