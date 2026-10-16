@@ -249,7 +249,11 @@ or the representativeness of a dataset.
 The output partitions game **counts and ply/within-game distinct-position
 count distributions** by bullet/blitz/rapid, exact initial+increment
 (e.g. 180+0 versus 180+2), and ABSENT/PARTIAL/COMPLETE/INVALID source-clock
-coverage. It also preserves aggregate source-clock sample counts. Its
+coverage. Speed pools are checked against Lichess's estimated duration
+`initialSeconds + 40 * incrementSeconds`: 30–179 seconds is bullet,
+180–479 is blitz, and 480–1499 is rapid. UltraBullet and classical
+controls are explicitly out of scope rather than silently mislabeled.
+It also preserves aggregate source-clock sample counts. Its
 input.sha256 identifies the precise manifest bytes; no fixture IDs or
 raw game metadata appear in the output. Summed per-game distinct positions
 **cannot** be interpreted as unique positions across the whole corpus.
