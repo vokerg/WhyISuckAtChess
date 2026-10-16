@@ -123,7 +123,12 @@ size before/after (affected by physical allocation; **not per-game storage
 economics**). Each cold/warm run independently samples the live Stockfish
 child's cumulative CPU time and peak RSS before engine shutdown on Linux.
 These readings exclude the Node process and PostgreSQL, and the two single-game
-samples are not a useful CPU/RSS distribution. The v3 JSON also reports
+samples are not a useful CPU/RSS distribution. Persisted `createdAt`, `claimedAt`,
+and `completedAt` timestamps must be valid, chronologically ordered, and yield
+safe integer millisecond intervals; invalid timing is rejected instead of
+silently being clamped to zero. These database timestamps are not monotonic
+wall-clock timers and do not replace the separate measured worker-cycle wall
+time. The v3 JSON also reports
 `nodeHostResources` for each cold/warm `service.runOnce()` call. The resource
 window uses `process.cpuUsage()` to obtain the **parent benchmark Node process's**
 user/system CPU delta in milliseconds, and `process.memoryUsage.rss()` for
