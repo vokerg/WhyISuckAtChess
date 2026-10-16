@@ -168,7 +168,8 @@ On successful validation it uploads `/tmp/phase7-native-timing.json` and
 `phase7-native-benchmarks-<workflow-SHA>-<run-attempt>` with **30-day retention**.
 Here `github.sha` identifies the tested workflow revision (the test merge commit
 on pull-request runs, not necessarily the source branch's head SHA).
-Missing output files fail the upload step. Download from the specific workflow
+A preceding CI step requires both reports to be nonempty; a missing report
+fails the job rather than uploading only one file. Download from the specific workflow
 run's Artifacts section to inspect raw measurements and compare exact engine,
 settings, host, and DB provenance. This is limited retention, not a permanent
 research archive; save approved copies separately if longer-term comparison is
