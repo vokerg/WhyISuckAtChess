@@ -10,6 +10,7 @@ import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { assertDisposableCacheBenchmarkUrl, validatedCacheRun } from './phase-7-worker-cache-policy.mjs';
 import { sampleNativeChildProcessResources } from './phase-7-stockfish-child-resources.mjs';
+import { summarizeNodeHostCycleResources } from './phase-7-node-host-resources.mjs';
 
 const PGN = [
   '[Event "Phase 7 synthetic cache benchmark"]',
@@ -156,10 +157,19 @@ export async function runPersistedCacheProbe() {
     });
 
     async function measureRun(expectedId) {
+      // Capture only this benchmark Node process, independently from native
+      // Stockfish child /proc samples. RSS boundaries are NOT per-cycle peaks.
+      const rssBeforeBytes = process.memoryUsage.rss();
+      const cpuBefore = process.cpuUsage();
       const started = performance.now();
       const claimed = await service.runOnce();
       const wallMs = roundMs(performance.now() - started);
+      const cpuDelta = process.cpuUsage(cpuBefore);
+      const rssAfterBytes = process.memoryUsage.rss();
       if (!claimed) throw new Error('Benchmark worker did not claim its queued run.');
+      const nodeHostResources = summarizeNodeHostCycleResources(
+        cpuDelta, rssBeforeBytes, rssAfterBytes,
+      );
       const nativeChildResources = processSamples.shift() ?? null;
       if (process.platform === 'linux' && !nativeChildResources) {
         throw new Error('Linux native child CPU/RSS measurement is missing.');
@@ -171,6 +181,7 @@ export async function runPersistedCacheProbe() {
         ...validatedCacheRun(persisted),
         workerCycleWallMs: wallMs,
         nativeChildResources,
+        nodeHostResources,
         sourcePlyIndexedAt: persisted.sourcePlyIndexedAt?.toISOString(),
         analysisVersion: persisted.analysisVersion,
         settingsHash: persisted.settingsHash,
@@ -203,7 +214,7 @@ export async function runPersistedCacheProbe() {
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v2',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v3',
       observedAtUtc: new Date().toISOString(),
       measurementKind: 'SYNTHETIC_SINGLE_GAME_DB_CACHE_COLD_WARM',
       environment: {
@@ -242,6 +253,7 @@ export async function runPersistedCacheProbe() {
         'representative bullet/blitz/rapid game distributions and clock coverage',
         'production depth-16/MultiPV-3 resource use',
         'per-game Stockfish child CPU/peak RSS distributions (only one four-ply synthetic game is sampled)',
+        'isolated Node worker CPU/peak RSS, or PostgreSQL process CPU/RSS (only Node parent cycle deltas and RSS endpoints are sampled)',
         'concurrency, saturation, cancellation/backlog, retry/recovery economics',
         'cloud pricing, per-1k-game cost or pilot capacity',
       ],
