@@ -58,8 +58,10 @@ production-sized workload. The dedicated
 [real-Stockfish workflow](../.github/workflows/real-stockfish-acceptance.yml)
 now exercises this extra microbaseline after its existing native/DB gates,
 on Ubuntu 24.04 with apt `stockfish=16-1build1` and PostgreSQL 16.
-Its logs contain the measured JSON; do not extrapolate across runner/CPU/binary
-differences without matching recorded provenance.
+Its logs contain the measured JSON, and the dedicated workflow also uploads
+both raw synthetic benchmark JSON reports as one GitHub Actions artifact; do not
+extrapolate across runner/CPU/binary differences without matching recorded
+provenance.
 
 ### First observed native CI sample (illustrative; not economics acceptance)
 
@@ -161,6 +163,19 @@ node --test scripts/phase-7-worker-cache-policy.test.mjs scripts/phase-7-stockfi
 The dedicated native workflow creates a separate disposable PostgreSQL 16
 database for this probe so prior integration tests cannot contaminate a cold
 cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v3`.
+On successful validation it uploads `/tmp/phase7-native-timing.json` and
+`/tmp/phase7-db-cache.json` together as an Actions artifact named
+`phase7-native-benchmarks-<workflow-SHA>-<run-attempt>` with **30-day retention**.
+Here `github.sha` identifies the tested workflow revision (the test merge commit
+on pull-request runs, not necessarily the source branch's head SHA).
+A preceding CI step requires both reports to be nonempty; a missing report
+fails the job rather than uploading only one file. Download from the specific workflow
+run's Artifacts section to inspect raw measurements and compare exact engine,
+settings, host, and DB provenance. This is limited retention, not a permanent
+research archive; save approved copies separately if longer-term comparison is
+required. These are **synthetic** benchmark reports; they contain local binary
+paths, disposable database names and host information, but no Lichess user data.
+Archiving them does not make their one-game results representative.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
 not a measurement. This narrow synthetic case cannot establish statistically
