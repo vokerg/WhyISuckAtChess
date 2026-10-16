@@ -1,5 +1,5 @@
 // Phase 7 #126: strictly opt-in, native Stockfish + persisted position-cache probe.
-// This uses one synthetic four-ply PGN in a fresh LOCAL disposable PostgreSQL DB.
+// This uses two synthetic four-ply PGNs in a fresh LOCAL disposable PostgreSQL DB.
 // Not an import/provider, representative throughput, or production-depth benchmark.
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { assertDisposableCacheBenchmarkUrl, validatedCacheRun, validateCrossGameReuse } from './phase-7-worker-cache-policy.mjs';
 import { sampleNativeChildProcessResources } from './phase-7-stockfish-child-resources.mjs';
 import { summarizeNodeHostCycleResources } from './phase-7-node-host-resources.mjs';
+import { summarizeCacheEnginePhaseTimings } from './phase-7-cache-engine-phase-timings.mjs';
 
 const PGN = [
   '[Event "Phase 7 synthetic cache benchmark"]',
@@ -132,12 +133,14 @@ export async function runPersistedCacheProbe() {
     positionIds = [...new Set(plies.flatMap((ply) => [ply.beforePositionId, ply.afterPositionId]))];
 
     const processSamples = [];
+    const enginePhaseSamples = [];
     const service = createStockfishAnalysisService({
       analysisVersion: ANALYSIS_VERSION,
       settings: SETTINGS,
       workerId: 'phase7-cache-benchmark-' + suffix,
       engineFactory: async () => {
         let childPid = null;
+        const startupStarted = performance.now();
         const engine = await createStockfishEngine({
           binaryPath, settings: SETTINGS, commandTimeoutMs: 15_000,
           spawnProcess: (command) => {
@@ -146,14 +149,31 @@ export async function runPersistedCacheProbe() {
             return child;
           },
         });
+        const enginePhaseSample = {
+          startupWallMs: performance.now() - startupStarted,
+          searchWallMs: [],
+          shutdownWallMs: null,
+        };
+        enginePhaseSamples.push(enginePhaseSample);
         return {
           ...engine,
+          async analyzeFen(fen) {
+            const searchStarted = performance.now();
+            const result = await engine.analyzeFen(fen);
+            enginePhaseSample.searchWallMs.push(performance.now() - searchStarted);
+            return result;
+          },
           async close() {
             // Capture live child CPU + VmHWM before the worker closes the engine.
             try {
               processSamples.push(await sampleNativeChildProcessResources(childPid));
             } finally {
-              await engine.close();
+              const shutdownStarted = performance.now();
+              try {
+                await engine.close();
+              } finally {
+                enginePhaseSample.shutdownWallMs = performance.now() - shutdownStarted;
+              }
             }
           },
         };
@@ -167,7 +187,7 @@ export async function runPersistedCacheProbe() {
       const cpuBefore = process.cpuUsage();
       const started = performance.now();
       const claimed = await service.runOnce();
-      const wallMs = roundMs(performance.now() - started);
+      const wallMs = performance.now() - started;
       const cpuDelta = process.cpuUsage(cpuBefore);
       const rssAfterBytes = process.memoryUsage.rss();
       if (!claimed) throw new Error('Benchmark worker did not claim its queued run.');
@@ -181,9 +201,17 @@ export async function runPersistedCacheProbe() {
       const persisted = await prisma.gameAnalysisRun.findUniqueOrThrow({
         where: { id: expectedId },
       });
+      const validated = validatedCacheRun(persisted);
+      // Native Stockfish lifecycle and search awaits sit inside runOnce().
+      // Search count must equal actual durable cache misses, including zero
+      // searches on the same-game warm pass.
+      const enginePhaseTimings = summarizeCacheEnginePhaseTimings(
+        enginePhaseSamples.shift(), wallMs, validated.cacheMisses,
+      );
       return {
-        ...validatedCacheRun(persisted),
-        workerCycleWallMs: wallMs,
+        ...validated,
+        workerCycleWallMs: roundMs(wallMs),
+        enginePhaseTimings,
         nativeChildResources,
         nodeHostResources,
         sourcePlyIndexedAt: persisted.sourcePlyIndexedAt?.toISOString(),
@@ -260,7 +288,7 @@ export async function runPersistedCacheProbe() {
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v4',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v5',
       observedAtUtc: new Date().toISOString(),
       measurementKind: 'SYNTHETIC_TWO_GAME_DB_CACHE_COLD_WARM_AND_PARTIAL_CROSS_GAME',
       environment: {
@@ -313,6 +341,7 @@ export async function runPersistedCacheProbe() {
         'production depth-16/MultiPV-3 resource use',
         'representative per-game Stockfish child CPU/peak RSS distributions (only two very short synthetic games are sampled)',
         'isolated Node worker CPU/peak RSS, or PostgreSQL process CPU/RSS (only Node parent cycle deltas and RSS endpoints are sampled)',
+        'PostgreSQL/query-only duration: otherWorkerWallMs also includes Node scheduling, JS processing and application persistence overhead',
         'concurrency, saturation, cancellation/backlog, retry/recovery economics, or independent-game sample distributions',
         'cloud pricing, per-1k-game cost or pilot capacity',
       ],
