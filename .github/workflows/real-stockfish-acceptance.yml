@@ -97,6 +97,10 @@ jobs:
           cat /tmp/phase7-db-cache.json
       # Both reports contain synthetic positions only. The Actions run ties
       # measurements to the tested workflow SHA and run attempt.
+      - name: Require both nonempty native benchmark JSON reports
+        run: |
+          test -s /tmp/phase7-native-timing.json
+          test -s /tmp/phase7-db-cache.json
       - name: Retain raw synthetic native benchmark measurements
         uses: actions/upload-artifact@v4
         with:
