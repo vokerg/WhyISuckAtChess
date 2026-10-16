@@ -22,7 +22,7 @@ may reflect host or process warm-up. This is **not** an experiment on Why's
 persisted position cache.
 
 The report is machine-readable JSON, schema
-`phase-7-native-timing-microbaseline-v1`. It records per-search wall time,
+`phase-7-native-timing-microbaseline-v2`. It records per-search wall time,
 nearest-rank p50/p90/p95, mean/min/max, engine name/version, binary SHA-256,
 runtime, CPU model/logical core count, host-reported RAM, FEN sample definitions,
 settings and settings hash. Timings are from the Node host monotonic clock
@@ -147,7 +147,7 @@ node --test scripts/phase-7-worker-cache-policy.test.mjs
 
 The dedicated native workflow creates a separate disposable PostgreSQL 16
 database for this probe so prior integration tests cannot contaminate a cold
-cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v1`.
+cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v2`.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
 not a measurement. This narrow synthetic case cannot establish statistically
