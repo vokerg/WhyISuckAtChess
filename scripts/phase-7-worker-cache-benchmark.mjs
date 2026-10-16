@@ -203,7 +203,7 @@ export async function runPersistedCacheProbe() {
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v1',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v2',
       observedAtUtc: new Date().toISOString(),
       measurementKind: 'SYNTHETIC_SINGLE_GAME_DB_CACHE_COLD_WARM',
       environment: {
