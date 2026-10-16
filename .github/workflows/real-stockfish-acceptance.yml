@@ -95,14 +95,15 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE why_chess_cache_benchmark_ci'
-      - name: Run real persisted Stockfish cold/warm cache probe (synthetic, not pilot economics)
+      - name: Run real persisted Stockfish cold/warm and cross-game cache probe (synthetic, not pilot economics)
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_chess_cache_benchmark_ci
           RUN_PHASE7_CACHE_BENCHMARK: '1'
         run: |
           npm run db:migrate
+          node --test scripts/phase-7-worker-cache-policy.test.mjs
           timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > /tmp/phase7-db-cache.json
-          node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v3'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal||!x.results.cold.nativeChildResources?.peakResidentBytes||!x.results.warm.nativeChildResources?.peakResidentBytes||x.results.cold.nativeChildResources.cpuTotalMs<0||x.results.warm.nativeChildResources.cpuTotalMs<0||!['cold','warm'].every(k=>x.results[k].nodeHostResources?.source==='NODE_PARENT_CPU_USAGE_AND_RSS_BOUNDARY_SNAPSHOTS'&&Number.isFinite(x.results[k].nodeHostResources.cpuTotalMs)&&x.results[k].nodeHostResources.cpuTotalMs>=0&&x.results[k].nodeHostResources.rssBeforeBytes>0&&x.results[k].nodeHostResources.rssAfterBytes>0)) process.exit(1)"
+          node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v4'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal||x.fixture.crossGame.reusedPositions<=0||x.fixture.crossGame.newPositions<=0||x.results.crossGame.cacheHits!==x.fixture.crossGame.reusedPositions||x.results.crossGame.cacheMisses!==x.fixture.crossGame.newPositions||x.results.positionAnalysisRowsAfterCrossGame!==x.results.positionAnalysisRowsAfterWarm+x.fixture.crossGame.newPositions||!['cold','warm','crossGame'].every(k=>x.results[k].nativeChildResources?.peakResidentBytes>0&&x.results[k].nativeChildResources.cpuTotalMs>=0&&x.results[k].nodeHostResources?.source==='NODE_PARENT_CPU_USAGE_AND_RSS_BOUNDARY_SNAPSHOTS'&&Number.isFinite(x.results[k].nodeHostResources.cpuTotalMs)&&x.results[k].nodeHostResources.cpuTotalMs>=0&&x.results[k].nodeHostResources.rssBeforeBytes>0&&x.results[k].nodeHostResources.rssAfterBytes>0)) process.exit(1)"
           cat /tmp/phase7-db-cache.json
       # Both reports contain synthetic positions only. The Actions run ties
       # measurements to the tested workflow SHA and run attempt.

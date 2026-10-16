@@ -2,7 +2,7 @@
 
 **Status:** **Partial benchmark instrumentation, not an economics sign-off.**
 The first deliverables are a reproducible native Stockfish timing microbaseline
-and a real persisted-cache probe on one synthetic game. Linux-only, live-child
+and a real persisted-cache probe on two short synthetic games with partially shared positions. Linux-only, live-child
 CPU and peak RSS snapshots supplement their wall-clock timings; none of these
 are representative per-game cost, application worker throughput, or pilot capacity.
 See [real-Stockfish acceptance](phase-7-real-stockfish-acceptance.md) for the
@@ -91,7 +91,7 @@ run; preserve the original head reference when citing these timings.
 | --- | --- | --- |
 | Native engine wall-time distribution for 5 synthetic positions | Opt-in JSON from the dedicated workflow; confirm exact run/head before citing values | **Microbaseline only**, not a game/worker distribution |
 | Repeated in-process engine searches | First pass versus later passes in the same JSON | `ucinewgame` is sent per search; timing variation is **not** a measured engine-hash or DB-cache hit rate |
-| Cold and warm persisted position cache | Real DB-backed 4-ply synthetic probe: 0/5 to 5/5 hits (see #156 and its exact-head native workflow) | **Partial**; only one game, not representative cross-game reuse |
+| Cold, warm, and cross-game persisted position cache | Real DB-backed four-ply synthetic probe: cold 0/5, warm 5/5 hits (see #156); v4 additionally tests partial reuse from a second divergent synthetic opening | **Partial**; two fixed 4-ply games cannot establish representative cross-game reuse |
 | Imported game/position/ply throughput | **Not yet measured** | Existing small pipeline CI durations are acceptance-test times, not representative costs |
 | Stockfish child CPU/peak RSS | One Linux live-child snapshot per synthetic engine session/pass, available only from new exact-head benchmark runs | **Partial**; not a representative per-game distribution, and not application worker CPU/RSS |
 | Node benchmark parent CPU/RSS | `process.cpuUsage()` delta plus `process.memoryUsage.rss()` before/after each cache worker cycle | **Partial**; inclusive Node parent-process CPU, not an isolated worker, child engine, or PostgreSQL sample; RSS endpoints are **not peaks** |
@@ -109,20 +109,30 @@ The opt-in `scripts/phase-7-worker-cache-benchmark.mjs` supplies a **different
 measurement** from the five-FEN UCI-only microbaseline: it inserts one original
 four-ply 180+0 blitz PGN, indexes it with the production ply-index service,
 and processes it through the **real persisted Stockfish analysis service**
-against freshly migrated PostgreSQL. It then **requests reanalysis as a new
+against freshly migrated PostgreSQL. After the cold/warm reanalysis of that
+first game, it indexes a **second original synthetic four-ply game**, with
+identical 180+0 metadata and initial `1. e4 e5` moves but a divergent
+`2. d4 exd4` continuation. This checks true *cross-game* persistence rather
+than only same-game rerun behavior. It then **requests reanalysis as a new
 durable run** with identical indexed source, engine identity, analysis version,
 settings hash, and actual cache rows. Without that new run, the normal
 already-complete scheduling path would skip work, making a "warm" result invalid.
 
 The cold run must report zero hits and all distinct positions as misses; the
-warm run must report all hits and zero misses. Both durable runs must have
+warm run must report all hits and zero misses. The second game's analysis must
+report both shared-position cache hits and new-position misses based on actual
+indexed position IDs, preserve engine name/version/analysis settings, and grow
+the persisted cache by **exactly the number of new positions**; all three
+runs must complete on the same disposable database. If there are zero shared
+positions or zero new positions, or the counters/row growth disagree, the
+probe fails rather than claiming a cross-game reuse measurement. Both durable runs must have
 `SUCCEEDED/COMPLETE` coverage with all plies, one attempt, matching provenance,
 and unchanged `StockfishPositionAnalysis` row count after the warm run.
 The report includes wall-clock worker-cycle times **including engine startup**
 and Postgres persistence, indexed PGN time, database-reported queue/claim times,
 cache ratios, row counts, OS/engine identifiers, binary SHA-256 and database
 size before/after (affected by physical allocation; **not per-game storage
-economics**). Each cold/warm run independently samples the live Stockfish
+economics**). Each cold/warm/cross-game run independently samples the live Stockfish
 child's cumulative CPU time and peak RSS before engine shutdown on Linux.
 These readings exclude the Node process and PostgreSQL, and the two single-game
 samples are not a useful CPU/RSS distribution. Persisted `createdAt`, `claimedAt`,
@@ -130,15 +140,15 @@ and `completedAt` timestamps must be valid, chronologically ordered, and yield
 safe integer millisecond intervals; invalid timing is rejected instead of
 silently being clamped to zero. These database timestamps are not monotonic
 wall-clock timers and do not replace the separate measured worker-cycle wall
-time. The v3 JSON also reports
-`nodeHostResources` for each cold/warm `service.runOnce()` call. The resource
+time. The v4 JSON also reports
+`nodeHostResources` for each cold/warm/cross-game `service.runOnce()` call. The resource
 window uses `process.cpuUsage()` to obtain the **parent benchmark Node process's**
 user/system CPU delta in milliseconds, and `process.memoryUsage.rss()` for
 resident bytes at the start and end. These Node readings include parent
 benchmark and database-client overhead but exclude native Stockfish child and
 PostgreSQL server CPU/memory; the RSS change may be negative and is **not**
 a cycle peak. No isolated application worker or per-position footprint is
-established. The probe does not contact Lichess or run evidence/diagnosis.
+established. The probe does not contact Lichess or run evidence/diagnosis, and its two tiny fixed games are not independent samples of a population.
 
 **Safety requirements:** explicit `RUN_PHASE7_CACHE_BENCHMARK=1`; an absolute
 `STOCKFISH_PATH`; a **local** dedicated DB whose name starts
@@ -162,7 +172,11 @@ node --test scripts/phase-7-worker-cache-policy.test.mjs scripts/phase-7-stockfi
 
 The dedicated native workflow creates a separate disposable PostgreSQL 16
 database for this probe so prior integration tests cannot contaminate a cold
-cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v3`.
+cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v4`, including
+`fixture.crossGame`, `results.crossGame`, second-game indexing time, and the
+post-cross-game row count. The workflow validates all three native-child and
+Node-parent resource snapshots, exact shared/new position counts and cache
+row growth.
 On successful validation it uploads `/tmp/phase7-native-timing.json` and
 `/tmp/phase7-db-cache.json` together as an Actions artifact named
 `phase7-native-benchmarks-<workflow-SHA>-<run-attempt>` with **30-day retention**.
@@ -178,7 +192,7 @@ paths, disposable database names and host information, but no Lichess user data.
 Archiving them does not make their one-game results representative.
 Inspect the **exact run/head** and its CPU/binary/environment before citing
 actual measured values; merely landing the script or passing a unit test is
-not a measurement. This narrow synthetic case cannot establish statistically
+not a measurement. This narrow two-game synthetic case cannot establish statistically
 representative resource distributions, isolated application-worker peak RSS or
 PostgreSQL process CPU/RSS, concurrency, queue saturation, provider ingestion,
 evidence/diagnosis throughput, or cloud capacity/cost. In

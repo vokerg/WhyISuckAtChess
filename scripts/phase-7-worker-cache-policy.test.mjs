@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   assertDisposableCacheBenchmarkUrl,
   validatedCacheRun,
+  validateCrossGameReuse,
 } from './phase-7-worker-cache-policy.mjs';
 
 test('dedicated local PostgreSQL benchmark names are required before connecting', () => {
@@ -88,4 +89,31 @@ test('benchmark rejects malformed, reversed, or unsafe persisted timestamp inter
   }));
   assert.equal(zeroDuration.queueLagMs, 0);
   assert.equal(zeroDuration.persistedRunElapsedMs, 0);
+});
+
+
+test('cross-game probe verifies measured overlaps, misses and cache row growth', () => {
+  const complete = { status: 'SUCCEEDED', coverageStatus: 'COMPLETE', positionsTotal: 5, cacheHits: 3, cacheMisses: 2 };
+  assert.deepEqual(validateCrossGameReuse([1, 2, 3, 4, 5], [1, 2, 3, 6, 7], complete, 5, 7), {
+    reusedPositions: 3, newPositions: 2,
+  });
+  const wrongRuns = [
+    { ...complete, cacheHits: 5, cacheMisses: 0 },
+    { ...complete, cacheHits: 2, cacheMisses: 3 },
+    { ...complete, status: 'FAILED' },
+    { ...complete, coverageStatus: 'PARTIAL' },
+    { ...complete, positionsTotal: 4 },
+  ];
+  for (const invalid of wrongRuns) {
+    assert.throws(() => validateCrossGameReuse([1, 2, 3, 4, 5], [1, 2, 3, 6, 7], invalid, 5, 7));
+  }
+  for (const [first, second, before, after] of [
+    [[1, 2, 3], [4, 5], 3, 5], // zero overlap
+    [[1, 2, 3], [1, 2, 3], 3, 3], // no new work
+    [[1, 1, 3], [1, 2, 3, 6, 7], 5, 7], // duplicate IDs
+    [[1, 2, 3], [1, 2, 0, 6, 7], 5, 7], // invalid IDs
+    [[1, 2, 3], [1, 2, 3, 6, 7], 5, 6], // missing cache rows
+    [[1, 2, 3], [1, 2, 3, 6, 7], 5, 8], // extra cache rows
+    [[1, 2, 3], [1, 2, 3, 6, 7], -1, 1], // invalid starting count
+  ]) assert.throws(() => validateCrossGameReuse(first, second, complete, before, after));
 });

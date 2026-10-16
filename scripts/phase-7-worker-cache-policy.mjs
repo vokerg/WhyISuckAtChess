@@ -55,3 +55,33 @@ export function validatedCacheRun(run) {
     persistedRunElapsedMs,
   };
 }
+
+
+// Cross-game cache reuse is only meaningful when a second DIFFERENT game has
+// both shared indexed position IDs and genuinely new positions. Require row
+// growth to match the misses; a second no-op run is not a measurement.
+export function validateCrossGameReuse(baselineIds, secondIds, run, rowsBefore, rowsAfter) {
+  const validIds = (ids) => Array.isArray(ids) && ids.length > 0
+    && ids.every((id) => Number.isSafeInteger(id) && id > 0)
+    && new Set(ids).size === ids.length;
+  if (!validIds(baselineIds) || !validIds(secondIds)) {
+    throw new Error('Cross-game probe requires unique valid indexed position IDs.');
+  }
+  if (![rowsBefore, rowsAfter].every((value) => Number.isSafeInteger(value) && value >= 0)
+      || rowsAfter < rowsBefore) {
+    throw new Error('Cross-game probe has invalid persisted cache row counts.');
+  }
+  const shared = new Set(baselineIds);
+  const reusedPositions = secondIds.filter((id) => shared.has(id)).length;
+  const newPositions = secondIds.length - reusedPositions;
+  if (reusedPositions < 1 || newPositions < 1) {
+    throw new Error('Cross-game probe must include both shared and new positions.');
+  }
+  if (run?.status !== 'SUCCEEDED' || run?.coverageStatus !== 'COMPLETE'
+      || run.positionsTotal !== secondIds.length
+      || run.cacheHits !== reusedPositions || run.cacheMisses !== newPositions
+      || rowsAfter - rowsBefore !== newPositions) {
+    throw new Error('Cross-game persisted cache hits, misses or row growth contradict indexed positions.');
+  }
+  return { reusedPositions, newPositions };
+}

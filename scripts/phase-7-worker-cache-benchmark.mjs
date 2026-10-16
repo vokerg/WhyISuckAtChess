@@ -8,7 +8,7 @@ import { arch, cpus, platform, totalmem } from 'node:os';
 import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { assertDisposableCacheBenchmarkUrl, validatedCacheRun } from './phase-7-worker-cache-policy.mjs';
+import { assertDisposableCacheBenchmarkUrl, validatedCacheRun, validateCrossGameReuse } from './phase-7-worker-cache-policy.mjs';
 import { sampleNativeChildProcessResources } from './phase-7-stockfish-child-resources.mjs';
 import { summarizeNodeHostCycleResources } from './phase-7-node-host-resources.mjs';
 
@@ -23,6 +23,11 @@ const PGN = [
   '',
   '1. e4 e5 2. Nf3 Nc6 1-0',
 ].join('\n');
+// A second original synthetic opening shares its first two plies with PGN,
+// then diverges. This measures real persisted cross-game partial cache reuse.
+const PARTIAL_OVERLAP_PGN = PGN.replace(
+  '1. e4 e5 2. Nf3 Nc6 1-0', '1. e4 e5 2. d4 exd4 1-0',
+);
 const SETTINGS = Object.freeze({ depth: 6, multiPv: 1, threads: 1, hashMb: 16 });
 const ANALYSIS_VERSION = 'phase-7-cache-probe-v1';
 const roundMs = (value) => Math.round(value * 1000) / 1000;
@@ -90,30 +95,29 @@ export async function runPersistedCacheProbe() {
       data: { authProvider: 'TEST', authSubject: 'phase7-cache-bench-' + suffix },
     });
     userId = user.id;
-    const game = await prisma.importedGame.create({
-      data: {
-        appUserId: user.id,
-        provider: 'LICHESS',
-        providerGameId: 'phase7-cache-bench-' + suffix,
-        connectedLichessUserId: 'synthetic-fixture',
-        connectedLichessUsername: 'FixtureUser',
-        source: 'PHASE7_SYNTHETIC',
-        pgn: PGN,
-        rated: true,
-        variant: 'standard',
-        speedCategory: 'blitz',
-        timeControlRaw: '180+0',
-        timeControlInitial: 180,
-        timeControlIncrement: 0,
-        timeControlSource: 'PGN',
-        userColor: 'WHITE',
-        whiteUsername: 'FixtureUser',
-        blackUsername: 'FixtureOpponent',
-        status: 'resign',
-        rawClockPresence: 'ABSENT',
-        rawClockStateCount: 0,
-      },
-    });
+    const gameSource = {
+      appUserId: user.id,
+      provider: 'LICHESS',
+      providerGameId: 'phase7-cache-bench-' + suffix,
+      connectedLichessUserId: 'synthetic-fixture',
+      connectedLichessUsername: 'FixtureUser',
+      source: 'PHASE7_SYNTHETIC',
+      pgn: PGN,
+      rated: true,
+      variant: 'standard',
+      speedCategory: 'blitz',
+      timeControlRaw: '180+0',
+      timeControlInitial: 180,
+      timeControlIncrement: 0,
+      timeControlSource: 'PGN',
+      userColor: 'WHITE',
+      whiteUsername: 'FixtureUser',
+      blackUsername: 'FixtureOpponent',
+      status: 'resign',
+      rawClockPresence: 'ABSENT',
+      rawClockStateCount: 0,
+    };
+    const game = await prisma.importedGame.create({ data: gameSource });
 
     const indexStarted = performance.now();
     const indexed = await ImportedGamePlyIndexService.indexOne(user.id, game.id);
@@ -197,8 +201,45 @@ export async function runPersistedCacheProbe() {
     const warm = await measureRun(warmId);
     const positionAnalysisRowsAfterWarm = await prisma.stockfishPositionAnalysis.count();
 
+    // A different indexed game shares the first two plies (starting
+    // position, after e4, after ...e5), then diverges.
+    // Read actual normalized position IDs rather than assuming hit counts.
+    const sibling = await prisma.importedGame.create({
+      data: {
+        ...gameSource,
+        providerGameId: 'phase7-cache-bench-partial-' + suffix,
+        pgn: PARTIAL_OVERLAP_PGN,
+      },
+    });
+    const crossGameIndexStarted = performance.now();
+    const crossGameIndexed = await ImportedGamePlyIndexService.indexOne(user.id, sibling.id);
+    const crossGameIndexingWallMs = roundMs(performance.now() - crossGameIndexStarted);
+    if (crossGameIndexed.status !== 'INDEXED' || crossGameIndexed.pliesIndexed !== 4) {
+      throw new Error('Synthetic overlapping game indexing failed.');
+    }
+    const siblingPlies = await prisma.importedGamePly.findMany({
+      where: { importedGameId: sibling.id },
+      select: { beforePositionId: true, afterPositionId: true },
+    });
+    const siblingPositionIds = [
+      ...new Set(siblingPlies.flatMap((ply) => [ply.beforePositionId, ply.afterPositionId])),
+    ];
+    const firstPositionIds = [...positionIds];
+    // Cleanup tracks BOTH games even if the second analysis fails.
+    positionIds = [...new Set([...positionIds, ...siblingPositionIds])];
+    const crossGameId = await service.requestReanalysis(sibling.id);
+    const crossGame = await measureRun(crossGameId);
+    const positionAnalysisRowsAfterCrossGame = await prisma.stockfishPositionAnalysis.count();
+    const crossGameOverlap = validateCrossGameReuse(
+      firstPositionIds,
+      siblingPositionIds,
+      crossGame,
+      positionAnalysisRowsAfterWarm,
+      positionAnalysisRowsAfterCrossGame,
+    );
+
     if (cold.cacheHits !== 0 || cold.cacheMisses !== cold.positionsTotal
-        || cold.positionsTotal !== positionIds.length
+        || cold.positionsTotal !== firstPositionIds.length
         || warm.cacheHits !== warm.positionsTotal || warm.cacheMisses !== 0
         || warm.positionsTotal !== cold.positionsTotal
         || warm.pliesTotal !== cold.pliesTotal
@@ -206,17 +247,22 @@ export async function runPersistedCacheProbe() {
         || cold.analysisVersion !== warm.analysisVersion
         || cold.engineName !== warm.engineName || cold.engineVersion !== warm.engineVersion
         || cold.sourcePlyIndexedAt !== warm.sourcePlyIndexedAt
-        || positionAnalysisRowsAfterCold !== positionIds.length
-        || positionAnalysisRowsAfterWarm !== positionAnalysisRowsAfterCold) {
+        || positionAnalysisRowsAfterCold !== firstPositionIds.length
+        || positionAnalysisRowsAfterWarm !== positionAnalysisRowsAfterCold
+        || crossGame.pliesTotal !== siblingPlies.length
+        || crossGame.settingsHash !== cold.settingsHash
+        || crossGame.analysisVersion !== cold.analysisVersion
+        || crossGame.engineName !== cold.engineName
+        || crossGame.engineVersion !== cold.engineVersion) {
       throw new Error('Cold/warm persisted cache invariants did not hold.');
     }
 
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v3',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v4',
       observedAtUtc: new Date().toISOString(),
-      measurementKind: 'SYNTHETIC_SINGLE_GAME_DB_CACHE_COLD_WARM',
+      measurementKind: 'SYNTHETIC_TWO_GAME_DB_CACHE_COLD_WARM_AND_PARTIAL_CROSS_GAME',
       environment: {
         platform: platform(),
         architecture: arch(),
@@ -236,14 +282,27 @@ export async function runPersistedCacheProbe() {
         sourceClockCoverage: 'ABSENT',
         games: 1,
         plies: plies.length,
-        distinctPositionIds: positionIds.length,
+        distinctPositionIds: firstPositionIds.length,
+        crossGame: {
+          origin: 'ORIGINAL_SYNTHETIC_FOUR_PLY_PGN_WITH_SHARED_OPENING',
+          speedCategory: 'blitz',
+          exactTimeControl: '180+0',
+          sourceClockCoverage: 'ABSENT',
+          games: 1,
+          plies: siblingPlies.length,
+          distinctPositionIds: siblingPositionIds.length,
+          ...crossGameOverlap,
+        },
       },
       results: {
         indexingWallMs: indexWallMs,
+        crossGameIndexingWallMs,
         cold,
         warm,
+        crossGame,
         positionAnalysisRowsAfterCold,
         positionAnalysisRowsAfterWarm,
+        positionAnalysisRowsAfterCrossGame,
         databaseBytesBefore: dbSizeBeforeBytes,
         databaseBytesAfter: dbSizeAfterBytes,
         databaseBytesDelta: dbSizeAfterBytes - dbSizeBeforeBytes,
@@ -252,9 +311,9 @@ export async function runPersistedCacheProbe() {
         'real Lichess provider import and evidence/diagnosis throughput',
         'representative bullet/blitz/rapid game distributions and clock coverage',
         'production depth-16/MultiPV-3 resource use',
-        'per-game Stockfish child CPU/peak RSS distributions (only one four-ply synthetic game is sampled)',
+        'representative per-game Stockfish child CPU/peak RSS distributions (only two very short synthetic games are sampled)',
         'isolated Node worker CPU/peak RSS, or PostgreSQL process CPU/RSS (only Node parent cycle deltas and RSS endpoints are sampled)',
-        'concurrency, saturation, cancellation/backlog, retry/recovery economics',
+        'concurrency, saturation, cancellation/backlog, retry/recovery economics, or independent-game sample distributions',
         'cloud pricing, per-1k-game cost or pilot capacity',
       ],
     };
