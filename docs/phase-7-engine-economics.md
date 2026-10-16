@@ -165,7 +165,9 @@ database for this probe so prior integration tests cannot contaminate a cold
 cache. Its JSON output schema is `phase-7-persisted-stockfish-cache-probe-v3`.
 On successful validation it uploads `/tmp/phase7-native-timing.json` and
 `/tmp/phase7-db-cache.json` together as an Actions artifact named
-`phase7-native-benchmarks-<head-SHA>-<run-attempt>` with **30-day retention**.
+`phase7-native-benchmarks-<workflow-SHA>-<run-attempt>` with **30-day retention**.
+Here `github.sha` identifies the tested workflow revision (the test merge commit
+on pull-request runs, not necessarily the source branch's head SHA).
 Missing output files fail the upload step. Download from the specific workflow
 run's Artifacts section to inspect raw measurements and compare exact engine,
 settings, host, and DB provenance. This is limited retention, not a permanent
