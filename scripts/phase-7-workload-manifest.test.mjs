@@ -44,6 +44,30 @@ test('exact controls, game lengths and source-clock arms stay separate', () => {
   assert.equal(JSON.stringify(result).includes('synthetic_1'), false);
 });
 
+test('Lichess time-control classification enforces bullet/blitz/rapid boundaries', () => {
+  const cases = [
+    [30, 0, 'bullet'], [179, 0, 'bullet'], [180, 0, 'blitz'],
+    [479, 0, 'blitz'], [480, 0, 'rapid'], [1499, 0, 'rapid'],
+    [120, 2, 'blitz'], // 120 + 40*2 = 200, not bullet
+  ];
+  const rows = cases.map(([initialSeconds, incrementSeconds, speedCategory], index) =>
+    game({ fixtureId: 'boundary_' + index, initialSeconds, incrementSeconds, speedCategory }));
+  const result = summarizeWorkloadManifest(manifest(rows));
+  assert.equal(result.games, cases.length);
+  assert.equal(result.strata.length, cases.length);
+  const invalid = [
+    game({ speedCategory: 'bullet', initialSeconds: 180 }),
+    game({ speedCategory: 'blitz', initialSeconds: 60 }),
+    game({ speedCategory: 'rapid', initialSeconds: 180 }),
+    game({ initialSeconds: 29 }), // ultraBullet pool is out of scope
+    game({ speedCategory: 'rapid', initialSeconds: 1500 }), // classical is out of scope
+    game({ initialSeconds: 120, incrementSeconds: 2 }), // 2+2 belongs to blitz
+  ];
+  for (const row of invalid) {
+    assert.throws(() => summarizeWorkloadManifest(manifest([row])), /contradicts/);
+  }
+});
+
 test('reject malformed, unsafe or potentially identifying manifests', () => {
   const invalid = [
     manifest([]), manifest(Array.from({ length: 10_001 }, (_, i) => game({ fixtureId: 'g' + i }))),
