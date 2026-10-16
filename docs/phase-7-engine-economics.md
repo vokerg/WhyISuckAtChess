@@ -232,3 +232,49 @@ assumed cost-equivalent to the depth-6/MultiPV-1 acceptance fixture.
 **Decision at this checkpoint:** no runtime/worker configuration change.
 #126 remains open and Phase 7 #128 pilot-readiness remains gated on empirical
 economics and independent domain/operational assessment.
+
+
+## 4. Workload composition manifest (metadata only; partial #126)
+
+Run the deterministic cohort *shape* audit against a local, bounded JSON manifest
+before comparing any real-engine performance measurements. This accepts only
+nonidentifying per-game metadata, **not** PGNs, FENs, player names, game IDs,
+OAuth tokens, account identifiers, or provider URLs. It refuses extra fields,
+duplicate fixture IDs, unsafe counts, contradictory absent/complete/partial
+source-clock coverage, unapproved origins, and manifest files larger than 1 MB.
+Only ORIGINAL_SYNTHETIC and RIGHTS_CLEARED_RECORDED metadata origins
+are accepted; selecting the latter does **not** certify the underlying rights
+or the representativeness of a dataset.
+
+The output partitions game **counts and ply/within-game distinct-position
+count distributions** by bullet/blitz/rapid, exact initial+increment
+(e.g. 180+0 versus 180+2), and ABSENT/PARTIAL/COMPLETE/INVALID source-clock
+coverage. Speed pools are checked against Lichess's estimated duration
+`initialSeconds + 40 * incrementSeconds`: 30–179 seconds is bullet,
+180–479 is blitz, and 480–1499 is rapid. UltraBullet and classical
+controls are explicitly out of scope rather than silently mislabeled.
+Zero initial time with positive increment (such as 0+1 bullet) is permitted
+when the resulting estimated duration is in a supported speed pool; 0+0 is not.
+It also preserves aggregate source-clock sample counts. Its
+input.sha256 identifies the precise manifest bytes; no fixture IDs or
+raw game metadata appear in the output. Summed per-game distinct positions
+**cannot** be interpreted as unique positions across the whole corpus.
+The pure command does not contact Lichess, the database, or Stockfish:
+
+~~~sh
+node --test scripts/phase-7-workload-manifest.test.mjs
+node scripts/phase-7-workload-manifest.mjs \
+  scripts/phase-7-workload-synthetic.json \
+  > phase-7-workload-composition.json
+~~~
+
+The checked-in six-row example is **invented metadata for schema/stratification
+testing**, not six recorded or engine-analyzed games; its four-ply lengths
+are deliberately nonrepresentative. Source-clock coverage is declared by
+the fixture author, never inferred. Use separately rights-cleared recorded
+input and independently verified import/clock alignment for a future
+real-game workload; do not upload private source data to Actions. Keep raw
+real benchmark evidence, binary/settings and host provenance in separate,
+versioned measurement artifacts. This composition report alone has **no
+runtime, CPU, RAM, cache-hit, pipeline throughput, saturation, pricing,
+or population-sampling data**, and changes none of the #126/#128 gates.

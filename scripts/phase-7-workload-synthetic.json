@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "phase-7-workload-manifest-v1",
+  "games": [
+    {
+      "fixtureId": "synthetic_bullet_30_0",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "bullet",
+      "initialSeconds": 30,
+      "incrementSeconds": 0,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "COMPLETE",
+      "sourceClockSamples": 4
+    },
+    {
+      "fixtureId": "synthetic_bullet_60_1",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "bullet",
+      "initialSeconds": 60,
+      "incrementSeconds": 1,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "ABSENT",
+      "sourceClockSamples": 0
+    },
+    {
+      "fixtureId": "synthetic_blitz_180_0",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "blitz",
+      "initialSeconds": 180,
+      "incrementSeconds": 0,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "ABSENT",
+      "sourceClockSamples": 0
+    },
+    {
+      "fixtureId": "synthetic_blitz_180_2",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "blitz",
+      "initialSeconds": 180,
+      "incrementSeconds": 2,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "PARTIAL",
+      "sourceClockSamples": 2
+    },
+    {
+      "fixtureId": "synthetic_rapid_600_0",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "rapid",
+      "initialSeconds": 600,
+      "incrementSeconds": 0,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "COMPLETE",
+      "sourceClockSamples": 4
+    },
+    {
+      "fixtureId": "synthetic_rapid_600_5",
+      "origin": "ORIGINAL_SYNTHETIC",
+      "speedCategory": "rapid",
+      "initialSeconds": 600,
+      "incrementSeconds": 5,
+      "plies": 4,
+      "distinctPositions": 5,
+      "clockCoverage": "INVALID",
+      "sourceClockSamples": 3
+    }
+  ]
+}

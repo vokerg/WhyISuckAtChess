@@ -12,6 +12,9 @@ on:
       - 'scripts/phase-7-stockfish-timing-benchmark.mjs'
       - 'scripts/phase-7-stockfish-timing-benchmark.test.mjs'
       - 'scripts/phase-7-benchmark-statistics.mjs'
+      - 'scripts/phase-7-workload-manifest.mjs'
+      - 'scripts/phase-7-workload-manifest.test.mjs'
+      - 'scripts/phase-7-workload-synthetic.json'
       - 'scripts/phase-7-worker-cache-benchmark.mjs'
       - 'scripts/phase-7-worker-cache-policy.mjs'
       - 'scripts/phase-7-worker-cache-policy.test.mjs'
@@ -74,6 +77,12 @@ jobs:
         run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
       - name: Run isolated native Node worker crash and lease recovery (depth 6, 1 thread)
         run: timeout 120s node --test apps/api/test/native-worker-restart.test.mjs
+      - name: Validate Phase 7 workload strata manifest (metadata only, not measured games)
+        run: |
+          node --test scripts/phase-7-workload-manifest.test.mjs
+          node scripts/phase-7-workload-manifest.mjs scripts/phase-7-workload-synthetic.json > /tmp/phase7-workload-composition.json
+          node -e "const x=require('/tmp/phase7-workload-composition.json'); if(x.schemaVersion!=='phase-7-workload-composition-v1'||x.games!==6||x.strata.length!==6||x.originCounts.ORIGINAL_SYNTHETIC!==6||!x.input.sha256||!x.metadataOnly) process.exit(1)"
+          cat /tmp/phase7-workload-composition.json
       - name: Run synthetic Phase 7 native timing microbaseline (not worker economics)
         env:
           RUN_PHASE7_ENGINE_BENCHMARK: '1'
