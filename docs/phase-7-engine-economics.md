@@ -253,6 +253,8 @@ coverage. Speed pools are checked against Lichess's estimated duration
 `initialSeconds + 40 * incrementSeconds`: 30–179 seconds is bullet,
 180–479 is blitz, and 480–1499 is rapid. UltraBullet and classical
 controls are explicitly out of scope rather than silently mislabeled.
+Zero initial time with positive increment (such as 0+1 bullet) is permitted
+when the resulting estimated duration is in a supported speed pool; 0+0 is not.
 It also preserves aggregate source-clock sample counts. Its
 input.sha256 identifies the precise manifest bytes; no fixture IDs or
 raw game metadata appear in the output. Summed per-game distinct positions
