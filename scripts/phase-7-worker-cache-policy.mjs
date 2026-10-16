@@ -28,6 +28,18 @@ export function validatedCacheRun(run) {
       || !run.claimedAt || !run.completedAt || !run.createdAt) {
     throw new Error('Analysis run is not a complete, single-attempt cache measurement.');
   }
+  // Persisted timestamps are not monotonic timers. Reject malformed or
+  // backward chronology instead of reporting a fabricated zero-duration run.
+  const createdAtMs = run.createdAt instanceof Date ? run.createdAt.getTime() : NaN;
+  const claimedAtMs = run.claimedAt instanceof Date ? run.claimedAt.getTime() : NaN;
+  const completedAtMs = run.completedAt instanceof Date ? run.completedAt.getTime() : NaN;
+  const queueLagMs = claimedAtMs - createdAtMs;
+  const persistedRunElapsedMs = completedAtMs - claimedAtMs;
+  if (![createdAtMs, claimedAtMs, completedAtMs, queueLagMs, persistedRunElapsedMs]
+    .every(Number.isSafeInteger)
+    || queueLagMs < 0 || persistedRunElapsedMs < 0) {
+    throw new Error('Cache benchmark run has invalid or reversed persisted timestamps.');
+  }
   return {
     status: run.status,
     coverageStatus: run.coverageStatus,
@@ -39,7 +51,7 @@ export function validatedCacheRun(run) {
     attempts: run.attempts,
     engineName: run.engineName,
     engineVersion: run.engineVersion,
-    queueLagMs: Math.max(0, run.claimedAt.getTime() - run.createdAt.getTime()),
-    persistedRunElapsedMs: Math.max(0, run.completedAt.getTime() - run.claimedAt.getTime()),
+    queueLagMs,
+    persistedRunElapsedMs,
   };
 }
