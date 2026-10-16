@@ -61,3 +61,31 @@ test('partial, retried, or inconsistent counts cannot masquerade as cache measur
     { attempts: 2 }, { claimedAt: null }, { engineVersion: null },
   ]) assert.throws(() => validatedCacheRun(run(fields)));
 });
+
+test('benchmark rejects malformed, reversed, or unsafe persisted timestamp intervals', () => {
+  for (const fields of [
+    { createdAt: new Date('invalid') },
+    { claimedAt: new Date('invalid') },
+    { completedAt: new Date('invalid') },
+    { createdAt: '2026-10-15T00:00:00.000Z' },
+    { claimedAt: '2026-10-15T00:00:01.000Z' },
+    { completedAt: '2026-10-15T00:00:03.000Z' },
+    { createdAt: new Date('2026-10-15T00:00:02.000Z') },
+    { claimedAt: new Date('2026-10-14T23:59:59.000Z') },
+    { completedAt: new Date('2026-10-15T00:00:00.000Z') },
+    {
+      createdAt: new Date(-8_640_000_000_000_000),
+      claimedAt: new Date(8_640_000_000_000_000),
+      completedAt: new Date(8_640_000_000_000_000),
+    },
+  ]) {
+    assert.throws(() => validatedCacheRun(run(fields)));
+  }
+
+  const zeroDuration = validatedCacheRun(run({
+    claimedAt: new Date('2026-10-15T00:00:00.000Z'),
+    completedAt: new Date('2026-10-15T00:00:00.000Z'),
+  }));
+  assert.equal(zeroDuration.queueLagMs, 0);
+  assert.equal(zeroDuration.persistedRunElapsedMs, 0);
+});
