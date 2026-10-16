@@ -100,9 +100,9 @@ export async function runNativeTimingBaseline() {
   const first = samples.filter((row) => row.pass === 1).map((row) => row.wallMs);
   const later = samples.filter((row) => row.pass > 1).map((row) => row.wallMs);
   return {
-    schemaVersion: 'phase-7-native-timing-microbaseline-v1',
+    schemaVersion: 'phase-7-native-timing-microbaseline-v2',
     observedAtUtc: new Date().toISOString(),
-    measurementKind: 'SYNTHETIC_NATIVE_STOCKFISH_WALL_CLOCK_ONLY',
+    measurementKind: 'SYNTHETIC_NATIVE_STOCKFISH_WALL_CLOCK_AND_CHILD_RESOURCES',
     inputProvenance: 'ORIGINAL_SYNTHETIC_FIVE_POSITION_OPENING',
     environment: {
       platform: platform(),
