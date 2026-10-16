@@ -1,6 +1,7 @@
 // Phase 7 #126: strictly opt-in, native Stockfish + persisted position-cache probe.
 // This uses one synthetic four-ply PGN in a fresh LOCAL disposable PostgreSQL DB.
 // Not an import/provider, representative throughput, or production-depth benchmark.
+import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { arch, cpus, platform, totalmem } from 'node:os';
@@ -8,6 +9,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { assertDisposableCacheBenchmarkUrl, validatedCacheRun } from './phase-7-worker-cache-policy.mjs';
+import { sampleNativeChildProcessResources } from './phase-7-stockfish-child-resources.mjs';
 
 const PGN = [
   '[Event "Phase 7 synthetic cache benchmark"]',
@@ -124,13 +126,33 @@ export async function runPersistedCacheProbe() {
     });
     positionIds = [...new Set(plies.flatMap((ply) => [ply.beforePositionId, ply.afterPositionId]))];
 
+    const processSamples = [];
     const service = createStockfishAnalysisService({
       analysisVersion: ANALYSIS_VERSION,
       settings: SETTINGS,
       workerId: 'phase7-cache-benchmark-' + suffix,
-      engineFactory: () => createStockfishEngine({
-        binaryPath, settings: SETTINGS, commandTimeoutMs: 15_000,
-      }),
+      engineFactory: async () => {
+        let childPid = null;
+        const engine = await createStockfishEngine({
+          binaryPath, settings: SETTINGS, commandTimeoutMs: 15_000,
+          spawnProcess: (command) => {
+            const child = spawn(command, [], { stdio: 'pipe' });
+            childPid = child.pid ?? null;
+            return child;
+          },
+        });
+        return {
+          ...engine,
+          async close() {
+            // Capture live child CPU + VmHWM before the worker closes the engine.
+            try {
+              processSamples.push(await sampleNativeChildProcessResources(childPid));
+            } finally {
+              await engine.close();
+            }
+          },
+        };
+      },
     });
 
     async function measureRun(expectedId) {
@@ -138,12 +160,17 @@ export async function runPersistedCacheProbe() {
       const claimed = await service.runOnce();
       const wallMs = roundMs(performance.now() - started);
       if (!claimed) throw new Error('Benchmark worker did not claim its queued run.');
+      const nativeChildResources = processSamples.shift() ?? null;
+      if (process.platform === 'linux' && !nativeChildResources) {
+        throw new Error('Linux native child CPU/RSS measurement is missing.');
+      }
       const persisted = await prisma.gameAnalysisRun.findUniqueOrThrow({
         where: { id: expectedId },
       });
       return {
         ...validatedCacheRun(persisted),
         workerCycleWallMs: wallMs,
+        nativeChildResources,
         sourcePlyIndexedAt: persisted.sourcePlyIndexedAt?.toISOString(),
         analysisVersion: persisted.analysisVersion,
         settingsHash: persisted.settingsHash,
@@ -176,7 +203,7 @@ export async function runPersistedCacheProbe() {
     const dbSizeAfterBytes = await sizeOfDatabase(prisma);
     const cpusOnHost = cpus();
     return {
-      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v1',
+      schemaVersion: 'phase-7-persisted-stockfish-cache-probe-v2',
       observedAtUtc: new Date().toISOString(),
       measurementKind: 'SYNTHETIC_SINGLE_GAME_DB_CACHE_COLD_WARM',
       environment: {
@@ -214,7 +241,7 @@ export async function runPersistedCacheProbe() {
         'real Lichess provider import and evidence/diagnosis throughput',
         'representative bullet/blitz/rapid game distributions and clock coverage',
         'production depth-16/MultiPV-3 resource use',
-        'native Stockfish child CPU/peak RSS',
+        'per-game Stockfish child CPU/peak RSS distributions (only one four-ply synthetic game is sampled)',
         'concurrency, saturation, cancellation/backlog, retry/recovery economics',
         'cloud pricing, per-1k-game cost or pilot capacity',
       ],
