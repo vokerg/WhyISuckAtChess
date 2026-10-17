@@ -23,7 +23,7 @@ p {
 
 h2 {
   margin-bottom: 0.85rem;
-  color: #4a2d1b;
+  color: #2b302b;
   font-size: 1rem;
 }
 
@@ -32,7 +32,7 @@ h2 {
   border-radius: 999px;
   padding: 0.25rem 0.5rem;
   background: #f5dfd6;
-  color: #8a3f2f;
+  color: #9e4036;
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -41,7 +41,7 @@ h2 {
 
 .coverage-pill.coverage-complete {
   background: #e0ecd7;
-  color: #45612e;
+  color: #356749;
 }
 
 .annotation-list {
@@ -62,12 +62,12 @@ h2 {
 
 .annotation-chip[data-severity='WARNING'] {
   background: #f4e2c7;
-  color: #7b4a19;
+  color: #52685b;
 }
 
 .annotation-chip[data-severity='CRITICAL'] {
   background: #f5d4cc;
-  color: #913b2b;
+  color: #9e4036;
 }
 
 .status-line,
@@ -82,7 +82,7 @@ h2 {
 .status-line,
 .caveat,
 .provenance {
-  color: #765f4e;
+  color: #68766b;
 }
 
 .caveat {
@@ -132,11 +132,11 @@ h2 {
 }
 
 .family {
-  color: #90602d;
+  color: #52685b;
 }
 
 .kind {
-  color: #806b59;
+  color: #68766b;
 }
 
 .availability {
@@ -162,12 +162,12 @@ h2 {
 }
 
 dt {
-  color: #806b59;
+  color: #68766b;
 }
 
 dd {
   margin: 0;
-  color: #402a1c;
+  color: #2b302b;
   font-weight: 700;
   text-align: right;
   overflow-wrap: anywhere;
@@ -196,3 +196,7 @@ dd {
     text-align: left;
   }
 }
+
+.evidence-card { border-color: #e0e5de; border-radius: 9px; background: #fff; }
+.evidence-event { border-color: #e0e5de; border-radius: 6px; background: #fff; }
+.coverage-pill, .annotation-chip { border-radius: 4px; letter-spacing: 0; }
