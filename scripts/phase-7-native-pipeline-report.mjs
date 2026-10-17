@@ -7,12 +7,13 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { summarizeDurationMs } from './phase-7-benchmark-statistics.mjs';
 
-const STAGES = Object.freeze(['import', 'indexing', 'analysis', 'evidence', 'replay']);
+const STAGES = Object.freeze(['import', 'indexing', 'analysis', 'evidence', 'diagnosis', 'replay']);
 const FIELDS = Object.freeze([
   'fixtureKey', 'speedCategory', 'initialSeconds', 'incrementSeconds',
   'sourceClockCoverage', 'scenario', 'plies', 'positionsTotal',
   'cacheHits', 'cacheMisses', 'analysisAttempts', 'nativeEngineSpawns',
-  'evidenceRuns', 'clockAlignmentStatus', 'timingCoverageStatus',
+  'evidenceRuns', 'diagnosisPublicationStatus', 'diagnosisFindingCount',
+  'clockAlignmentStatus', 'timingCoverageStatus',
   'harnessWallMs', 'stageCallWallMs',
 ]);
 const MAX_BYTES = 64_000;
@@ -59,6 +60,8 @@ export function summarizePipelineFixtureSamples(samples, expectedCount = 11) {
         || !integer(sample.analysisAttempts, 1, 5)
         || !integer(sample.nativeEngineSpawns, 1, 5)
         || !integer(sample.evidenceRuns, 1, 100)
+        || sample.diagnosisPublicationStatus !== 'SUCCEEDED'
+        || !integer(sample.diagnosisFindingCount, 0, 1000)
         || typeof sample.clockAlignmentStatus !== 'string'
         || !/^[A-Z_]{2,40}$/.test(sample.clockAlignmentStatus)
         || typeof sample.timingCoverageStatus !== 'string'
@@ -84,8 +87,8 @@ export function summarizePipelineFixtureSamples(samples, expectedCount = 11) {
           || values.some((value) => !nonnegative(value))) {
         throw new Error('Native pipeline stage has missing or invalid call timings.');
       }
-      if (['import', 'indexing', 'replay'].includes(stage) && values.length !== 1) {
-        throw new Error('Expected exactly one import, indexing and replay call per fixture.');
+      if (['import', 'indexing', 'diagnosis', 'replay'].includes(stage) && values.length !== 1) {
+        throw new Error('Expected exactly one import, indexing, diagnosis and replay call per fixture.');
       }
       stageTotals[stage] = sum(values);
       allStageMs += stageTotals[stage];
@@ -122,14 +125,14 @@ export function summarizePipelineFixtureSamples(samples, expectedCount = 11) {
       || a.sourceClockCoverage.localeCompare(b.sourceClockCoverage);
   });
   return {
-    schemaVersion: 'phase-7-native-pipeline-fixture-timings-v1',
+    schemaVersion: 'phase-7-native-pipeline-fixture-timings-v2',
     measurementKind: 'INSTRUMENTED_NATIVE_ACCEPTANCE_TEST_SYNTHETIC_FOUR_PLY',
     games: normalized.length,
     sampleUnit: 'ONE_SYNTHETIC_TEST_FIXTURE_NOT_AN_INDEPENDENT_REAL_GAME',
-    stageSemantics: 'SUM_OF_SUCCESSFUL_RUNONCE_CALL_WALL_TIMES;REPLAY_QUERY_AND_PARSE',
+    stageSemantics: 'SUM_OF_SUCCESSFUL_RUNONCE_CALL_WALL_TIMES;DIAGNOSIS_OWNER_SCOPED_PUBLICATION;REPLAY_QUERY_AND_PARSE',
     samples: normalized, strata: grouped,
     notMeasured: [
-      'production Lichess HTTP import, actual end-user diagnosis publication',
+      'production Lichess HTTP import, diagnosis on representative histories or end-user HTTP latency',
       'representative real-game lengths, player clock coverage, or production depth-16/MultiPV-3',
       'isolated worker/PostgreSQL process CPU and peak RSS, database query counts/latencies',
       'concurrent throughput, backlog saturation, natural recovery delay or cancellation cost',

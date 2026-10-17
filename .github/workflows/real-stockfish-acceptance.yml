@@ -9,6 +9,7 @@ on:
       - 'apps/api/test/pipeline-acceptance.test.mjs'
       - 'apps/api/test/native-worker-restart.test.mjs'
       - 'apps/api/src/modules/engine-analysis/**'
+      - 'apps/api/src/modules/diagnosis/**'
       - 'scripts/phase-7-stockfish-timing-benchmark.mjs'
       - 'scripts/phase-7-stockfish-timing-benchmark.test.mjs'
       - 'scripts/phase-7-benchmark-statistics.mjs'
@@ -77,7 +78,7 @@ jobs:
           npm run db:migrate
       - name: Build API and shared dependencies
         run: npm run build:api
-      - name: Run real Stockfish/DB integration with bounded fixture stage timings (11 synthetic cases)
+      - name: Run native import-to-diagnosis/replay fixture stage timings (11 synthetic cases)
         env:
           RUN_PHASE7_PIPELINE_BENCHMARK_REPORT: '1'
         run: |
@@ -86,7 +87,7 @@ jobs:
           timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
           test -s /tmp/phase7-pipeline-fixtures.ndjson
           node scripts/phase-7-native-pipeline-report.mjs /tmp/phase7-pipeline-fixtures.ndjson > /tmp/phase7-pipeline-timings.json
-          node -e "const x=require('/tmp/phase7-pipeline-timings.json'); if(x.schemaVersion!=='phase-7-native-pipeline-fixture-timings-v1'||x.games!==11||x.strata.length<4||!x.environment.stockfishBinarySha256||x.samples.some(s=>s.stageCallWallMs.analysis.length!==s.nativeEngineSpawns||s.cacheMisses<1)) process.exit(1)"
+          node -e "const x=require('/tmp/phase7-pipeline-timings.json'); if(x.schemaVersion!=='phase-7-native-pipeline-fixture-timings-v2'||x.games!==11||x.strata.length<4||!x.environment.stockfishBinarySha256||x.samples.some(s=>s.stageCallWallMs.analysis.length!==s.nativeEngineSpawns||s.cacheMisses<1||s.stageCallWallMs.diagnosis.length!==1||s.diagnosisPublicationStatus!=='SUCCEEDED'||!Number.isSafeInteger(s.diagnosisFindingCount))) process.exit(1)"
       - name: Run isolated native Node worker crash and lease recovery (depth 6, 1 thread)
         run: timeout 120s node --test apps/api/test/native-worker-restart.test.mjs
       - name: Validate Phase 7 workload strata manifest (metadata only, not measured games)
