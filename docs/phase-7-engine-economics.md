@@ -293,3 +293,70 @@ real benchmark evidence, binary/settings and host provenance in separate,
 versioned measurement artifacts. This composition report alone has **no
 runtime, CPU, RAM, cache-hit, pipeline throughput, saturation, pricing,
 or population-sampling data**, and changes none of the #126/#128 gates.
+
+
+## 5. Opt-in native import-to-replay fixture stage timing (partial #126)
+
+The dedicated native acceptance workflow now **retains bounded, structured stage
+timings** from its existing **11 original synthetic four-ply fixtures** covering
+bullet `30+0`, blitz `180+2`, and rapid `600+5`, including absent, short,
+invalid and otherwise complete provider-clock samples. The fixtures also include
+source supersession and injected real Stockfish process-crash/search-deadline
+retries. They exercise the real import/indexing/engine/evidence/replay modules
+with a **mocked Lichess NDJSON response** and a real local Stockfish subprocess;
+they do **not** make external Lichess requests or sample real user workloads.
+
+Instrumentation is behind `RUN_PHASE7_PIPELINE_BENCHMARK_REPORT=1` *and*
+`RUN_REAL_STOCKFISH_ACCEPTANCE=1`. It records one opaque fixture key,
+exact control, declared sample clock-coverage category, durable engine
+cache counters, engine claim/spawn counts, evidence-run count, and
+monotonic **wall time for each successful `runOnce()` call** in the import,
+indexing, native engine and evidence stages. The replay stage times
+the read-model query plus schema parse. Failed/empty polling calls are excluded
+from stage totals; injected failed engine claims that return true are retained.
+The separate per-fixture `harnessWallMs` includes test assertions, direct
+database assertions/queries and special-case retry/supersession orchestration,
+so **it is not app-request latency or a queue throughput denominator**.
+Stages can include Node scheduling, DB interaction and Stockfish time, and
+must not be described as exclusive CPU or PostgreSQL times.
+
+Raw `/tmp/phase7-pipeline-fixtures.ndjson` is processed by
+`scripts/phase-7-native-pipeline-report.mjs`; the pure validator refuses
+missing/duplicate fixtures, extra fields, invalid time-control pools,
+cache-count disagreements, missing/nonfinite stage timings, inconsistent
+native spawn/analysis call counts, or stage sums exceeding enclosing harness
+wall time. It requires exactly 11 rows by default. The v1 summary groups by
+speed, **exact control and clock-coverage category**, with per-group sample
+counts and nearest-rank p50/p90/p95 of *fixture* wall durations; the raw rows
+are retained for inspection. Each single-game group with n=1 has degenerate
+quantiles, not an estimated population distribution. The report also records
+Node/OS/host CPU model and RAM, depth-6/MultiPV-1/one-thread/16-MiB engine
+settings, native executable SHA-256 and input NDJSON SHA-256. Neither private
+IDs, account/player names, PGNs, FENs nor provider payloads are emitted.
+
+```sh
+# With the same disposable PostgreSQL/Stockfish setup as the native acceptance
+# workflow (do NOT run on Neon or an application database):
+export RUN_REAL_STOCKFISH_ACCEPTANCE=1
+export RUN_PHASE7_PIPELINE_BENCHMARK_REPORT=1
+rm -f /tmp/phase7-pipeline-fixtures.ndjson
+timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
+node --test scripts/phase-7-native-pipeline-report.test.mjs
+node scripts/phase-7-native-pipeline-report.mjs \
+  /tmp/phase7-pipeline-fixtures.ndjson > phase-7-pipeline-timings.json
+```
+
+The dedicated workflow fails if the full native test/validator does not pass,
+requires both raw and summarized nonempty files, and uploads them with the
+other synthetic native artifacts under the **tested workflow SHA/run attempt**,
+subject to 30-day retention. No local native run or measured numerical result
+is inferred merely from this instrumentation. Examine actual run artifacts
+before reporting numbers.
+
+**Unresolved:** all 11 cases share one tiny four-ply opening skeleton; they
+are neither independent natural games nor rights-cleared sampled Lichess
+histories. This work does not establish real provider-network ingestion,
+diagnosis publication, per-game CPU/RSS or PostgreSQL load, production
+depth-16/MultiPV-3 economics, concurrency/saturation, natural retry backoff,
+cancellation cost or per-1k-game capacity. The fully representative #126
+economics gate and Phase 7 #128 pilot gate remain **OPEN**.

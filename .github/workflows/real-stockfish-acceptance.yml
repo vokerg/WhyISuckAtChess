@@ -24,6 +24,8 @@ on:
       - 'scripts/phase-7-node-host-resources.test.mjs'
       - 'scripts/phase-7-cache-engine-phase-timings.mjs'
       - 'scripts/phase-7-cache-engine-phase-timings.test.mjs'
+      - 'scripts/phase-7-native-pipeline-report.mjs'
+      - 'scripts/phase-7-native-pipeline-report.test.mjs'
       - '.github/workflows/real-stockfish-acceptance.yml'
 
 jobs:
@@ -75,8 +77,16 @@ jobs:
           npm run db:migrate
       - name: Build API and shared dependencies
         run: npm run build:api
-      - name: Run real Stockfish/DB integration (11 games incl. supersession and durable retries, depth 6, 1 thread)
-        run: timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
+      - name: Run real Stockfish/DB integration with bounded fixture stage timings (11 synthetic cases)
+        env:
+          RUN_PHASE7_PIPELINE_BENCHMARK_REPORT: '1'
+        run: |
+          rm -f /tmp/phase7-pipeline-fixtures.ndjson
+          node --test scripts/phase-7-native-pipeline-report.test.mjs
+          timeout 360s node --test apps/api/test/pipeline-acceptance.test.mjs
+          test -s /tmp/phase7-pipeline-fixtures.ndjson
+          node scripts/phase-7-native-pipeline-report.mjs /tmp/phase7-pipeline-fixtures.ndjson > /tmp/phase7-pipeline-timings.json
+          node -e "const x=require('/tmp/phase7-pipeline-timings.json'); if(x.schemaVersion!=='phase-7-native-pipeline-fixture-timings-v1'||x.games!==11||x.strata.length<4||!x.environment.stockfishBinarySha256||x.samples.some(s=>s.stageCallWallMs.analysis.length!==s.nativeEngineSpawns||s.cacheMisses<1)) process.exit(1)"
       - name: Run isolated native Node worker crash and lease recovery (depth 6, 1 thread)
         run: timeout 120s node --test apps/api/test/native-worker-restart.test.mjs
       - name: Validate Phase 7 workload strata manifest (metadata only, not measured games)
@@ -107,12 +117,14 @@ jobs:
           timeout 120s node scripts/phase-7-worker-cache-benchmark.mjs > /tmp/phase7-db-cache.json
           node -e "const x=require('/tmp/phase7-db-cache.json'); if(x.schemaVersion!=='phase-7-persisted-stockfish-cache-probe-v5'||x.results.cold.cacheMisses<=0||x.results.cold.cacheHits!==0||x.results.warm.cacheMisses!==0||x.results.warm.cacheHits!==x.results.cold.positionsTotal||x.fixture.crossGame.reusedPositions<=0||x.fixture.crossGame.newPositions<=0||x.results.crossGame.cacheHits!==x.fixture.crossGame.reusedPositions||x.results.crossGame.cacheMisses!==x.fixture.crossGame.newPositions||x.results.positionAnalysisRowsAfterCrossGame!==x.results.positionAnalysisRowsAfterWarm+x.fixture.crossGame.newPositions||!['cold','warm','crossGame'].every(k=>x.results[k].nativeChildResources?.peakResidentBytes>0&&x.results[k].nativeChildResources.cpuTotalMs>=0&&x.results[k].nodeHostResources?.source==='NODE_PARENT_CPU_USAGE_AND_RSS_BOUNDARY_SNAPSHOTS'&&Number.isFinite(x.results[k].nodeHostResources.cpuTotalMs)&&x.results[k].nodeHostResources.cpuTotalMs>=0&&x.results[k].nodeHostResources.rssBeforeBytes>0&&x.results[k].nodeHostResources.rssAfterBytes>0&&x.results[k].enginePhaseTimings?.source==='BENCHMARK_NATIVE_ENGINE_AWAITED_WALL_CLOCK'&&x.results[k].enginePhaseTimings.searchCount===x.results[k].cacheMisses&&x.results[k].enginePhaseTimings.searchWallMs.length===x.results[k].cacheMisses&&x.results[k].enginePhaseTimings.engineAwaitedWallMs<=x.results[k].workerCycleWallMs+0.002&&x.results[k].enginePhaseTimings.otherWorkerWallMs>=0&&x.results[k].enginePhaseTimings.searchDurationDistribution?.count===(x.results[k].cacheMisses||undefined))) process.exit(1)"
           cat /tmp/phase7-db-cache.json
-      # Both reports contain synthetic positions only. The Actions run ties
+      # All reports use synthetic positions only. The Actions run ties
       # measurements to the tested workflow SHA and run attempt.
-      - name: Require both nonempty native benchmark JSON reports
+      - name: Require all nonempty native benchmark JSON reports
         run: |
           test -s /tmp/phase7-native-timing.json
           test -s /tmp/phase7-db-cache.json
+          test -s /tmp/phase7-pipeline-fixtures.ndjson
+          test -s /tmp/phase7-pipeline-timings.json
       - name: Retain raw synthetic native benchmark measurements
         uses: actions/upload-artifact@v4
         with:
@@ -120,5 +132,7 @@ jobs:
           path: |
             /tmp/phase7-native-timing.json
             /tmp/phase7-db-cache.json
+            /tmp/phase7-pipeline-fixtures.ndjson
+            /tmp/phase7-pipeline-timings.json
           if-no-files-found: error
           retention-days: 30
