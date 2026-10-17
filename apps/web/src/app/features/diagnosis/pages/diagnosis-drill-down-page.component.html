@@ -1,11 +1,11 @@
-<main class="diagnosis-page">
+<main id="main-content" class="diagnosis-page">
   <header class="hero">
     <div>
-      <p class="eyebrow">Why I suck at chess</p>
-      <h1>What supports this weakness?</h1>
+      <p class="eyebrow">A closer look</p>
+      <h1>Behind this pattern</h1>
       <p class="hero-copy">
-        Inspect the saved diagnosis and its supporting findings. Their relationships and scores
-        come from the deterministic backend, not from this page.
+        See the observations and games behind this finding. Supporting patterns offer
+        context, not separate entries in your ranked list.
       </p>
     </div>
     <a class="secondary-link" routerLink="/diagnosis">← All ranked weaknesses</a>
@@ -25,8 +25,7 @@
   } @else if (loading()) {
     <section class="state-card" aria-live="polite">
       <p class="state-kicker">Loading</p>
-      <h2>Reading current finding evidence…</h2>
-      <p>Only persisted current-revision diagnosis evidence is used.</p>
+      <h2>Loading supporting evidence…</h2>
     </section>
   } @else if (detail(); as current) {
     @if (current.status === 'UNAVAILABLE') {
@@ -84,7 +83,7 @@
           }
           @if (current.finding.representativeEvidence.length > 0) {
             <section class="evidence-section" aria-label="Top-level finding evidence">
-              <h3>Representative evidence</h3>
+              <h3>Example positions</h3>
               <div class="evidence-links">
                 @for (evidence of current.finding.representativeEvidence; track trackEvidence($index, evidence)) {
                   @if (evidenceHrefFor(evidence); as href) {
@@ -102,9 +101,9 @@
       <section class="supporting-section" aria-labelledby="supporting-heading">
         <div class="supporting-heading">
           <div>
-            <p class="eyebrow">Persisted hierarchy</p>
+            <p class="eyebrow">The supporting evidence</p>
             <h2 id="supporting-heading">Supporting findings</h2>
-            <p>Roles and scores are persisted by the diagnosis engine. Children are not independently ranked weaknesses.</p>
+            <p>Related observations help explain the main pattern. They aren’t ranked separately.</p>
           </div>
           <strong class="support-count">{{ current.supportingFindings.length }} findings</strong>
         </div>
