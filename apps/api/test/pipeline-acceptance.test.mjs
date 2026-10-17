@@ -14,6 +14,8 @@ import { evidenceDetectors } from '../dist/modules/evidence/evidence.registry.js
 import { createPrismaEvidenceRepository } from '../dist/modules/evidence/evidence.repository.prisma.js';
 import { createEvidenceService } from '../dist/modules/evidence/evidence.service.js';
 import { createImportedGamesQueryService } from '../dist/modules/imported-games/imported-games.service.js';
+import { createDiagnosisWorkerService } from '../dist/modules/diagnosis/diagnosis-worker.service.js';
+import { diagnosisSummaryService } from '../dist/modules/diagnosis/diagnosis-summary.service.js';
 import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-index.service.js';
 import { runWorkerCycle } from '../dist/worker.js';
 
@@ -482,19 +484,20 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       repository: scopedEvidenceRepository,
       workerId: 'pipeline-evidence-' + suffix,
     });
+    const diagnosisService = createDiagnosisWorkerService({ database: prisma, appUserId: user.id });
 
-    // Measure real native acceptance calls without changing their ordering or
-    // assertions. This harness uses mocked Lichess NDJSON and four-ply fixtures,
-    // and does NOT measure real HTTP or user-diagnosis throughput.
+    // Measure real native acceptance calls without changing production orchestration.
+    // Mocked Lichess NDJSON and four-ply fixtures are not real-user throughput.
     const recordPipelineSample = REAL_STOCKFISH
       && process.env.RUN_PHASE7_PIPELINE_BENCHMARK_REPORT === '1';
     const stageCallWallMs = {
-      import: [], indexing: [], analysis: [], evidence: [], replay: [],
+      import: [], indexing: [], analysis: [], evidence: [], diagnosis: [], replay: [],
     };
     if (recordPipelineSample) {
       for (const [stage, executor] of [
         ['import', importExecutor], ['indexing', plyIndexExecutor],
         ['analysis', analysisService], ['evidence', evidenceService],
+        ['diagnosis', diagnosisService],
       ]) {
         const originalRunOnce = executor.runOnce.bind(executor);
         executor.runOnce = async (...args) => {
@@ -648,6 +651,20 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       false,
       'the same source projection must not enqueue duplicate evidence work',
     );
+
+    // Exercise the actual owner-scoped durable diagnosis publication after all
+    // current native engine/evidence work. Empty findings are valid, but a
+    // pending, failed or stale finding set is not a completed pipeline sample.
+    assert.equal(await diagnosisService.runOnce(), true, 'completed evidence must permit diagnosis publication');
+    const diagnosisJob = await prisma.diagnosisMaterializationJob.findUniqueOrThrow({
+      where: { appUserId_scopeKey: { appUserId: user.id, scopeKey: 'overall' } },
+    });
+    assert.equal(diagnosisJob.status, 'SUCCEEDED', diagnosisJob.errorCode ?? '');
+    assert.ok(diagnosisJob.findingSetId);
+    const diagnosisSummary = await diagnosisSummaryService.getSummary(user.id, 'overall');
+    assert.equal(diagnosisSummary.status, 'AVAILABLE');
+    assert.equal(diagnosisSummary.refresh.state, 'READY');
+    assert.equal(diagnosisSummary.findingSetId, diagnosisJob.findingSetId);
 
     assert.ok(targetGameId);
     const game = await prisma.importedGame.findUniqueOrThrow({
@@ -813,6 +830,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
         analysisAttempts: analysisRun.attempts,
         nativeEngineSpawns,
         evidenceRuns: persistedEvidenceRuns.length,
+        diagnosisPublicationStatus: diagnosisJob.status,
+        diagnosisFindingCount: diagnosisSummary.items.length,
         clockAlignmentStatus: game.clockAlignmentStatus,
         timingCoverageStatus: game.timingCoverageStatus,
         harnessWallMs: Math.round((performance.now() - pipelineHarnessStarted) * 1000) / 1000,
