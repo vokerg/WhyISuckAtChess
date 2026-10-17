@@ -295,7 +295,7 @@ runtime, CPU, RAM, cache-hit, pipeline throughput, saturation, pricing,
 or population-sampling data**, and changes none of the #126/#128 gates.
 
 
-## 5. Opt-in native import-to-replay fixture stage timing (partial #126)
+## 5. Opt-in native import-to-diagnosis/replay fixture stage timing (partial #126)
 
 The dedicated native acceptance workflow now **retains bounded, structured stage
 timings** from its existing **11 original synthetic four-ply fixtures** covering
@@ -309,9 +309,15 @@ they do **not** make external Lichess requests or sample real user workloads.
 Instrumentation is behind `RUN_PHASE7_PIPELINE_BENCHMARK_REPORT=1` *and*
 `RUN_REAL_STOCKFISH_ACCEPTANCE=1`. It records one opaque fixture key,
 exact control, declared sample clock-coverage category, durable engine
-cache counters, engine claim/spawn counts, evidence-run count, and
+cache counters, engine claim/spawn counts, evidence-run count, **completed diagnosis
+publication status and finding count**, and
 monotonic **wall time for each successful `runOnce()` call** in the import,
-indexing, native engine and evidence stages. The replay stage times
+indexing, native engine, evidence and owner-scoped diagnosis publication stages.
+The diagnosis stage calls the production durable `createDiagnosisWorkerService`
+for the synthetic user after every current evidence run, requires a
+`SUCCEEDED` materialization job and an `AVAILABLE`/`READY` summary, and times
+its single `runOnce()` call. An empty finding set is a valid completed
+publication, not evidence of model accuracy. The replay stage times
 the read-model query plus schema parse. Failed/empty polling calls are excluded
 from stage totals; injected failed engine claims that return true are retained.
 The separate per-fixture `harnessWallMs` includes test assertions, direct
@@ -325,9 +331,10 @@ Raw `/tmp/phase7-pipeline-fixtures.ndjson` is processed by
 missing/duplicate fixtures, extra fields, invalid time-control pools,
 cache-count disagreements, missing/nonfinite stage timings, inconsistent
 native spawn/analysis call counts, or stage sums exceeding enclosing harness
-wall time. It requires exactly 11 rows by default. The v1 summary groups by
+wall time. It requires exactly 11 rows by default. The v2 summary groups by
 speed, **exact control and clock-coverage category**, with per-group sample
-counts and nearest-rank p50/p90/p95 of *fixture* wall durations; the raw rows
+counts and nearest-rank p50/p90/p95 of *fixture* wall durations and per-stage durations, including diagnosis;
+the raw rows
 are retained for inspection. Each single-game group with n=1 has degenerate
 quantiles, not an estimated population distribution. The report also records
 Node/OS/host CPU model and RAM, depth-6/MultiPV-1/one-thread/16-MiB engine
@@ -356,7 +363,7 @@ before reporting numbers.
 **Unresolved:** all 11 cases share one tiny four-ply opening skeleton; they
 are neither independent natural games nor rights-cleared sampled Lichess
 histories. This work does not establish real provider-network ingestion,
-diagnosis publication, per-game CPU/RSS or PostgreSQL load, production
+representative diagnosis publication throughput, per-game CPU/RSS or PostgreSQL load, production
 depth-16/MultiPV-3 economics, concurrency/saturation, natural retry backoff,
 cancellation cost or per-1k-game capacity. The fully representative #126
 economics gate and Phase 7 #128 pilot gate remain **OPEN**.
