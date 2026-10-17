@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 import { importedGameReplayResponseSchema } from '@why-i-suck-at-chess/contracts';
 import prismaModule from '../dist/prisma.js';
@@ -481,6 +483,33 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       workerId: 'pipeline-evidence-' + suffix,
     });
 
+    // Measure real native acceptance calls without changing their ordering or
+    // assertions. This harness uses mocked Lichess NDJSON and four-ply fixtures,
+    // and does NOT measure real HTTP or user-diagnosis throughput.
+    const recordPipelineSample = REAL_STOCKFISH
+      && process.env.RUN_PHASE7_PIPELINE_BENCHMARK_REPORT === '1';
+    const stageCallWallMs = {
+      import: [], indexing: [], analysis: [], evidence: [], replay: [],
+    };
+    if (recordPipelineSample) {
+      for (const [stage, executor] of [
+        ['import', importExecutor], ['indexing', plyIndexExecutor],
+        ['analysis', analysisService], ['evidence', evidenceService],
+      ]) {
+        const originalRunOnce = executor.runOnce.bind(executor);
+        executor.runOnce = async (...args) => {
+          const started = performance.now();
+          const claimed = await originalRunOnce(...args);
+          // A false/unclaimed poll is NOT a processed work item.
+          if (claimed) stageCallWallMs[stage].push(
+            Math.round((performance.now() - started) * 1000) / 1000,
+          );
+          return claimed;
+        };
+      }
+    }
+    const pipelineHarnessStarted = performance.now();
+
     if (fixture.supersedeDuringAnalysis) {
       // Race a completed native UCI search with a revised indexed source and
       // a replacement analysis request while the first worker retains its claim.
@@ -688,9 +717,13 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       'current detector events must keep stable non-colliding evidence identities',
     );
 
+    const replayStarted = performance.now();
     const replayPayload = await createImportedGamesQueryService(undefined, prismaEvidenceRepository).getReplay(user.id, game.id);
     assert.ok(replayPayload);
     const replay = importedGameReplayResponseSchema.parse(replayPayload);
+    if (recordPipelineSample) stageCallWallMs.replay.push(
+      Math.round((performance.now() - replayStarted) * 1000) / 1000,
+    );
     assert.equal(replay.providerGameId, providerGameId);
     assert.equal(replay.speedCategory, fixture.speed);
     assert.equal(replay.provenance.source, 'LICHESS_API');
@@ -755,6 +788,38 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
       assert.equal(ply.engine.status, 'AVAILABLE', 'missing clocks cannot erase real engine facts');
       assert.equal(ply.engine.analysisRunId, analysisRun.id);
       assert.equal(ply.engine.beforePosition.status, 'AVAILABLE');
+    }
+
+    if (recordPipelineSample) {
+      const slug = (fixture.label ?? fixture.speed).toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+      const sourceClockCoverage = fixture.rawClockPresence === 'INVALID'
+        || fixture.clockAlignment === 'ANOMALOUS' ? 'INVALID'
+        : fixture.clocks === null ? 'ABSENT'
+        : rawClocks.length === 4 ? 'COMPLETE' : 'PARTIAL';
+      const scenario = fixture.supersedeDuringAnalysis ? 'SUPERSESSION'
+        : fixture.retryAfterProcessCrash ? 'NATIVE_PROCESS_CRASH_RETRY'
+        : fixture.retryAfterProcessTimeout ? 'NATIVE_SEARCH_DEADLINE_RETRY' : 'STANDARD';
+      const sample = {
+        fixtureKey: slug,
+        speedCategory: fixture.speed,
+        initialSeconds: fixture.initial,
+        incrementSeconds: fixture.increment,
+        sourceClockCoverage, scenario,
+        plies: analysisRun.pliesTotal,
+        positionsTotal: analysisRun.positionsTotal,
+        cacheHits: analysisRun.cacheHits,
+        cacheMisses: analysisRun.cacheMisses,
+        analysisAttempts: analysisRun.attempts,
+        nativeEngineSpawns,
+        evidenceRuns: persistedEvidenceRuns.length,
+        clockAlignmentStatus: game.clockAlignmentStatus,
+        timingCoverageStatus: game.timingCoverageStatus,
+        harnessWallMs: Math.round((performance.now() - pipelineHarnessStarted) * 1000) / 1000,
+        stageCallWallMs,
+      };
+      // Constant local path; emit no PGN, FEN, IDs, account or credential data.
+      appendFileSync('/tmp/phase7-pipeline-fixtures.ndjson', JSON.stringify(sample) + '\\n');
     }
 
     await prisma.importedGame.update({
