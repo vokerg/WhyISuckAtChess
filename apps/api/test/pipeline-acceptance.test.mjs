@@ -819,7 +819,7 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
         stageCallWallMs,
       };
       // Constant local path; emit no PGN, FEN, IDs, account or credential data.
-      appendFileSync('/tmp/phase7-pipeline-fixtures.ndjson', JSON.stringify(sample) + '\\n');
+      appendFileSync('/tmp/phase7-pipeline-fixtures.ndjson', JSON.stringify(sample) + '\n');
     }
 
     await prisma.importedGame.update({
