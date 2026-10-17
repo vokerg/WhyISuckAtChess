@@ -39,18 +39,6 @@
         <button type="button" (click)="load()">Retry</button>
       </section>
     } @else {
-      <section class="summary-strip" aria-label="Diagnosis revision metadata">
-        <div><span>Rank</span><strong>#{{ current.finding.rankPosition }}</strong></div>
-        <div><span>Scope</span><strong>{{ current.scopeKey }}</strong></div>
-        <div><span>Finding set</span><strong>#{{ current.findingSetId }}</strong></div>
-        <div class="wide">
-          <span>Calculated</span>
-          <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
-        </div>
-      </section>
-
-      <app-diagnosis-evidence-guide />
-
       <section class="finding-card" aria-label="Selected top-level finding">
         <div class="rank-badge" [attr.aria-label]="'Rank ' + current.finding.rankPosition">
           #{{ current.finding.rankPosition }}
@@ -168,10 +156,23 @@
         }
       </section>
 
-      <footer class="version-note">
+      <app-diagnosis-evidence-guide />
+      <details class="analysis-details">
+        <summary>About this analysis</summary>
+      <section class="summary-strip" aria-label="Diagnosis revision metadata">
+        <div><span>Rank</span><strong>#{{ current.finding.rankPosition }}</strong></div>
+        <div><span>Scope</span><strong>{{ current.scopeKey }}</strong></div>
+        <div><span>Finding set</span><strong>#{{ current.findingSetId }}</strong></div>
+        <div class="wide">
+          <span>Calculated</span>
+          <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
+        </div>
+      </section>
+      <p class="version-note">
         Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
         calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
-      </footer>
+      </p>
+      </details>
     }
   }
 </main>
