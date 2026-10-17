@@ -4,7 +4,7 @@
 
 .finding-context {
   margin: 0.55rem 0 0;
-  color: #806b59;
+  color: #68766b;
   font-size: 0.8rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -26,32 +26,32 @@
 .supporting-heading h2 {
   margin: 0 0 0.35rem;
   font-size: clamp(1.4rem, 3vw, 2rem);
-  color: #382519;
+  color: #2b302b;
 }
 
 .supporting-heading p:last-child {
   margin: 0;
-  color: #765f4e;
+  color: #68766b;
   line-height: 1.45;
 }
 
 .support-count {
   flex: 0 0 auto;
-  color: #604939;
+  color: #52685b;
 }
 
 .support-symbol {
   width: 3rem;
   padding-top: 0.3rem;
   text-align: center;
-  color: #9b5d20;
+  color: #507460;
   font-size: 1.7rem;
   font-weight: 800;
 }
 
 .supporting-list h3 {
   margin: 0 0 0.3rem;
-  color: #382519;
+  color: #2b302b;
   font-size: clamp(1.15rem, 2.5vw, 1.5rem);
 }
 
@@ -66,7 +66,7 @@
   padding: 0.4rem 0.62rem;
   border-radius: 999px;
   background: rgba(155, 93, 32, 0.11);
-  color: #7b4a19;
+  color: #315a47;
   font-size: 0.78rem;
   font-weight: 750;
 }
@@ -88,3 +88,10 @@
     text-align: left;
   }
 }
+
+/* Supporting findings belong to the same evidence trail, not a second dashboard. */
+.supporting-section { gap: .6rem; }
+.supporting-heading { border-top: 1px solid #e0e5de; padding-top: 1.4rem; }
+.support-count { font-weight: 650; font-size: .85rem; }
+.support-symbol { color: #8aa092; }
+.role-label { border-radius: 4px; background: #edf2ee; color: #426e52; }

@@ -1,157 +1,133 @@
-<main class="diagnosis-page">
+<main id="main-content" class="diagnosis-page">
   <header class="hero">
     <div>
-      <p class="eyebrow">Why I suck at chess</p>
-      <h1>Your ranked weaknesses</h1>
+      <p class="eyebrow">Your chess, explained</p>
+      <h1>Patterns worth working on</h1>
       <p class="hero-copy">
-        This is the current deterministic diagnosis: ranked findings backed by persisted evidence,
-        not a fresh interpretation calculated in the browser.
+        A ranked look at recurring problems in your games. Each finding links back to the
+        examples behind it, so you can see what happened on the board.
       </p>
     </div>
-    <nav class="entry-actions" aria-label="Diagnosis navigation">
-      <a class="secondary-link" routerLink="/diagnosis/time-controls">Compare time controls</a>
-      <a class="secondary-link" routerLink="/games">Browse imported games</a>
-      <a class="secondary-link" routerLink="/settings/lichess">Connect / import Lichess</a>
-    </nav>
   </header>
 
   @if (error(); as message) {
     <section class="state-card error" role="alert">
       <div>
-        <p class="state-kicker">Request failed</p>
-        <h2>Diagnosis could not be loaded</h2>
+        <p class="state-kicker">Couldn’t load the page</p>
+        <h2>We couldn't load your diagnosis</h2>
         <p>{{ message }}</p>
       </div>
       <button type="button" (click)="load()">Try again</button>
     </section>
   } @else if (loading()) {
     <section class="state-card" aria-live="polite">
-      <p class="state-kicker">Loading</p>
-      <h2>Reading the current diagnosis…</h2>
-      <p>The page waits for the authoritative persisted ranking instead of reconstructing it locally.</p>
+      <div>
+        <p class="state-kicker">Loading</p>
+        <h2>Looking up your latest diagnosis…</h2>
+      </div>
     </section>
   } @else if (summary(); as current) {
     @if (refreshMessage(); as message) {
-      <section class="state-card" aria-live="polite">
+      <section class="state-card status-note" role="status">
         <p>{{ message }}</p>
-        <button type="button" (click)="load()">Refresh status</button>
+        <button type="button" (click)="load()">Check again</button>
       </section>
     }
     @if (current.status === 'UNAVAILABLE') {
-      <section class="state-card">
-        <p class="state-kicker">Diagnosis unavailable</p>
-        <h2>There is no complete current answer to show yet</h2>
-        <p>{{ unavailableMessageFor(current.reason) }}</p>
-        <div class="entry-actions">
-          <a routerLink="/games">Inspect existing game evidence</a>
-          <a routerLink="/settings/lichess">Connect Lichess or import more games</a>
+      <section class="state-card empty">
+        <div>
+          <p class="state-kicker">Not ready yet</p>
+          <h2>Your diagnosis isn't available yet</h2>
+          <p>{{ unavailableMessageFor(current.reason) }}</p>
+          <div class="entry-actions">
+            <a routerLink="/games">Explore your games</a>
+            <a routerLink="/settings/lichess">Import games from Lichess</a>
+          </div>
         </div>
       </section>
     } @else {
-      <section class="summary-strip" aria-label="Diagnosis summary metadata">
-        <div>
-          <span>Ranked findings</span>
-          <strong>{{ current.items.length }}</strong>
-        </div>
-        <div>
-          <span>Scope</span>
-          <strong>{{ current.scopeKey }}</strong>
-        </div>
-        <div>
-          <span>Finding set</span>
-          <strong>#{{ current.findingSetId }}</strong>
-        </div>
-        <div class="wide">
-          <span>Calculated</span>
-          <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
-        </div>
-      </section>
-
-      <app-diagnosis-evidence-guide />
-
       @if (current.items.length === 0) {
-        <section class="state-card">
-          <p class="state-kicker">No ranked weaknesses</p>
-          <h2>The current diagnosis has no top-level findings</h2>
-          @if (current.evidenceState === 'INSUFFICIENT_EVIDENCE' || current.evidenceState === 'REQUIRED_EVIDENCE_UNAVAILABLE') {
-            <p>There is not enough current evidence to rank a weakness. This does not establish that no problem exists.</p>
-          } @else {
-            <p>No finding qualifies for ranking in this scope. Inspect the game evidence and coverage before drawing conclusions.</p>
-          }
-          <a routerLink="/settings/lichess">Connect or import games</a>
+        <section class="state-card empty">
+          <div>
+            <h2>No patterns to rank yet</h2>
+            @if (current.evidenceState === 'INSUFFICIENT_EVIDENCE' || current.evidenceState === 'REQUIRED_EVIDENCE_UNAVAILABLE') {
+              <p>There isn't enough evidence to rank a weakness yet. That doesn't mean no problems exist.</p>
+            } @else {
+              <p>Nothing qualifies for this ranking yet. You can still explore the game evidence.</p>
+            }
+            <a routerLink="/settings/lichess">Import more games</a>
+          </div>
         </section>
       } @else {
+        <div class="results-heading">
+          <h2>{{ current.items.length }} {{ current.items.length === 1 ? 'pattern' : 'patterns' }} in your play</h2>
+          <p>Ordered by the diagnosis ranking, not by certainty.</p>
+        </div>
         <ol class="finding-list" aria-label="Ranked diagnosis findings">
           @for (item of current.items; track trackFinding($index, item)) {
             <li class="finding-card">
-              <div class="rank-badge" aria-label="Rank {{ item.rankPosition }}">#{{ item.rankPosition }}</div>
-
+              <div class="rank-badge" [attr.aria-label]="'Rank ' + item.rankPosition">{{ item.rankPosition }}</div>
               <div class="finding-body">
                 <div class="finding-heading">
                   <div>
-                    <p class="diagnosis-id">{{ item.diagnosisId }}</p>
-                    <h2>{{ titleFor(item) }}</h2>
+                    <h3>{{ titleFor(item) }}</h3>
                     <p class="claim">{{ claimFor(item) }}</p>
                   </div>
-                  <div class="evidence-strength" [attr.data-strength]="item.evidenceStrength">
+                  <span class="evidence-strength" [attr.data-strength]="item.evidenceStrength">
                     {{ item.evidenceStrength }} evidence
-                  </div>
+                  </span>
                 </div>
-
-                <dl class="metrics">
-                  <div>
-                    <dt>Rank score</dt>
-                    <dd>{{ scoreFor(item.finalScore) }}</dd>
-                  </div>
-                  <div>
-                    <dt>Samples</dt>
-                    <dd>{{ item.sampleCount }}</dd>
-                  </div>
-                  <div>
-                    <dt>Games</dt>
-                    <dd>{{ item.distinctGameCount }}</dd>
-                  </div>
-                  <div>
-                    <dt>Sessions</dt>
-                    <dd>{{ item.distinctSessionCount }}</dd>
-                  </div>
-                  <div>
-                    <dt>Required coverage</dt>
-                    <dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd>
-                  </div>
-                </dl>
-
-                @if (effectFor(item); as effect) {
-                  <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
-                }
-
+                <p class="finding-context">{{ item.distinctGameCount }} games · {{ item.sampleCount }} observations</p>
                 @if (item.representativeEvidence.length > 0) {
-                  <section class="evidence-section" aria-label="Representative evidence">
-                    <h3>Representative evidence</h3>
+                  <div class="evidence-section">
+                    <h4>See the examples</h4>
                     <div class="evidence-links">
                       @for (evidence of item.representativeEvidence; track trackEvidence($index, evidence)) {
                         @if (evidenceHrefFor(evidence); as href) {
-                          <a [routerLink]="href" [queryParams]="evidenceQueryFor(evidence)">{{ evidenceLabelFor(evidence) }}</a>
+                          <a [routerLink]="href" [queryParams]="evidenceQueryFor(evidence)">{{ evidenceLabelFor(evidence) }} <span aria-hidden="true">↗</span></a>
                         } @else {
                           <span>{{ evidenceLabelFor(evidence) }}</span>
                         }
                       }
                     </div>
-                  </section>
+                  </div>
                 }
                 @if (findingHrefFor(item.findingId); as href) {
-                  <a class="detail-link" [routerLink]="href">Inspect supporting findings →</a>
+                  <a class="detail-link" [routerLink]="href">Explore this pattern <span aria-hidden="true">→</span></a>
                 }
+                <details class="finding-details">
+                  <summary>Evidence and scoring details</summary>
+                  <dl class="metrics">
+                    <div><dt>Rank score</dt><dd>{{ scoreFor(item.finalScore) }}</dd></div>
+                    <div><dt>Samples</dt><dd>{{ item.sampleCount }}</dd></div>
+                    <div><dt>Games</dt><dd>{{ item.distinctGameCount }}</dd></div>
+                    <div><dt>Sessions</dt><dd>{{ item.distinctSessionCount }}</dd></div>
+                    <div><dt>Required coverage</dt><dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd></div>
+                  </dl>
+                  <p class="technical-id">Diagnosis ID: {{ item.diagnosisId }}</p>
+                  @if (effectFor(item); as effect) {
+                    <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+                  }
+                </details>
               </div>
             </li>
           }
         </ol>
       }
-
-      <footer class="version-note">
-        Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
-        calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
-      </footer>
+      <app-diagnosis-evidence-guide />
+      <details class="analysis-details">
+        <summary>About this analysis</summary>
+        <div class="summary-strip" aria-label="Diagnosis summary metadata">
+          <div><span>Ranked findings</span><strong>{{ current.items.length }}</strong></div>
+          <div><span>Scope</span><strong>{{ current.scopeKey }}</strong></div>
+          <div><span>Finding set</span><strong>#{{ current.findingSetId }}</strong></div>
+          <div><span>Calculated</span><strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong></div>
+        </div>
+        <p class="version-note">
+          Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
+          calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
+        </p>
+      </details>
     }
   }
 </main>

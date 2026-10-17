@@ -1,18 +1,13 @@
-<main class="comparison-page">
+<main id="main-content" class="comparison-page">
   <header class="hero">
     <div>
-      <p class="eyebrow">Time-control evidence</p>
-      <h1>Where the clock changes your results</h1>
+      <p class="eyebrow">Time controls</p>
+      <h1>How you play at different speeds</h1>
       <p class="hero-copy">
-        These are deterministic comparisons already calculated by the backend. The browser preserves
-        exact controls, matched increment strata, evidence grades, coverage and caveats; it does not
-        choose comparators or infer causation.
+        Compare results across time controls using the games you’ve played. These are
+        observed differences, not proof that the clock caused them.
       </p>
     </div>
-    <nav class="entry-actions" aria-label="Diagnosis navigation">
-      <a class="secondary-link" routerLink="/diagnosis">Back to ranked weaknesses</a>
-      <a class="secondary-link" routerLink="/games">Browse imported games</a>
-    </nav>
   </header>
 
   @if (error(); as message) {
@@ -27,8 +22,7 @@
   } @else if (loading()) {
     <section class="state-card" aria-live="polite">
       <p class="state-kicker">Loading</p>
-      <h2>Reading accepted timing evidence…</h2>
-      <p>No comparison policy is recalculated in the browser.</p>
+      <h2>Loading your time-control comparisons…</h2>
     </section>
   } @else if (comparison(); as current) {
     <section class="scope-strip" aria-label="Comparison scope">

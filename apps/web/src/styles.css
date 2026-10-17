@@ -2,10 +2,44 @@
 @import '@lichess-org/chessground/assets/chessground.brown.css';
 @import '@lichess-org/chessground/assets/chessground.cburnett.css';
 
+:root {
+  color-scheme: light;
+  --ink: #2b302b;
+  --muted: #677069;
+  --accent: #315a47;
+  --accent-dark: #214333;
+  --paper: #f7f8f5;
+  --surface: #fff;
+  --line: #e0e5de;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
 body {
   margin: 0;
   min-height: 100vh;
-  background: #f6efe5;
-  color: #3d281b;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+a { color: var(--accent); text-underline-offset: .2em; }
+a:hover { color: var(--accent-dark); }
+:where(a, button, input, select, summary):focus-visible {
+  outline: 3px solid #547f68;
+  outline-offset: 3px;
+}
+::selection { background: #d5e7d8; color: #203728; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

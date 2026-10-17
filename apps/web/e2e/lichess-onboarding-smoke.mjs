@@ -134,39 +134,41 @@ try {
   await page.goto(origin + '/settings/lichess?lichessConnected=1');
   await page.getByText(/Authorization return noted/).waitFor();
   await page.getByText(/No Lichess identity is connected/).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Start bounded import' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Import these games' }).isDisabled(), true);
 
   // Fresh entry points remain discoverable even with no imported evidence.
   await page.goto(origin + '/games');
-  await page.getByRole('link', { name: 'Connect / import Lichess' }).waitFor();
+  await page.getByRole('link', { name: /Import more games/ }).waitFor();
   await page.goto(origin + '/diagnosis');
-  await page.getByRole('link', { name: 'Connect / import Lichess' }).waitFor();
+  await page.getByRole('link', { name: 'Import games from Lichess' }).waitFor();
 
   // The first user-driven connection step starts OAuth and returns through the
   // mocked provider to the authoritative backend connection read.
-  await page.getByRole('link', { name: 'Connect / import Lichess' }).click();
+  await page.getByRole('link', { name: 'Import games from Lichess' }).click();
   await page.getByRole('button', { name: 'Connect Lichess' }).click();
   await page.getByText('OwnedLichessPlayer').first().waitFor();
 
   // Explicit import of the server-owned identity; the UI sends UTC instants.
   await page.getByText('OwnedLichessPlayer').first().waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Start bounded import' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Import these games' }).isEnabled(), true);
   const from = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
   const to = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
   await page.getByLabel('From (local time)').fill(from);
-  await page.getByLabel('To (local time, exclusive)').fill(to);
+  await page.getByLabel('Up to (local time; not included)').fill(to);
   await page.getByLabel('Rated scope').selectOption('rated');
-  await page.getByRole('button', { name: 'Start bounded import' }).click();
+  await page.getByRole('button', { name: 'Import these games' }).click();
+  await page.getByText('Import request details').click();
   await page.getByText(/Run #7/).waitFor();
   assert.equal(receivedImport.from, new Date(from).toISOString());
   assert.equal(receivedImport.to, new Date(to).toISOString());
   assert.equal(receivedImport.rated, true);
   assert.equal('userId' in receivedImport, false);
   assert.equal('username' in receivedImport, false);
-  assert.equal(await page.getByRole('button', { name: 'Start bounded import' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Import these games' }).isDisabled(), true);
 
   // Reload uses the owned backend latest-run read, not browser-local authority.
   await page.reload();
+  await page.getByText('Import request details').click();
   await page.getByText(/Run #7/).waitFor();
   await page.getByRole('button', { name: 'Request cancellation' }).click();
   await page.getByText(/Cancellation requested/).waitFor();
@@ -183,8 +185,9 @@ try {
   persistedRun = null;
   createMode = 'conflict';
   await page.reload();
-  await page.getByRole('button', { name: 'Start bounded import' }).click();
+  await page.getByRole('button', { name: 'Import these games' }).click();
   await page.getByText(/Recovered its server-owned progress/).waitFor();
+  await page.getByText('Import request details').click();
   await page.getByText(/Run #7/).waitFor();
 
   // Non-usable credential states are displayed distinctly, and disconnect is confirmed.
@@ -192,7 +195,7 @@ try {
     connection = { ...usable, credentialState, reconnectRequired: true };
     await page.reload();
     await page.locator('.credential[data-state="' + credentialState + '"]').waitFor();
-    assert.equal(await page.getByRole('button', { name: 'Start bounded import' }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Import these games' }).isDisabled(), true);
   }
   connection = usable;
   page.on('dialog', (dialog) => dialog.accept());

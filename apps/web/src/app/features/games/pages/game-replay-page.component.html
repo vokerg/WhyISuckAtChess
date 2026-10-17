@@ -1,14 +1,14 @@
-<main class="replay-page">
+<main id="main-content" class="replay-page">
   <a class="back-link" routerLink="/games">← Imported games</a>
 
   @if (store.loading()) {
-    <section class="state-card" aria-live="polite">Loading replay evidence…</section>
+    <section class="state-card" aria-live="polite">Loading your game…</section>
   } @else if (store.error(); as error) {
     <section class="state-card error" role="alert">{{ error }}</section>
   } @else if (store.replay(); as game) {
     <header class="page-heading">
       <div>
-        <p class="eyebrow">Lichess evidence replay</p>
+        <p class="eyebrow">Game replay</p>
         <h1>{{ store.gameTitle() }}</h1>
         <p class="subtitle">
           {{ game.resultForUser ?? 'Result unavailable' }} · {{ game.speedCategory ?? 'Speed unavailable' }}
@@ -30,38 +30,38 @@
           [evidenceAnnotations]="store.currentPly()?.annotations ?? []"
         />
         <nav class="replay-controls" aria-label="Replay controls">
-          <button type="button" (click)="store.goToStart()" [disabled]="!store.canGoBackward()">|‹</button>
-          <button type="button" (click)="store.goToPrevious()" [disabled]="!store.canGoBackward()">‹</button>
+          <button type="button" aria-label="First position" title="First position" (click)="store.goToStart()" [disabled]="!store.canGoBackward()">|‹</button>
+          <button type="button" aria-label="Previous move" title="Previous move" (click)="store.goToPrevious()" [disabled]="!store.canGoBackward()">‹</button>
           <span>Position {{ store.currentPlyNumber() }} / {{ game.plies.length }}</span>
-          <button type="button" (click)="store.goToNext()" [disabled]="!store.canGoForward()">›</button>
-          <button type="button" (click)="store.goToEnd()" [disabled]="!store.canGoForward()">›|</button>
+          <button type="button" aria-label="Next move" title="Next move" (click)="store.goToNext()" [disabled]="!store.canGoForward()">›</button>
+          <button type="button" aria-label="Last position" title="Last position" (click)="store.goToEnd()" [disabled]="!store.canGoForward()">›|</button>
         </nav>
         <p class="keyboard-hint">Keyboard: ←/→, Home/End</p>
       </div>
 
       <aside class="evidence-column">
-        <section class="evidence-card">
-          <h2>Game facts</h2>
+        <details class="evidence-card supplementary">
+          <summary>Game details</summary>
           <dl>
             <div><dt>Time control</dt><dd>{{ game.timeControl.exactKey ?? game.timeControl.raw ?? 'Unavailable' }}</dd></div>
             <div><dt>Initial time</dt><dd>{{ game.timeControl.initialSeconds === null ? 'Unavailable' : formatClock(game.timeControl.initialSeconds * 100) }}</dd></div>
             <div><dt>Increment</dt><dd>{{ game.timeControl.incrementSeconds === null ? 'Unknown' : `${game.timeControl.incrementSeconds}s` }}</dd></div>
             <div><dt>Indexing</dt><dd>{{ game.indexing.status }}</dd></div>
           </dl>
-        </section>
+        </details>
 
-        <section class="evidence-card">
-          <h2>Source clocks</h2>
+        <details class="evidence-card supplementary">
+          <summary>Original clock data</summary>
           <p class="status-line">{{ game.clockSource.presence }} · {{ game.clockSource.stateCount }} source states</p>
           @if (game.clockSource.anomalies.length) {
             <p class="caveat">{{ game.clockSource.anomalies.join(' · ') }}</p>
           } @else {
             <p class="caveat">Raw provider clock values are preserved separately from derived timing.</p>
           }
-        </section>
+        </details>
 
         <section class="evidence-card current-evidence">
-          <h2>Selected move</h2>
+          <h2>This move</h2>
           @if (store.currentPly(); as ply) {
             <p class="selected-move"><span>{{ formatMove(ply.plyNumber) }}</span> {{ ply.moveUci }}</p>
             <dl>
@@ -91,7 +91,7 @@
     <section class="moves-card">
       <div class="section-heading">
         <h2>Moves</h2>
-        <span>{{ game.plies.length }} indexed plies</span>
+        <span>{{ game.plies.length }} half-moves</span>
       </div>
       <div class="move-list">
         @for (ply of game.plies; track ply.plyNumber) {

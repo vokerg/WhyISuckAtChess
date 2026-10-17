@@ -1,10 +1,9 @@
-<main class="games-page">
+<main id="main-content" class="games-page">
   <header class="page-heading">
-    <a class="diagnosis-link" routerLink="/diagnosis">← Back to ranked diagnosis</a>
-    <p class="eyebrow">Evidence library</p>
+    <p class="eyebrow">Your game history</p>
     <h1>Imported games</h1>
-    <p>Start with the games themselves. Every replay keeps source provenance, clocks, and timing coverage visible.</p>
-    <a class="diagnosis-link" routerLink="/settings/lichess">Connect / import Lichess</a>
+    <p>Revisit your games move by move, with the analysis and original clock data alongside the board.</p>
+    <a class="diagnosis-link" routerLink="/settings/lichess">Import more games <span aria-hidden="true">→</span></a>
   </header>
 
   @if (error(); as message) {
@@ -12,9 +11,9 @@
   }
 
   @if (loading() && games().length === 0) {
-    <p class="state">Loading imported games…</p>
+    <p class="state" role="status">Loading your games…</p>
   } @else if (games().length === 0 && !error()) {
-    <p class="state">No imported games yet. <a routerLink="/settings/lichess">Connect Lichess and explicitly import game history</a> to begin.</p>
+    <div class="state"><h2>Your games will appear here</h2><p>Connect Lichess and choose which games to import. Nothing is imported without your approval.</p><a routerLink="/settings/lichess">Connect Lichess <span aria-hidden="true">→</span></a></div>
   } @else {
     <section class="game-grid" aria-label="Imported games">
       @for (game of games(); track game.id) {
@@ -31,8 +30,8 @@
             {{ game.endedAt ?? 'Date unavailable' }} · timing {{ game.timing.coverageStatus.toLowerCase() }}
           </p>
           <div class="coverage-row">
-            <span>Index {{ game.indexing.status.toLowerCase() }}</span>
-            <span>Engine {{ game.engine.status.toLowerCase() }}</span>
+            <span>Index: {{ game.indexing.status.toLowerCase() }}</span>
+            <span>Analysis: {{ game.engine.status.toLowerCase() }}</span>
           </div>
         </a>
       }
