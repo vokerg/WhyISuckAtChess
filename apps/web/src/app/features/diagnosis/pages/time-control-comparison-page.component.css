@@ -34,7 +34,7 @@
 .state-kicker,
 .diagnosis-id {
   margin: 0 0 0.45rem;
-  color: #9b5d20;
+  color: #507460;
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -51,7 +51,7 @@ p {
 
 h1 {
   margin-bottom: 0.55rem;
-  color: #382519;
+  color: #2b302b;
   font-size: clamp(2rem, 5vw, 3.5rem);
   letter-spacing: -0.05em;
 }
@@ -62,7 +62,7 @@ h1 {
 .control-list,
 .composition-note,
 .caveats {
-  color: #765f4e;
+  color: #68766b;
   line-height: 1.55;
 }
 
@@ -82,7 +82,7 @@ h1 {
   padding: 0.72rem 0.95rem;
   border: 1px solid rgba(155, 93, 32, 0.25);
   border-radius: 10px;
-  color: #7d4b18;
+  color: #315a47;
   font-weight: 750;
   text-decoration: none;
 }
@@ -130,7 +130,7 @@ h1 {
 .coverage-grid dt,
 .metric-grid dt,
 .delta-grid dt {
-  color: #876f5c;
+  color: #68766b;
   font-size: 0.72rem;
   font-weight: 750;
   letter-spacing: 0.05em;
@@ -138,7 +138,7 @@ h1 {
 }
 
 .scope-strip strong {
-  color: #3d281b;
+  color: #2b302b;
   overflow-wrap: anywhere;
 }
 
@@ -159,7 +159,7 @@ h1 {
 
 .section-heading h2 {
   margin-bottom: 0.35rem;
-  color: #382519;
+  color: #2b302b;
   font-size: clamp(1.45rem, 3vw, 2.1rem);
 }
 
@@ -173,14 +173,14 @@ h1 {
   padding: 0.42rem 0.68rem;
   border-radius: 999px;
   background: rgba(44, 122, 75, 0.12);
-  color: #256840;
+  color: #356749;
   font-size: 0.78rem;
   font-weight: 800;
 }
 
 .coverage-chip[data-status='PARTIAL'] {
   background: rgba(155, 93, 32, 0.12);
-  color: #7d4b18;
+  color: #315a47;
 }
 
 .coverage-chip[data-status='UNAVAILABLE'] {
@@ -220,14 +220,14 @@ h1 {
 .metric-grid dd,
 .delta-grid dd {
   margin: 0.28rem 0 0;
-  color: #3d281b;
+  color: #2b302b;
   font-weight: 800;
   overflow-wrap: anywhere;
 }
 
 .collection-note {
   margin: -0.25rem 0 0;
-  color: #876f5c;
+  color: #68766b;
   font-size: 0.8rem;
 }
 
@@ -246,12 +246,12 @@ h1 {
 
 .card-heading h3 {
   margin-bottom: 0;
-  color: #382519;
+  color: #2b302b;
   font-size: 1.25rem;
 }
 
 .card-heading h3 span {
-  color: #876f5c;
+  color: #68766b;
   font-weight: 650;
 }
 
@@ -266,7 +266,7 @@ h1 {
   padding: 0.35rem 0.52rem;
   border-radius: 999px;
   background: rgba(61, 40, 27, 0.07);
-  color: #604939;
+  color: #52685b;
   font-size: 0.72rem;
   font-weight: 800;
 }
@@ -292,7 +292,7 @@ h1 {
 .delta-panel h4,
 .caveats h3 {
   margin-bottom: 0.65rem;
-  color: #4f3828;
+  color: #2b302b;
 }
 
 .metric-grid {
@@ -344,7 +344,7 @@ h1 {
 .version-note {
   padding: 0.8rem 1rem;
   border-radius: 12px;
-  color: #876f5c;
+  color: #68766b;
   font-size: 0.78rem;
   line-height: 1.45;
 }
@@ -391,3 +391,16 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Keep the comparison itself prominent; metadata and nested panels stay quiet. */
+.hero { background: transparent; padding: 0 0 .75rem; border: none; box-shadow: none; }
+.hero h1 { font-size: clamp(2.1rem,4vw,3.2rem); font-weight: 760; letter-spacing: -.045em; }
+.eyebrow, .state-kicker, .diagnosis-id { letter-spacing: .055em; }
+.scope-strip { border: none; box-shadow: none; background: transparent; padding: .2rem 0; border-bottom: 1px solid #e0e5de; border-radius: 0; }
+.comparison-section { border-color: #e0e5de; border-radius: 10px; background: #fff; box-shadow: none; }
+.comparison-card { border: none; border-top: 1px solid #e0e5de; border-radius: 0; padding: 1.25rem 0; background: transparent; box-shadow: none; }
+.comparison-card:first-child { border-top: 0; }
+.coverage-grid div, .metric-grid div, .delta-grid div { background: #f5f7f4; border-radius: 5px; }
+.arm { border-color: #e0e5de; border-radius: 7px; }
+.coverage-reason, .composition-note, .caveats { border-radius: 6px; }
+.version-note { border: none; box-shadow: none; background: transparent; padding-left: 0; }
