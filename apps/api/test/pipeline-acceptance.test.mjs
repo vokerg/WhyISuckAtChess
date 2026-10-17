@@ -16,6 +16,7 @@ import { createEvidenceService } from '../dist/modules/evidence/evidence.service
 import { createImportedGamesQueryService } from '../dist/modules/imported-games/imported-games.service.js';
 import { createDiagnosisWorkerService } from '../dist/modules/diagnosis/diagnosis-worker.service.js';
 import { diagnosisSummaryService } from '../dist/modules/diagnosis/diagnosis-summary.service.js';
+import { diagnosisMaterializationVersions } from '../dist/modules/diagnosis/diagnosis-materialization.versions.js';
 import { ImportedGamePlyIndexService } from '../dist/modules/imported-games/ply-index.service.js';
 import { runWorkerCycle } from '../dist/worker.js';
 
@@ -66,9 +67,19 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
   const rawClocks = fixture.storedClocks ?? fixture.clocks ?? [];
   const timingCoverage = fixture.timingCoverage ?? (alignedClocks ? 'COMPLETE' : 'UNAVAILABLE');
   const suffix = randomUUID();
+  const analysisVersion = 'pipeline-acceptance-' + suffix;
+  const analysisSettings = { depth: REAL_STOCKFISH ? 6 : 8, multiPv: 1, threads: 1, hashMb: REAL_STOCKFISH ? 16 : 1 };
+  const policy = diagnosisMaterializationVersions.policyVersions;
+  const originalAnalysisPolicy = policy.analysis;
+  const originalSettingsPolicy = policy.settings;
+  // This single-file acceptance test executes top-level fixtures sequentially.
+  // Temporarily align diagnostic source gating with its isolated depth-6 native
+  // fixture instead of pretending it used the production depth-16 policy.
+  policy.analysis = analysisVersion;
+  policy.settings = settingsHash(analysisSettings);
   const prismaEvidenceRepository = createPrismaEvidenceRepository(prisma, {
-    analysisVersion: 'pipeline-acceptance-' + suffix,
-    settingsHash: settingsHash({ depth: REAL_STOCKFISH ? 6 : 8, multiPv:1, threads:1, hashMb:REAL_STOCKFISH ? 16 : 1 }),
+    analysisVersion,
+    settingsHash: settingsHash(analysisSettings),
   });
   const providerGameId = 'pipeline-' + suffix;
   const from = new Date('2026-09-10T00:00:00.000Z');
@@ -265,8 +276,8 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
 
     const analysisService = createStockfishAnalysisService({
       repository: scopedAnalysisRepository,
-      analysisVersion: 'pipeline-acceptance-' + suffix,
-      settings: { depth: REAL_STOCKFISH ? 6 : 8, multiPv: 1, threads: 1, hashMb: REAL_STOCKFISH ? 16 : 1 },
+      analysisVersion,
+      settings: analysisSettings,
       workerId: 'pipeline-worker-' + suffix,
       engineFactory: async () => {
         if (REAL_STOCKFISH) {
@@ -856,7 +867,11 @@ test(`DB-backed worker cycle: ${fixture.label ?? fixture.speed} import through $
     assert.notEqual(staleReplay.engine.status, 'COMPLETED', 'superseded engine run must not be advertised current');
     assert.ok(staleReplay.plies.every((ply) => ply.evidenceEventKeys.length === 0));
     assert.ok(staleReplay.plies.every((ply) => ply.engine.status === 'UNAVAILABLE'));
+    assert.equal((await diagnosisSummaryService.getSummary(user.id, 'overall')).status, 'UNAVAILABLE',
+      'source mutation must also hide the previously published diagnosis');
   } finally {
+    policy.analysis = originalAnalysisPolicy;
+    policy.settings = originalSettingsPolicy;
     if (userId !== null) {
       await prisma.appUser.delete({ where: { id: userId } }).catch(() => undefined);
     }
