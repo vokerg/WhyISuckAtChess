@@ -16,7 +16,11 @@
     "db:validate": "prisma validate --schema prisma/schema.prisma",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
-    "test": "npm run build && node --test --test-concurrency=1 test/*.test.mjs"
+    "test": "npm run build && node --test --test-concurrency=1 test/*.test.mjs",
+    "predev": "npm --prefix ../.. run dev:prepare",
+    "predev:worker": "npm --prefix ../.. run dev:prepare",
+    "dev:prepared": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "dev:worker:prepared": "ts-node-dev --respawn --transpile-only src/worker.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

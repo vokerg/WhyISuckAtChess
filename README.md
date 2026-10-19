@@ -59,11 +59,13 @@ The API keeps explicit module seams for auth, Lichess, account imports, jobs, im
 
 ## Developer setup
 
-Requirements: Node.js 22.12+, npm 10+, and PostgreSQL for the API/worker persistence path.
+Requirements: Node.js 22.12+, npm 10+, PostgreSQL, and a native `stockfish` executable on `PATH` for game analysis (or set `STOCKFISH_PATH` in `apps/api/.env`).
 
 ```bash
 npm ci
-cp .env.example .env
+cp .env.example apps/api/.env
+# Configure DATABASE_URL for your PostgreSQL database before migrating.
+npm run db:migrate
 npm run db:validate
 npm run db:generate
 npm run build
@@ -82,12 +84,28 @@ For a PostgreSQL migration smoke check, point `DATABASE_URL` at a disposable dat
 npm run db:migrate
 ```
 
-Development processes are intentionally separate (the Angular dev server proxies `/api` to the local Fastify server):
+Start the full local application, including the persistent worker:
 
 ```bash
-npm run dev          # API + Angular web shell
+npm run dev:all      # API + Angular + persistent processing worker
+# Or run these in separate terminals:
+npm run dev          # API + Angular
 npm run dev:worker   # persistent import -> indexing -> Stockfish -> evidence -> diagnosis worker
 ```
+
+Open **http://localhost:4200** with the example settings. `npm run dev` and `dev:all` build the shared packages and generate Prisma before starting. Both use `apps/api/.env`; the web port comes from `WEB_APP_URL` and its `/api` proxy follows `PORT`. Exported environment variables take precedence. Stop all started processes with Ctrl+C. Standalone `dev:web` uses Angular's default port; pass `-- --port 4220` when needed.
+
+For a local PostgreSQL instance using Docker:
+
+```bash
+docker run --name why-chess-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=why_i_suck_at_chess -p 127.0.0.1:5432:5432 -v why-chess-postgres:/var/lib/postgresql/data -d postgres:16
+# On subsequent launches:
+docker start why-chess-postgres
+```
+
+The example `DATABASE_URL` matches this database. An existing native PostgreSQL installation also works; create the database and set its credentials in `apps/api/.env`. Migrations are explicit (`npm run db:migrate`); startup never resets or migrates a database automatically. The root `.env` is not used by workspace commands.
+
+Lichess credentials are only needed when connecting/importing: set `LICHESS_OAUTH_CLIENT_ID`, the matching callback URL, and `LICHESS_TOKEN_ENCRYPTION_KEY` (generate it with `openssl rand -base64 32`) in `apps/api/.env`. Keep `WEB_APP_URL` and the OAuth callback aligned with your chosen web/API ports. The empty application can launch before these credentials are configured.
 
 The API exposes `GET /health`, authenticated imported-game list/detail/replay reads, and the Lichess connection/import endpoints. The persistent worker carries supported standard bullet/blitz/rapid games through indexing, timing derivation, Stockfish analysis, and the registered deterministic evidence detectors. The web app contains an investigation-first imported-game library and replay surface with inspectable deterministic evidence. The backend now has reusable session context, internal `SESSION-001/002/003` aggregates, and the accepted Phase 4B `TIME-001`–`TIME-007` plus `RATING-001/002` aggregate evidence described in `docs/phase-4b-acceptance.md`. Remaining Phase 4 breadth is `CAL-001` once explicit user timezone data exists. Phase 5 is now accepted end to end: the framework-neutral synthesis/ranking policy, immutable finding persistence, typed candidate projection, stable event overlap, relationship graph, non-destructive consolidation, registered root-cause synthesis, hierarchy refresh, and deterministic ranking are covered by the #89 integration pass in `docs/phase-5-acceptance.md`. Supported roots consume consolidated findings without independently ranking their children, explicit rating confounders remain inspectable, and known synthesized-root/child evidence reuse is not misclassified as unresolved duplicate overlap. Remaining taxonomy producer breadth is explicit, including `CAL-001` pending authoritative user IANA timezone data. Phase 6 now begins with the authenticated bounded `GET /api/diagnosis/summary?scopeKey=...` read model from #100, which projects only current persisted top-level ranking and representative evidence without recalculating diagnosis policy. Issue #102 adds `/diagnosis` as the default Angular surface over the owned `overall` summary, preserving backend rank order and linking representative game evidence to the existing replay view. PR #105 adds the bounded current-top-level drill-down API with persisted child support roles, and issue #106 exposes it through the `/diagnosis/:findingId` Angular page linked from each summary finding. Each page preserves authority and revision state, including missing/stale data, while displaying bounded game evidence. Issue #108 links the accepted representative game evidence from both views to an exact replay ply via a validated `?ply=` route target; absent, invalid, or out-of-range targets safely open at the starting position without recalculating any evidence. A shared, read-only interpretation guide on both diagnosis views explains policy-normalized priority, evidence grades, sample/coverage semantics, raw effects and the limits of representative examples without reinterpreting any finding. Issue #116 adds authenticated `GET /api/diagnosis/time-controls` as the first dedicated comparison read model over accepted `TIME-005` / `TIME-006` evidence, with explicit response caps and no recalculation of timing policy. Issue #118 exposes that boundary at `/diagnosis/time-controls`, preserving exact-control identity, matched increment strata, separate result/quality/timing coverage, directional deltas, caveats, truncation and rating-composition disclosure without client-side recomputation. A later grounded explanation layer can consume the same boundary; AI remains outside the authoritative evidence path.
 
