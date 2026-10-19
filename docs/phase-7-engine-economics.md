@@ -392,7 +392,7 @@ production engine/worker policy and database schema are unchanged.
 ### Reproduce
 
 Use an empty migrated **local** PostgreSQL 16 database matching
-`why_chess_cache_benchmark_{ci,test,local}[_suffix]`, UTC sessions, and an absolute
+`why_chess_cache_benchmark_{ci,test,local}[_suffix]`, UTC/Etc/UTC sessions, and an absolute
 native `STOCKFISH_PATH`. The guard rejects remote/shared targets and URL options.
 Do not point this at the application's configured database. The runner only
 removes its generated user, cache rows and indexed positions. It blocks all
@@ -474,3 +474,79 @@ query-level/isolated PostgreSQL resources and a deployment-specific capacity
 budget remain explicit review items. Keep the production depth-16/MultiPV-3 and
 single-worker defaults unless measured evidence plus independent review justify
 a separate runtime change.
+
+### Observed local depth-10 matrix (2026-10-19)
+
+Raw reports are committed under [docs/benchmarks/2026-10-19-recorded](benchmarks/2026-10-19-recorded/).
+They identify baseline repository revision `dbd6fca4f836efd39160f15a28ace43f15b401e4`
+and benchmark script SHA-256
+`8e04b2b786cc8a1a11f21df5fce34289058c55ea654421851b62505e74886c83`
+(the runner source committed in `69d5da6`). The same fixture, Apple M1 Pro
+(10 logical CPUs, 32 GiB host RAM), Node 26.0.0, PostgreSQL 16.15/UTC and
+Stockfish executable SHA-256
+`ae4c93fa9676ca7750d0714342fd8a5b1d018000fc6e0f6cedf112067b5ef374`
+were used sequentially. The executable identifies itself in every per-game
+sample; do not compare these results as if they used the Linux CI binary.
+This was a developer laptop, not an isolated or capacity-reserved server.
+
+Engine configuration: **depth 10, MultiPV 3, one thread per engine, 64 MiB hash**.
+The workload has 1,225 unique indexed positions across 18 games and 1,246 plies.
+Each run began with an empty application/cache dataset and retained no generated
+users/positions afterwards; previously allocated DB pages were not reset.
+
+| Workers requested / observed peak | Cold engine cohort seconds | Warm engine cohort seconds | Cold cache hits | Warm cache hits | Cold engine+Node CPU-hours / 1k games |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 / 1 | 65.573 | 4.717 | 3.09% | 100% | 1.010 |
+| 2 / 2 | 34.940 | 2.542 | 3.01% | 100% | 1.044 |
+| 4 / 4 | 18.542 | 1.446 | 2.69% | 100% | 1.057 |
+
+Observed cold work rates were 988, 1,855 and 3,495 games/hour **for this finite
+cohort and this depth-10 engine stage**. The corresponding linear wall-hour
+scenarios per 1,000 games were 1.012, 0.539 and 0.286. These exclude the separate
+import/index/evidence/diagnosis stages, queue arrivals, deployment limits and
+PostgreSQL CPU. They are not production depth-16 throughput or sustained SLAs.
+The small reduction in cross-game cold hit ratio at higher concurrency is
+consistent with concurrent workers reaching shared uncached positions before
+a peer persists them; each report retains actual search/miss counts rather
+than assuming every miss creates a globally unique row.
+
+For one worker, per-game cold wall times had n=18, p50 3.195 s, p90 5.561 s,
+p95/max 7.492 s. The 1,225 actual uncached searches had p50 35.896 ms,
+p90 108.550 ms and p95 127.517 ms. The source-control groups have only **three
+quota-selected games each**; their p95 is the maximum, not a population tail
+estimate. The same worker's pre-enqueued backlog produced p50 queue lag 33.955 s
+and p95 62.801 s. Raw reports retain all per-game, per-position, control and
+queue samples, including both requested and observed concurrency.
+
+The one-worker non-engine stages observed import 113.538 ms, mean indexing
+24.594 ms/game, 108 registered evidence runs in 8.206 s, and diagnosis
+publication in 187.471 ms. All three runs published a current two-finding
+benchmark hierarchy. This pooled unrelated-player result proves lifecycle
+completion only. As engine work becomes cached/parallel, serial evidence and
+per-run process/DB overhead become a material fraction of the remaining work;
+that is a reason to profile those stages, not to weaken evidence coverage.
+
+Across the three sequential settings, injected engine crash plus natural retry
+completed in 3.198–3.300 s, with `RETRY_WAIT/PENDING`, zero classified plies at
+interruption, and a complete second attempt. Mid-search supersession completed
+replacement in 2.592–2.643 s; the stale claim performed eight searches before the
+production batch fence rejected its write, and remained `SUPERSEDED/INCOMPLETE`.
+This observes existing batch-boundary cancellation behavior, not immediate
+cancellation or a natural crash rate. In-flight import cancellation finished
+`CANCELLED` in 10.119–11.419 ms and retained exactly the 18 existing games.
+These are three executions of one injected short-game scenario, not independent
+natural-game recovery samples.
+
+The first scenario's PostgreSQL physical allocation grew by 4,096,000 bytes,
+including cold/warm runs, fault/replacement history, evidence and diagnosis.
+This is **not bytes per ordinary imported game**; later scenarios reuse already
+allocated pages. Raw cumulative transaction/block/tuple counters are retained,
+with their asynchronous-flush limitations. macOS native RSS readings are
+close-time snapshots and must not be presented as high-water or aggregate
+concurrent memory consumption.
+
+**Decision:** no engine fidelity, cache policy or production concurrency change.
+On this depth-10 cohort, 2 and 4 workers improve finite-backlog wall time at
+slightly higher measured CPU per game, but do not locate saturation or establish
+production-setting capacity. Production depth-16 observations and the final
+closeout limitations must be assessed separately before accepting #126/#128.

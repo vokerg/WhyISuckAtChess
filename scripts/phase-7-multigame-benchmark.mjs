@@ -107,7 +107,7 @@ export async function runMultigameBenchmark() {
     const counts = await Promise.all([prisma.appUser.count(), prisma.importedGame.count(), prisma.position.count(), prisma.gameAnalysisRun.count()]);
     assert.ok(counts.every((n) => n === 0), 'Benchmark requires an empty migrated database.');
     const dbBefore = await dbSnapshot();
-    assert.equal(dbBefore.timezone, 'UTC', 'Benchmark requires UTC PostgreSQL sessions; see #170.');
+    assert.ok(['UTC', 'Etc/UTC'].includes(dbBefore.timezone), 'Controlled benchmark profile requires UTC/Etc/UTC PostgreSQL sessions.');
     // Hard deadline kills engines even if a worker stalls. No incomplete report is emitted.
     deadline = setTimeout(() => { for (const child of children) child.kill('SIGKILL'); console.error('Benchmark exceeded 30-minute hard deadline.'); process.exit(124); }, 30 * 60_000);
     const scenarioStarted = performance.now();
