@@ -550,3 +550,56 @@ On this depth-10 cohort, 2 and 4 workers improve finite-backlog wall time at
 slightly higher measured CPU per game, but do not locate saturation or establish
 production-setting capacity. Production depth-16 observations and the final
 closeout limitations must be assessed separately before accepting #126/#128.
+
+### Production depth-16 short-game observation
+
+[The six-short-game raw report](benchmarks/2026-10-19-recorded/depth16-workers1-short.json)
+uses the same source/script/binary/host provenance as the depth-10 matrix,
+**production settings: depth 16, MultiPV 3, one thread, 64 MiB hash**, and one
+observed worker. These are six complete games (191 plies), one per exact control,
+not prefixes cut from longer games.
+
+Cold analysis took **223.720 s**, with 4.06% cross-game cache hits; forced warm
+reanalysis took **1.457 s** with 100% hits. The linear engine-stage scenarios are
+10.357 wall-hours and 10.298 measured native+Node CPU-hours per 1,000 such short
+games. Each control has n=1, so no control-specific distribution is inferred.
+These values cannot be extrapolated to the 81–160-ply stratum or used as a
+matched estimate of the depth-10/depth-16 multiplier.
+
+The actual process-crash/retry scenario completed in 29.896 s and source
+supersession/replacement in 36.438 s. Interruption retained zero classified
+plies/incomplete coverage; retries completed the current source. The 36 evidence
+runs took 1.399 s, diagnosis publication 103.243 ms, and in-flight import
+cancellation 6.874 ms with all six existing games retained. The physical DB
+allocation decreased during this run, demonstrating why before/after database
+size must not be converted into a fabricated per-game storage price.
+
+### Finite closeout campaign
+
+The next acceptance action is **one production-setting campaign and one review**,
+not another chain of isolated timing instrumentation PRs:
+
+1. Run the existing 18-game varied-length cohort at depth 16/MultiPV 3 on the
+   declared Linux runner resource profile, cold/warm at 1/2/4 workers. Retain
+   native CPU/true peak RSS, actual overlap, backlog lag/drain, DB counters/size,
+   and current evidence/diagnosis plus injected recovery/cancellation results.
+   Describe the highest tested concurrency and whether saturation was observed;
+   do not require proving an arbitrary universal maximum.
+2. Derive a conservative operational backlog/drain-time and CPU/RAM budget from
+   observed slow strata with an explicit safety margin. Keep one-worker and
+   depth-16 defaults unless a separate reviewed change is justified. Prices
+   remain optional until a deployment and sourced rate are selected. Isolated
+   PostgreSQL CPU/per-query latency may remain a disclosed limitation when the
+   operational budget accounts for uncertainty.
+3. Independently review the campaign, source/coverage and operational bounds,
+   run required validation, and explicitly accept or block #126. The small CI
+   smoke gate and this laptop sample alone do not provide that sign-off.
+
+The separate #128 acceptance must reconcile closed prerequisite issue states
+with their canonical documents: the gold corpus still has pending domain
+adjudication, detector/calibration outputs have no accepted independent review,
+and operational authentication/log/configuration review remains partial. Those
+are credibility/security decisions; more green benchmark instrumentation cannot
+supply the missing evidence. Record a blocked pilot verdict until the bounded
+review/operational decisions are actually made. This does not add optional AI
+or live-provider stress as a hidden release dependency.

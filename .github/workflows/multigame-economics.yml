@@ -9,12 +9,18 @@ on:
         required: true
       concurrency:
         description: 'Concurrent workers (1, 2, 4)'
+        type: choice
+        options: ['1', '2', '4']
         default: '1'
         required: true
       games:
         description: 'Recorded games (6 short or 18 varied length)'
         default: '18'
         required: true
+      campaign:
+        description: 'Run the selected profile at all worker counts (1/2/4)'
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'scripts/phase-7-multigame*'
@@ -26,6 +32,10 @@ jobs:
   recorded-workload:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        workers: ${{ inputs.campaign && fromJSON('[1,2,4]') || fromJSON(format('[{0}]', inputs.concurrency || '2')) }}
     services:
       postgres:
         image: postgres:16
@@ -44,7 +54,7 @@ jobs:
       STOCKFISH_PATH: /usr/games/stockfish
       # PRs exercise a bounded real-binary gate; manual runs select the measured profile.
       PHASE7_DEPTH: ${{ inputs.depth || '6' }}
-      PHASE7_CONCURRENCY: ${{ inputs.concurrency || '2' }}
+      PHASE7_CONCURRENCY: ${{ matrix.workers }}
       PHASE7_GAMES: ${{ inputs.games || '6' }}
       PHASE7_REPORT_PATH: /tmp/phase7-recorded-multigame.json
     steps:
@@ -69,7 +79,7 @@ jobs:
           test -s /tmp/phase7-recorded-summary.json
       - uses: actions/upload-artifact@v4
         with:
-          name: phase7-recorded-economics-${{ github.sha }}-${{ github.run_attempt }}
+          name: phase7-recorded-economics-${{ github.sha }}-${{ github.run_attempt }}-workers${{ matrix.workers }}
           path: |
             /tmp/phase7-recorded-multigame.json
             /tmp/phase7-recorded-summary.json

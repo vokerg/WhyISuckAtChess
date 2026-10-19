@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import { benchmarkOptions, settleBenchmarkWorkers } from './phase-7-multigame-benchmark.mjs';
@@ -102,5 +102,19 @@ test('report rejects duplicate games, contradictory cache/search counts, or fals
   ]) {
     const report = reportFixture(); corrupt(report);
     assert.throws(() => summarizeMultigameReport(report));
+  }
+});
+
+test('archived native measurements reconcile through the same capacity validator', async () => {
+  const directory = new URL('../docs/benchmarks/2026-10-19-recorded/', import.meta.url);
+  const files = (await readdir(directory)).filter((name) => name.endsWith('.json'));
+  assert.ok(files.length >= 3);
+  for (const name of files) {
+    const report = JSON.parse(await readFile(new URL(name, directory), 'utf8'));
+    const summary = summarizeMultigameReport(report);
+    assert.equal(summary.passes[1].cacheHitRatio, 1);
+    assert.equal(report.passes[0].peakActiveAnalyses, report.passes[0].concurrency);
+    assert.equal(report.passes[0].participatingWorkers, report.passes[0].concurrency);
+    assert.deepEqual(new Set(summary.workload.strata.map((x) => x.control)), new Set(RECORDED_CONTROLS));
   }
 });
