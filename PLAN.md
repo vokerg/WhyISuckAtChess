@@ -298,6 +298,8 @@ A user can understand what the major weaknesses are, why the product believes th
 
 ## Phase 7 — Validation, calibration, economics, and hardening
 
+**Current exit status: BLOCKED for a pilot.** The recorded Phase 6 journey passes; Phase 7 prerequisite issue closure does not establish independent diagnosis credibility or an accepted operating envelope. The [integrated acceptance ledger and finite closeout decisions](docs/phase-7-acceptance.md) are canonical for #128; production economics, domain adjudication and pilot auth/log/config review remain explicit gates.
+
 Validate both software correctness and diagnostic credibility.
 
 This phase includes ordinary quality work:
