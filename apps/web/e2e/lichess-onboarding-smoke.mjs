@@ -140,11 +140,15 @@ try {
   await page.goto(origin + '/games');
   await page.getByRole('link', { name: /Import more games/ }).waitFor();
   await page.goto(origin + '/diagnosis');
-  await page.getByRole('link', { name: 'Import games from Lichess' }).waitFor();
+  // The global navigation stays available whether diagnosis is pending,
+  // has no ranked findings, or has an existing result.
+  const lichessNavigation = page.getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Lichess' });
+  await lichessNavigation.waitFor();
 
   // The first user-driven connection step starts OAuth and returns through the
   // mocked provider to the authoritative backend connection read.
-  await page.getByRole('link', { name: 'Import games from Lichess' }).click();
+  await lichessNavigation.click();
   await page.getByRole('button', { name: 'Connect Lichess' }).click();
   await page.getByText('OwnedLichessPlayer').first().waitFor();
 
