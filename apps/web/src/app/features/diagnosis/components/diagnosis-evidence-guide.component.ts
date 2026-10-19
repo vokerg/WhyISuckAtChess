@@ -58,21 +58,21 @@ export const diagnosisEvidenceGuideEntries = [
   `,
   styles: [`
     .evidence-guide {
-      border: 1px solid rgba(61, 40, 27, 0.14);
-      border-radius: 14px;
-      background: rgba(255, 252, 247, 0.92);
-      color: #604939;
+      border: 1px solid #e0e5de;
+      border-radius: 8px;
+      background: #fff;
+      color: #68766b;
     }
 
     summary {
       padding: 0.9rem 1.15rem;
       cursor: pointer;
-      color: #7d4b18;
+      color: #315a47;
       font-weight: 750;
     }
 
     summary:focus-visible {
-      outline: 3px solid #7d4b18;
+      outline: 3px solid #315a47;
       outline-offset: 3px;
     }
 
@@ -86,14 +86,14 @@ export const diagnosisEvidenceGuideEntries = [
 
     dl div {
       min-width: 0;
-      border-top: 1px solid rgba(61, 40, 27, 0.1);
+      border-top: 1px solid #e0e5de;
       padding-top: 0.65rem;
     }
 
     dt {
       margin-bottom: 0.25rem;
       font-weight: 800;
-      color: #3d281b;
+      color: #2b302b;
     }
 
     dd {

@@ -110,7 +110,7 @@ test('real persisted import -> analysis/evidence -> diagnosis lifecycle, API and
     assert.equal(summary.refresh.state, 'READY');
     assert.equal(await prisma.evidenceRun.count({where:{importedGame:{appUserId:user.id},detectorKey:'phase-context',status:'SUCCEEDED',isCurrent:true,sourceAnalysisRunId:null}}),80,'pure phase geometry remains valid after complete analysis');
     if (browser) {
-      await browser.page.getByRole('button', { name: 'Refresh status' }).click();
+      await browser.page.getByRole('button', { name: 'Check again' }).click();
       await browser.page.getByRole('list', { name: 'Ranked diagnosis findings' }).waitFor();
       await browser.page.getByText('Diagnosis processing is complete.').waitFor();
     }
