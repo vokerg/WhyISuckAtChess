@@ -1,3 +1,4 @@
+import { diagnosisScopeSql } from './diagnosis-scope-sql';
 import { CURRENT_DIAGNOSIS_ANALYSIS, currentDiagnosisAnalysisSql, type DiagnosisAnalysisIdentity } from './diagnosis-analysis-source';
 import { MoveClassificationCode } from '@why-i-suck-at-chess/chess-domain';
 import { Prisma } from '@prisma/client';
@@ -22,16 +23,6 @@ function buildWhere(
     appUserId,
     ...(scope.from || scope.to ? { startedAt } : {}),
   };
-}
-
-function queryConditions(
-  appUserId: number,
-  scope: OpponentStrengthEffectScope,
-): Prisma.Sql {
-  const conditions: Prisma.Sql[] = [Prisma.sql`game."appUserId" = ${appUserId}`];
-  if (scope.from) conditions.push(Prisma.sql`game."startedAt" >= ${scope.from}`);
-  if (scope.to) conditions.push(Prisma.sql`game."startedAt" < ${scope.to}`);
-  return Prisma.join(conditions, ' AND ');
 }
 
 export function createPrismaOpponentStrengthEffectRepository(database: typeof prisma = prisma, identity: DiagnosisAnalysisIdentity | null = CURRENT_DIAGNOSIS_ANALYSIS): OpponentStrengthEffectRepository {
@@ -100,7 +91,7 @@ export function createPrismaOpponentStrengthEffectRepository(database: typeof pr
        AND analysis."coverageStatus" = 'COMPLETE'
        AND analysis."sourcePlyIndexedAt" = game."plyIndexedAt"
        ${currentDiagnosisAnalysisSql(identity)}
-      WHERE ${queryConditions(appUserId, scope)}
+      WHERE ${diagnosisScopeSql(appUserId, scope)}
       GROUP BY
         game."id",
         game."variant",
