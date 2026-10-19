@@ -1,12 +1,10 @@
 # Phase 7 engine economics: measured evidence and remaining gates (#126)
 
-**Status:** **Partial benchmark instrumentation, not an economics sign-off.**
-The first deliverables are a reproducible native Stockfish timing microbaseline
-and a real persisted-cache probe on two short synthetic games with partially shared positions. Linux-only, live-child
-CPU and peak RSS snapshots supplement their wall-clock timings; none of these
-are representative per-game cost, application worker throughput, or pilot capacity.
-See [real-Stockfish acceptance](phase-7-real-stockfish-acceptance.md) for the
-separate already-tested disposable-PostgreSQL provenance and recovery gate.
+**Status:** Production recorded-workload campaign completed; bounded #126
+operational/economics acceptance and planning budget are recorded in section 7.
+The earlier microbaseline/partial checkpoints below retain their historical
+limitations. This is not Phase 7 pilot permission; see the integrated acceptance
+report for remaining domain and operational decisions.
 
 ## 1. Controlled microbaseline
 
@@ -603,3 +601,132 @@ are credibility/security decisions; more green benchmark instrumentation cannot
 supply the missing evidence. Record a blocked pilot verdict until the bounded
 review/operational decisions are actually made. This does not add optional AI
 or live-provider stress as a hidden release dependency.
+
+## 7. Production campaign and bounded economics acceptance (2026-10-19)
+
+**#126 decision: accept the measured operational/economics criterion within the
+scope below. #128 pilot permission remains BLOCKED on independent domain and
+pilot authentication/logging decisions.** Sections 1–6 are historical checkpoints;
+this completed campaign supersedes their outstanding-economics markers. It does
+not turn a quota sample into population evidence or authorize deployment.
+
+### Reproducible evidence
+
+[Production campaign 39267355603](https://github.com/vokerg/WhyISuckAtChess/actions/runs/39267355603)
+completed **SUCCESS for all three jobs** at source
+`6e743d8dcd0d6726737decda62f202a13f8f1985`. Each ran the existing 18 complete CC0
+recorded games, 1,246 plies and 1,225 distinct indexed positions, with the same
+six controls and short/medium/long quotas described in section 6. All source
+clocks were complete at archive-second precision. No external provider calls
+were made. Native Stockfish 16 was pinned to Ubuntu package `16-1build1`, binary
+SHA-256 `00628bd9c9855c1b7ff93d7f8d51b413586cdc6336fe637f9a14a61531a05aca`.
+All used production **depth 16 / MultiPV 3 / one thread / 64 MiB hash**, settings
+hash `b81feab9c4e90f52aeaa76d167d8af616b96df94862e6d4a46abadf47d5b83a0`.
+
+The three independent Ubuntu 24.04 runners reported the same AMD EPYC 7763 CPU
+model, four logical CPUs, approximately 16.77 GB host RAM (exact byte counts
+vary slightly and are retained in each report), Node 22.23.3 and
+PostgreSQL 16.15/Etc/UTC. These are separate cloud VMs, not repeated trials on an
+isolated physical host. Frequency/noisy-neighbor variability remains possible.
+Reports retain exact script/fixture/binary hashes, queue samples, native resource
+readings, source strata, DB telemetry and successful publication/fault states:
+
+- [One worker](benchmarks/2026-10-19-recorded/production-linux-workers1.json)
+- [Two workers](benchmarks/2026-10-19-recorded/production-linux-workers2.json)
+- [Four workers](benchmarks/2026-10-19-recorded/production-linux-workers4.json)
+
+The current pure report validator independently reproduced all three uploaded
+summaries byte-for-byte. The benchmark test validates every archived report.
+
+| Requested / observed workers | Cold cohort seconds | Warm cohort seconds | Cold games/hour | Cold native+Node CPU-hours / 1k games | Cold cache hit ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 / 1 | 789.893 | 4.545 | 82.036 | 12.211 | 3.09% |
+| 2 / 2 | 416.698 | 2.704 | 155.508 | 12.542 | 3.01% |
+| 4 / 4 | 353.210 | 2.092 | 183.460 | 20.916 | 2.69% |
+
+Warm runs were forced new durable analyses, with **100% cache hits and zero
+searches**. All workers participated. At four workers, measured native CPU alone
+averaged about 3.82 CPU-seconds per cohort wall-second, close to the four-logical-
+CPU profile's available budget. Four workers achieved only 1.18× the observed
+two-worker throughput while measured CPU/game rose about 67%. This is evidence
+of diminishing returns/resource contention in the tested profile, not proof of
+a universal saturation point. No default concurrency increase is justified.
+
+Serial per-game cold walls: n=18, p50 34.751 s, p90 72.463 s, p95/max 76.104 s.
+Serial pre-enqueued queue lag: p50 376.445 s, p95/max 756.362 s. Each exact-control
+group has only three games; raw group quantiles and per-search samples remain
+available. Natural games here span 20–153 plies; the sampling bands extend to
+160, but there is no all-games-within-160 guarantee.
+
+Every job completed 108 registered evidence runs and a current three-finding
+benchmark diagnosis. The pooled finding count is lifecycle evidence, not a
+reviewed player's diagnosis. Each also observed the real native crash/retry,
+source supersession and in-flight import cancellation invariants: interrupted
+runs had zero classified plies and incomplete coverage, retries/replacements
+completed current evidence, and cancelled imports retained exactly 18 games.
+All remain explicitly injected scenarios, not natural failure-rate estimates.
+
+### Conservative planning budget and unchanged defaults
+
+Retain **one worker, depth 16, MultiPV 3, one native thread, 64 MiB hash**.
+For an initial operator-controlled planning batch of **18 cold eligible games**
+inside this recorded scope, choose a **60-minute planning window**. This is a
+conservative operating model, not an implemented admission cap or SLA:
+
+| Input | Observed / chosen value |
+| --- | ---: |
+| Slowest serial game worker window, T | 76.104032 s |
+| Maximum indexing window across campaign, I | 0.098479 s |
+| Entire 18-game evidence stage reserved **per game**, E | 13.850037 s |
+| Entire diagnosis publication reserved **per game**, D | 0.359921 s |
+| Chosen per-game charge: 2 × (T + I + E + D) | 180.824938 s |
+| Sum of worst observed crash/retry and supersession/replacement windows, F | 58.670895 s |
+| Batch envelope: 18 × charge + F | 3,313.519779 s = **55.225 minutes** |
+| Rounded operator planning window | **60 minutes** |
+
+Charging the entire batch evidence and diagnosis stage to each game intentionally
+over-reserves downstream work. The factor of two is an explicit chosen safety
+margin, not a confidence interval or a bound proved for unseen positions. The
+engine-only per-1,000-game CPU figures above are measured linear scenarios;
+they exclude PostgreSQL server CPU, networking, API load and hosting prices.
+No deployment/rate has been selected, so no dollar cost is stated.
+
+Native `/proc` VmHWM peaked at 208,596,992 bytes (198.934 MiB) for one engine.
+Round to 256 MiB and double to choose a **512 MiB allowance per native engine**.
+The largest whole-scenario Node endpoint RSS was 180,797,440 bytes
+(172.422 MiB); double and round up to choose a separate **512 MiB Node worker
+allowance**. The latter is based on endpoint readings, **not a measured Node
+peak**. Neither sum of process maxima nor either allowance is measured
+simultaneous system RAM. Keep the tested four-logical-CPU/approximately-16-GB
+reference profile for comparisons; API, PostgreSQL and OS headroom must be
+reserved separately before any smaller deployment is approved. Isolated DB
+CPU/peak RAM and query-level latency remain disclosed unmeasured quantities.
+
+This budget covers the declared cohort/settings/profile, not arbitrary long
+games, other controls, large concurrent owners or sustained arrival rates.
+The application has **no new automatic 18-game admission limit**. Games outside
+the budget evidence continue under normal pipeline behavior; they are not
+silently skipped, truncated, reclassified or forced pending by this benchmark.
+Before a pilot, the operator must choose how to control incoming work and
+monitor batch drain time/RAM, revisit the envelope when observations exceed it,
+and preserve honest processing/partial/failed states. Those deployment/admission
+decisions belong to the remaining #128 operator review, not an unmeasured
+runtime policy change hidden in this economics acceptance.
+
+### Acceptance and handoff
+
+Independent results review recomputed all campaign numerators, provenance,
+resource/coverage/fault states and the 55.225-minute model and accepted #126's
+bounded measured operational criterion. The recorded harness's build/test,
+browser and native gates were green at its reviewed source; the campaign itself
+passed every production profile. Archiving/acceptance changes only reports and
+documentation, with the same parser/guardrail validation; production policies
+and raw source facts are unchanged.
+
+The remaining Phase 7 work is the finite domain/operational/release checklist in
+[the integrated acceptance report](phase-7-acceptance.md). Unknown detector
+accuracy, unreviewed calibration and actual pilot auth/log configuration are
+not waived by this economics acceptance. Do not reopen #126 for another tiny
+instrumentation increment merely because population scale, dollars or every
+possible server metric have not been certified; reopen it for a concrete defect
+or a changed workload/settings/deployment that invalidates this scoped budget.
