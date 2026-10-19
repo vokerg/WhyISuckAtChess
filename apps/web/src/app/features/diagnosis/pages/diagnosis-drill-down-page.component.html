@@ -46,34 +46,14 @@
         <div class="finding-body">
           <div class="finding-heading">
             <div>
-              
               <h2>{{ titleFor(current.finding) }}</h2>
               <p class="claim">{{ claimFor(current.finding) }}</p>
-              
             </div>
             <div class="evidence-strength" [attr.data-strength]="current.finding.evidenceStrength">
               {{ current.finding.evidenceStrength }} evidence
             </div>
           </div>
 
-          <details class="finding-details">
-            <summary>Evidence and scoring details</summary>
-            <p class="technical-id">Diagnosis ID: {{ current.finding.diagnosisId }}</p>
-            <p class="finding-context">
-              {{ current.finding.findingLevel }} · {{ current.finding.observationState }} ·
-              {{ current.finding.consolidationState }}
-            </p>
-            <dl class="metrics">
-            <div><dt>Rank score</dt><dd>{{ scoreFor(current.finding.finalScore) }}</dd></div>
-            <div><dt>Samples</dt><dd>{{ current.finding.sampleCount }}</dd></div>
-            <div><dt>Games</dt><dd>{{ current.finding.distinctGameCount }}</dd></div>
-            <div><dt>Sessions</dt><dd>{{ current.finding.distinctSessionCount }}</dd></div>
-            <div><dt>Required coverage</dt><dd>{{ coverageFor(current.finding.requiredEvidenceCoverage) }}</dd></div>
-          </dl>
-          @if (effectFor(current.finding); as effect) {
-            <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
-          }
-          </details>
           @if (current.finding.representativeEvidence.length > 0) {
             <section class="evidence-section" aria-label="Top-level finding evidence">
               <h3>Example positions</h3>
@@ -88,6 +68,21 @@
               </div>
             </section>
           }
+          <details class="finding-details">
+            <summary>Evidence and scoring details</summary>
+            <p class="technical-id">Diagnosis ID: {{ current.finding.diagnosisId }}</p>
+            <p class="finding-context">{{ current.finding.findingLevel }} · {{ current.finding.observationState }} · {{ current.finding.consolidationState }}</p>
+            <dl class="metrics">
+              <div><dt>Rank score</dt><dd>{{ scoreFor(current.finding.finalScore) }}</dd></div>
+              <div><dt>Samples</dt><dd>{{ current.finding.sampleCount }}</dd></div>
+              <div><dt>Games</dt><dd>{{ current.finding.distinctGameCount }}</dd></div>
+              <div><dt>Sessions</dt><dd>{{ current.finding.distinctSessionCount }}</dd></div>
+              <div><dt>Required coverage</dt><dd>{{ coverageFor(current.finding.requiredEvidenceCoverage) }}</dd></div>
+            </dl>
+            @if (effectFor(current.finding); as effect) {
+              <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+            }
+          </details>
         </div>
       </section>
 
@@ -116,10 +111,8 @@
                 <div class="finding-body">
                   <div class="finding-heading">
                     <div>
-                      
                       <h3>{{ titleFor(item) }}</h3>
                       <p class="claim">{{ claimFor(item) }}</p>
-                      
                     </div>
                     <div class="support-labels">
                       <span class="role-label">{{ roleFor(item.supportRole) }}</span>
@@ -128,23 +121,6 @@
                       </span>
                     </div>
                   </div>
-                  <details class="finding-details">
-                    <summary>Evidence and scoring details</summary>
-                    <p class="technical-id">Diagnosis ID: {{ item.diagnosisId }}</p>
-                    <p class="finding-context">
-                      {{ item.findingLevel }} · {{ item.observationState }} · {{ item.consolidationState }}
-                    </p>
-                    <dl class="metrics">
-                    <div><dt>Persisted score</dt><dd>{{ scoreFor(item.finalScore) }}</dd></div>
-                    <div><dt>Samples</dt><dd>{{ item.sampleCount }}</dd></div>
-                    <div><dt>Games</dt><dd>{{ item.distinctGameCount }}</dd></div>
-                    <div><dt>Sessions</dt><dd>{{ item.distinctSessionCount }}</dd></div>
-                    <div><dt>Required coverage</dt><dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd></div>
-                  </dl>
-                  @if (effectFor(item); as effect) {
-                    <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
-                  }
-                  </details>
                   @if (item.representativeEvidence.length > 0) {
                     <section class="evidence-section" aria-label="Supporting finding evidence">
                       <h3>Representative evidence</h3>
@@ -159,6 +135,21 @@
                       </div>
                     </section>
                   }
+                  <details class="finding-details">
+                    <summary>Evidence and scoring details</summary>
+                    <p class="technical-id">Diagnosis ID: {{ item.diagnosisId }}</p>
+                    <p class="finding-context">{{ item.findingLevel }} · {{ item.observationState }} · {{ item.consolidationState }}</p>
+                    <dl class="metrics">
+                      <div><dt>Persisted score</dt><dd>{{ scoreFor(item.finalScore) }}</dd></div>
+                      <div><dt>Samples</dt><dd>{{ item.sampleCount }}</dd></div>
+                      <div><dt>Games</dt><dd>{{ item.distinctGameCount }}</dd></div>
+                      <div><dt>Sessions</dt><dd>{{ item.distinctSessionCount }}</dd></div>
+                      <div><dt>Required coverage</dt><dd>{{ coverageFor(item.requiredEvidenceCoverage) }}</dd></div>
+                    </dl>
+                    @if (effectFor(item); as effect) {
+                      <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
+                    }
+                  </details>
                 </div>
               </li>
             }
