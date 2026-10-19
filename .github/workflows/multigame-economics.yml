@@ -1,0 +1,87 @@
+name: Recorded multigame engine economics
+
+on:
+  workflow_dispatch:
+    inputs:
+      depth:
+        description: 'Stockfish depth (6–16; production is 16)'
+        default: '10'
+        required: true
+      concurrency:
+        description: 'Concurrent workers (1, 2, 4)'
+        type: choice
+        options: ['1', '2', '4']
+        default: '1'
+        required: true
+      games:
+        description: 'Recorded games (6 short or 18 varied length)'
+        default: '18'
+        required: true
+      campaign:
+        description: 'Run the selected profile at all worker counts (1/2/4)'
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'scripts/phase-7-multigame*'
+      - 'scripts/phase-7-recorded-workload.mjs'
+      - 'apps/api/benchmarks/fixtures/recorded-cc0-workload.json'
+      - '.github/workflows/multigame-economics.yml'
+
+jobs:
+  recorded-workload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        workers: ${{ inputs.campaign && fromJSON('[1,2,4]') || fromJSON(format('[{0}]', inputs.concurrency || '2')) }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: why_chess_cache_benchmark_ci_recorded
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d why_chess_cache_benchmark_ci_recorded"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/why_chess_cache_benchmark_ci_recorded
+      RUN_PHASE7_MULTIGAME_BENCHMARK: '1'
+      STOCKFISH_PATH: /usr/games/stockfish
+      # PRs exercise a bounded real-binary gate; manual runs select the measured profile.
+      PHASE7_DEPTH: ${{ inputs.depth || '6' }}
+      PHASE7_CONCURRENCY: ${{ matrix.workers }}
+      PHASE7_GAMES: ${{ inputs.games || '6' }}
+      PHASE7_REPORT_PATH: /tmp/phase7-recorded-multigame.json
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install identified native engine and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends stockfish=16-1build1
+          dpkg-query -W stockfish
+          sha256sum "$STOCKFISH_PATH"
+          npm ci
+          npm run db:migrate
+          npm run build:api
+      - name: Validate recorded cohort and run measured worker pipeline
+        run: |
+          node --test scripts/phase-7-multigame-benchmark.test.mjs
+          node scripts/phase-7-multigame-benchmark.mjs
+          node scripts/phase-7-multigame-report.mjs "$PHASE7_REPORT_PATH" > /tmp/phase7-recorded-summary.json
+          test -s /tmp/phase7-recorded-summary.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase7-recorded-economics-${{ github.sha }}-${{ github.run_attempt }}-workers${{ matrix.workers }}
+          path: |
+            /tmp/phase7-recorded-multigame.json
+            /tmp/phase7-recorded-summary.json
+          if-no-files-found: error
+          retention-days: 30
