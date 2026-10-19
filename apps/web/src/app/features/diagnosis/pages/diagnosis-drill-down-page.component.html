@@ -46,20 +46,24 @@
         <div class="finding-body">
           <div class="finding-heading">
             <div>
-              <p class="diagnosis-id">{{ current.finding.diagnosisId }}</p>
+              
               <h2>{{ titleFor(current.finding) }}</h2>
               <p class="claim">{{ claimFor(current.finding) }}</p>
-              <p class="finding-context">
-                {{ current.finding.findingLevel }} · {{ current.finding.observationState }} ·
-                {{ current.finding.consolidationState }}
-              </p>
+              
             </div>
             <div class="evidence-strength" [attr.data-strength]="current.finding.evidenceStrength">
               {{ current.finding.evidenceStrength }} evidence
             </div>
           </div>
 
-          <dl class="metrics">
+          <details class="finding-details">
+            <summary>Evidence and scoring details</summary>
+            <p class="technical-id">Diagnosis ID: {{ current.finding.diagnosisId }}</p>
+            <p class="finding-context">
+              {{ current.finding.findingLevel }} · {{ current.finding.observationState }} ·
+              {{ current.finding.consolidationState }}
+            </p>
+            <dl class="metrics">
             <div><dt>Rank score</dt><dd>{{ scoreFor(current.finding.finalScore) }}</dd></div>
             <div><dt>Samples</dt><dd>{{ current.finding.sampleCount }}</dd></div>
             <div><dt>Games</dt><dd>{{ current.finding.distinctGameCount }}</dd></div>
@@ -69,6 +73,7 @@
           @if (effectFor(current.finding); as effect) {
             <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
           }
+          </details>
           @if (current.finding.representativeEvidence.length > 0) {
             <section class="evidence-section" aria-label="Top-level finding evidence">
               <h3>Example positions</h3>
@@ -111,12 +116,10 @@
                 <div class="finding-body">
                   <div class="finding-heading">
                     <div>
-                      <p class="diagnosis-id">{{ item.diagnosisId }}</p>
+                      
                       <h3>{{ titleFor(item) }}</h3>
                       <p class="claim">{{ claimFor(item) }}</p>
-                      <p class="finding-context">
-                        {{ item.findingLevel }} · {{ item.observationState }} · {{ item.consolidationState }}
-                      </p>
+                      
                     </div>
                     <div class="support-labels">
                       <span class="role-label">{{ roleFor(item.supportRole) }}</span>
@@ -125,7 +128,13 @@
                       </span>
                     </div>
                   </div>
-                  <dl class="metrics">
+                  <details class="finding-details">
+                    <summary>Evidence and scoring details</summary>
+                    <p class="technical-id">Diagnosis ID: {{ item.diagnosisId }}</p>
+                    <p class="finding-context">
+                      {{ item.findingLevel }} · {{ item.observationState }} · {{ item.consolidationState }}
+                    </p>
+                    <dl class="metrics">
                     <div><dt>Persisted score</dt><dd>{{ scoreFor(item.finalScore) }}</dd></div>
                     <div><dt>Samples</dt><dd>{{ item.sampleCount }}</dd></div>
                     <div><dt>Games</dt><dd>{{ item.distinctGameCount }}</dd></div>
@@ -135,6 +144,7 @@
                   @if (effectFor(item); as effect) {
                     <p class="effect"><strong>Measured effect:</strong> {{ effect }}</p>
                   }
+                  </details>
                   @if (item.representativeEvidence.length > 0) {
                     <section class="evidence-section" aria-label="Supporting finding evidence">
                       <h3>Representative evidence</h3>
@@ -159,7 +169,7 @@
       <app-diagnosis-evidence-guide />
       <details class="analysis-details">
         <summary>About this analysis</summary>
-      <section class="summary-strip" aria-label="Diagnosis revision metadata">
+        <section class="summary-strip" aria-label="Diagnosis revision metadata">
         <div><span>Rank</span><strong>#{{ current.finding.rankPosition }}</strong></div>
         <div><span>Scope</span><strong>{{ current.scopeKey }}</strong></div>
         <div><span>Finding set</span><strong>#{{ current.findingSetId }}</strong></div>
@@ -167,11 +177,11 @@
           <span>Calculated</span>
           <strong><time [attr.datetime]="current.calculationAsOf">{{ current.calculationAsOf }}</time></strong>
         </div>
-      </section>
-      <p class="version-note">
-        Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
-        calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
-      </p>
+        </section>
+        <p class="version-note">
+          Taxonomy {{ current.versions.taxonomy }} · synthesis {{ current.versions.synthesis }} ·
+          calculation {{ current.versions.calculation }} · ranking {{ current.versions.ranking }}
+        </p>
       </details>
     }
   }
