@@ -95,3 +95,14 @@
 .support-count { font-weight: 650; font-size: .85rem; }
 .support-symbol { color: #8aa092; }
 .role-label { border-radius: 4px; background: #edf2ee; color: #426e52; }
+
+/* The selected finding gets one clear surface; supporting findings use the shared list. */
+.diagnosis-page > .finding-card {
+  border: 1px solid #e0e5de;
+  border-radius: 10px;
+  background: #fff;
+}
+.finding-details { margin-top: 1.1rem; }
+.finding-details .technical-id { margin: .8rem 0 0; }
+.finding-details .finding-context { margin: .4rem 0 .75rem; }
+.finding-details .metrics { margin-top: .8rem; }
