@@ -26,7 +26,7 @@ The aggregate is observational. It does not claim that stronger opponents cause 
 
 ## Eligible population
 
-The repository first performs a bounded owned-game read by optional `from` / `to` start-time scope. The service then keeps the current standard bullet/blitz/rapid cohort used by the Phase 4 timing policy.
+The repository first performs a bounded owned-game read by optional `from` / `to` start-time scope. SQL date bounds use the shared [UTC scope binding contract](exact-time-control-underperformance.md#utc-date-scopes), preserving the same `[from, to)` population as Prisma counts regardless of the PostgreSQL session timezone. The service then keeps the current standard bullet/blitz/rapid cohort used by the Phase 4 timing policy.
 
 A game needs:
 

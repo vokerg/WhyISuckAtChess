@@ -106,6 +106,10 @@ Score percentage is 100 * (wins + 0.5 * draws) / result-covered games.
 
 The result delta is always target score percentage minus comparator score percentage. Positive, zero, and negative deltas are all valid observations.
 
+## UTC date scopes
+
+Optional `from` / `to` bounds select owned game start instants using `[from, to)` semantics. Counts use Prisma filters; the raw aggregate query shares `diagnosisScopeSql` with RATING-001. Prisma's PostgreSQL `DateTime` columns store UTC in `timestamp(3)` without time zone. The SQL helper therefore binds UTC ISO text explicitly as `timestamp(3)`, avoiding implicit `timestamptz` comparisons that would shift the selected population according to the database session timezone. Source timestamps and current-analysis provenance fences remain unchanged. Integration coverage checks January and July boundaries, milliseconds, and one-sided scopes under UTC, Europe/Copenhagen, and America/New_York sessions.
+
 ## Current engine-quality metrics
 
 A user move contributes quality only when its linked analysis run belongs to the same imported game, succeeded, has COMPLETE coverage, points to the current plyIndexedAt source snapshot, and supplies a finite non-negative scoreLossCp.
