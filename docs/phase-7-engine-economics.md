@@ -367,3 +367,110 @@ representative diagnosis publication throughput, per-game CPU/RSS or PostgreSQL 
 depth-16/MultiPV-3 economics, concurrency/saturation, natural retry backoff,
 cancellation cost or per-1k-game capacity. The fully representative #126
 economics gate and Phase 7 #128 pilot gate remain **OPEN**.
+
+## 6. Recorded multi-game operational benchmark (#126)
+
+The new `scripts/phase-7-multigame-benchmark.mjs` replaces the four-ply-only
+measurement boundary with a reproducible, offline **18-game / 1,246-ply**
+recorded workload. The checked-in [CC0 fixture and selection notes](../apps/api/benchmarks/fixtures/README.md)
+cover bullet 60+0/60+1, blitz 180+0/180+2, and rapid 600+0/600+5, with one
+20–40, 41–80 and 81–160-ply game per control. Selection is a chronological
+archive-prefix quota, **not random sampling or a population estimate**. Original
+moves/results/ratings/dates/clocks are retained with benchmark player identities.
+The source archive's second-resolution clocks remain explicitly distinct from
+native API centisecond precision. Complete source-clock coverage in this quota
+sample is not an estimate of coverage in users' histories.
+
+Reference: CRT `apps/api/benchmarks/onboarding-throughput-safe.mjs` and
+`apps/api/src/prisma.ts`. Preserve the explicit disposable DB guard, finite
+backlog, production service calls, measured resource windows and structured
+artifacts. Change to recorded standard Lichess games, native UCI and the complete
+Why evidence/diagnosis pipeline. Omit CRT Chess.com/WASM/repertoire behavior.
+The fixture adapter, runner and pure report validator remain benchmark modules;
+production engine/worker policy and database schema are unchanged.
+
+### Reproduce
+
+Use an empty migrated **local** PostgreSQL 16 database matching
+`why_chess_cache_benchmark_{ci,test,local}[_suffix]`, UTC sessions, and an absolute
+native `STOCKFISH_PATH`. The guard rejects remote/shared targets and URL options.
+Do not point this at the application's configured database. The runner only
+removes its generated user, cache rows and indexed positions. It blocks all
+unexpected network fetches, bounds the dataset and concurrency, and kills its
+native engines at a 30-minute hard deadline. A failed/incomplete run never emits
+a completed report. All concurrent workers are drained before failure cleanup.
+
+```sh
+export DATABASE_URL='postgresql://postgres:postgres@localhost:5432/why_chess_cache_benchmark_local_recorded'
+export STOCKFISH_PATH=/absolute/path/to/stockfish
+npm run db:migrate
+npm run build:api
+node --test scripts/phase-7-multigame-benchmark.test.mjs
+export RUN_PHASE7_MULTIGAME_BENCHMARK=1
+PHASE7_DEPTH=10 PHASE7_CONCURRENCY=1 PHASE7_GAMES=18 \
+  PHASE7_REPORT_PATH=/tmp/recorded-c1.json \
+  node scripts/phase-7-multigame-benchmark.mjs
+node scripts/phase-7-multigame-report.mjs /tmp/recorded-c1.json \
+  > /tmp/recorded-c1-summary.json
+```
+
+Repeat **sequentially** with concurrency 2 and 4 on an otherwise quiet host.
+Each invocation starts with an empty application dataset/cache; the same local
+DB may be reused after successful cleanup, but physical allocation/statistics
+are cumulative and are reported before/after. `PHASE7_GAMES=6` selects the six
+short games for a bounded production depth-16/MultiPV-3 comparison. Depth is
+bounded to 6–16, MultiPV to 1 or 3, threads to 1, hash to 64 MiB, and each native
+command to 30 seconds. Settings and executable SHA-256 accompany every report.
+
+The [dedicated workflow](../.github/workflows/multigame-economics.yml) runs six
+short recorded games at depth 6/concurrency 2 on PRs, with pinned Ubuntu
+Stockfish `16-1build1` and PostgreSQL 16. Manual dispatch supports the same
+bounded profiles. Both raw and validated reports are retained with the tested
+workflow SHA/run attempt; a PR's small gate is not the full economics matrix.
+
+### What the measurements mean
+
+- Import uses an explicit PGN-to-NDJSON fixture adapter and the durable production
+  importer, not a live HTTP export or invented source game. Indexing uses the
+  production legal-ply/clock projection.
+- Every engine pass pre-enqueues all games as a real bounded backlog. Cold
+  starts with no position-analysis rows; opening positions can then be shared
+  across games. Warm explicitly requests new durable analyses and requires
+  zero searches/cache misses. A scheduling no-op cannot count as reuse.
+- Workers retry lost optimistic claims while eligible queued work remains.
+  Requested concurrency, observed peak simultaneous claims, participating
+  workers and claim-race retries are separate fields. Per-game wall windows
+  overlap; cohort wall time, rather than their sum, determines work rate.
+- The six registered evidence detectors drain after the final current analyses.
+  The owner-scoped diagnosis worker must publish an `AVAILABLE`/`READY` result.
+  The pooled unrelated-player finding count validates lifecycle completion,
+  **not** diagnosis quality for a person. Import/index/evidence/diagnosis walls
+  are separate from engine-only capacity.
+- Actual native SIGKILL after two successful searches exercises the production
+  retry/backoff. A separate mid-search source supersession exercises claim
+  fencing; the interrupted run must remain incomplete and its replacement must
+  complete. An in-flight import cancellation must finish `CANCELLED` without
+  adding games. These are injected scenarios, not natural failure frequencies,
+  and each run has one sample of each scenario.
+- Native CPU is measured for each live engine before close. Linux reports
+  `/proc` CPU and `VmHWM`; macOS reports `ps` cumulative CPU and **close-time RSS,
+  not peak RSS**. Parent Node CPU/RSS boundaries are measured separately. The
+  resource sampler does not include PostgreSQL server CPU or RAM.
+- PostgreSQL physical DB bytes and cumulative transaction/block/tuple counters
+  are retained before/after. These asynchronously flushed counters are not
+  per-query latency, per-game storage attribution, or exclusive DB CPU.
+- Validated summaries expose nearest-rank per-control distributions with sample
+  counts, measured wall/CPU hours per 1,000 games, and all raw denominators.
+  Linear scaling of this quota sample is a planning scenario, not a tested
+  sustained capacity promise. No cloud dollar rate is invented.
+
+### Acceptance boundary
+
+This supplies real variable-length recorded-game measurements, cache and
+concurrency accounting, complete evidence/diagnosis publication and controlled
+failure/cancellation observations. It does not automatically close #126 or
+advance #128: production-setting long-game behavior, repeated recovery samples,
+query-level/isolated PostgreSQL resources and a deployment-specific capacity
+budget remain explicit review items. Keep the production depth-16/MultiPV-3 and
+single-worker defaults unless measured evidence plus independent review justify
+a separate runtime change.
