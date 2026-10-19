@@ -13,7 +13,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "concurrently --kill-others \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "dev": "npm run dev:prepare && node scripts/dev.mjs",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:worker": "npm run dev:worker --workspace=apps/api",
     "dev:web": "npm run dev --workspace=apps/web",
@@ -30,7 +30,9 @@
     "check:hygiene": "node scripts/check-repository-hygiene.mjs",
     "db:validate": "npm run db:validate --workspace=apps/api",
     "db:generate": "npm run db:generate --workspace=apps/api",
-    "db:migrate": "npm run db:migrate --workspace=apps/api"
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "dev:all": "npm run dev:prepare && node scripts/dev.mjs --worker",
+    "dev:prepare": "npm run build:domain && npm run build:contracts && npm run db:generate"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
