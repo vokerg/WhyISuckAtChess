@@ -111,11 +111,15 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       cacheHits: 0,
       cacheMisses: 2,
     }), true);
+    const historicalSearch = analysis(120, 'e2e4');
+    historicalSearch.rawInfo.unshift('info depth 1 multipv 1 score cp 5 pv a2a3');
+    historicalSearch.rawInfo.unshift('info depth 2 multipv 1 score cp 7 pv a2a4');
+
     assert.equal(await prismaAnalysisRepository.persistBatch(firstClaim, {
       engineName: 'Stockfish 18',
       engineVersion: '18',
       positionResults: [
-        { positionId: before.id, analysis: analysis(120, 'e2e4') },
+        { positionId: before.id, analysis: historicalSearch },
         { positionId: after.id, analysis: analysis(20, 'h7h6') },
       ],
       plyResults: [{ plyNumber: 1, scoreLossCp: 100, classificationCode: 5 }],
@@ -123,6 +127,15 @@ test('repository supports bullet, reusable cache, complete freshness, and stale-
       pliesDone: 1,
     }), true);
     assert.equal(await prismaAnalysisRepository.markSucceeded(firstClaim), true);
+
+    const storedBefore = await prisma.stockfishPositionAnalysis.findFirstOrThrow({
+      where: { positionId: before.id, analysisVersion: firstClaim.analysisVersion },
+      select: { rawInfoJson: true, multiPvJson: true },
+    });
+    assert.deepEqual(storedBefore.rawInfoJson, [historicalSearch.multiPv[0].raw],
+      'intermediate depth info lines must not be retained in the reusable cache');
+    assert.deepEqual(storedBefore.multiPvJson, historicalSearch.multiPv,
+      'authoritative final MultiPV evidence must remain unchanged');
 
     const completed = await prisma.gameAnalysisRun.findUniqueOrThrow({ where: { id: firstClaim.id } });
     assert.equal(completed.status, 'SUCCEEDED');
