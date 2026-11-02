@@ -44,7 +44,7 @@ position
 
 The `Position` identity is already normalized by the indexing stage, so transpositions and repeated positions across games/reanalysis can reuse the same engine evidence. A worker loads all compatible cached positions before starting Stockfish and searches only cache misses.
 
-Position rows contain the principal evaluation, mate score, best move/PV, structured MultiPV lines, and raw UCI `info` lines. Centipawn and mate values are normalized to **White's perspective** before persistence so game-specific calculations do not depend on whose turn it was when Stockfish produced the score.
+Position rows contain the principal evaluation, mate score, best move/PV, and structured MultiPV lines. New cache writes retain only the final UCI `info` line associated with each persisted MultiPV result, rather than every intermediate depth/iteration message; historic cached search histories are left unchanged (see [storage audit](storage-harmonization-audit.md)). Centipawn and mate values are normalized to **White's perspective** before persistence so game-specific calculations do not depend on whose turn it was when Stockfish produced the score.
 
 Cache rows are immutable for a provenance tuple. A different policy/settings/engine provenance produces a different cache key instead of mutating historical evidence.
 
