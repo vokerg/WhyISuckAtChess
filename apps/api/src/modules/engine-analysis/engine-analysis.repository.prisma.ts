@@ -485,7 +485,9 @@ export const prismaAnalysisRepository: AnalysisRepository = {
             bestMove: analysis.bestMove,
             bestPv: analysis.bestPv,
             multiPvJson: analysis.multiPv as unknown as Prisma.InputJsonValue,
-            rawInfoJson: analysis.rawInfo as unknown as Prisma.InputJsonValue,
+            // Keep only the terminal UCI line for each retained MultiPV line.
+            // Iterative search history repeats the same evidence at every depth.
+            rawInfoJson: analysis.multiPv.map((line) => line.raw) as unknown as Prisma.InputJsonValue,
           })),
           skipDuplicates: true,
         });
