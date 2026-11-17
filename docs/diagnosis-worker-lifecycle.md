@@ -73,3 +73,20 @@ Do not reset a running claim or delete imported evidence to recover diagnosis. A
 With `RUN_DIAGNOSIS_BROWSER_ACCEPTANCE=1`, real Chromium and Angular read the same fixture-backed Fastify API through a transport forwarding route. The browser sees no source, processing, and actual available ranked findings; it is not supplied mocked diagnosis responses. CI runs this alongside the existing onboarding browser smoke.
 
 Live Lichess OAuth and real Stockfish are not part of this fixture. The separate Phase 7 native Stockfish gate (#123) remains authoritative for real engine execution. Exact validation results and Phase 6 exit state are recorded in [phase-6-acceptance.md](phase-6-acceptance.md).
+
+### Optional scheduled scans for an idle worker
+
+Set `WORKER_IDLE_SCAN_INTERVAL_MS=900000` in the worker environment to opt in
+to quarter-hour scans. Supported values are 600000 through 3600000 ms. Leave
+the variable unset or empty for the existing poll cadence. The worker checks
+on startup, keeps its normal short delays for 30 seconds after work is processed,
+then waits until the next scan boundary. A job queued while the worker is idle
+can wait a full interval. Delayed retries and stale-claim recovery are checked
+on the next scan, so enable this only where that latency is acceptable.
+
+The sequential worker disconnects Prisma before a long sleep. Diagnosis
+discovery still rotates through bounded owner batches. Each idle scan can
+cover only one batch, so the full traversal can take several intervals.
+This mode is best suited to local or low traffic deployments. Confirm
+suspension in the Neon control plane and unset the option to restore fast
+polling.
