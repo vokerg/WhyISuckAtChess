@@ -217,6 +217,8 @@ Do not duplicate the same specification across many documents. Link to the canon
 
 ---
 
+For worker or API configuration, follow the [worker runbook](docs/diagnosis-worker-lifecycle.md#optional-scheduled-scans-for-an-idle-worker).
+
 ## 9. Issue quality requirements
 
 Implementation issues should be executable by an agent without rediscovering the entire product direction.
