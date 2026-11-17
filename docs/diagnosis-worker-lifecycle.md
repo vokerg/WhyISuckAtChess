@@ -76,6 +76,19 @@ Live Lichess OAuth and real Stockfish are not part of this fixture. The separate
 
 ### Optional scheduled scans for an idle worker
 
+Run the API and worker as separate processes from the same revision. Configure
+both with the same application `DATABASE_URL`. Use the [local configuration
+and provider setup](../README.md) for API auth, web origin and Lichess settings.
+Keep the existing Lichess token encryption key available to both processes
+when imports are enabled. The API queues imports in Postgres and serves status
+and diagnosis reads. Start the built API with `npm run start --workspace=apps/api`
+and the built worker with `npm run start:worker --workspace=apps/api`.
+Set the idle option on the worker process. For local development:
+
+```bash
+WORKER_IDLE_SCAN_INTERVAL_MS=900000 npm run dev:worker
+```
+
 Set `WORKER_IDLE_SCAN_INTERVAL_MS=900000` in the worker environment to opt in
 to quarter-hour scans. Supported values are 600000 through 3600000 ms. Leave
 the variable unset or empty for the existing poll cadence. The worker checks
@@ -87,6 +100,8 @@ on the next scan, so enable this only where that latency is acceptable.
 The sequential worker disconnects Prisma before a long sleep. Diagnosis
 discovery still rotates through bounded owner batches. Each idle scan can
 cover only one batch, so the full traversal can take several intervals.
-This mode is best suited to local or low traffic deployments. Confirm
-suspension in the Neon control plane and unset the option to restore fast
-polling.
+This mode is best suited to local or low traffic deployments. After restarting
+the worker, submit a normal Lichess import through the API. Confirm the worker
+starts it by the next scheduled scan and check the resulting import and diagnosis
+status. Close idle test clients and confirm suspension in the Neon control
+plane. Unset the worker option and restart it to restore fast polling.
